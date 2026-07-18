@@ -21,8 +21,20 @@
   if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 
   var params = new URLSearchParams(location.search);
-  var groupId = params.get("group");
+  var groupId = params.get("group") || decodeStartParam(
+    tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param
+  );
   var tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+
+  function decodeStartParam(param) {
+    // Mirrors bot.py's _encode_start_param ('n<n>' -> -n, 'p<n>' -> n),
+    // tolerating the '-cards' suffix used by the hotel-deck deep link.
+    if (!param) return null;
+    param = param.replace(/-cards$/, "");
+    if (param.charAt(0) === "n") return "-" + param.slice(1);
+    if (param.charAt(0) === "p") return param.slice(1);
+    return null;
+  }
   var userId = tgUser ? String(tgUser.id) : localId();
   var userName = params.get("name") || (tgUser && tgUser.first_name) || ("guest-" + userId.slice(-4));
 

@@ -11,7 +11,14 @@
   }
 
   var params = new URLSearchParams(window.location.search);
-  var groupId = params.get("group");
+  var startParam = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+  if (startParam && /-cards$/.test(startParam)) {
+    // hotel-deck deep link (bot.py _cards_keyboard) — hand the webview to /cards
+    location.replace("/cards?group=" +
+      encodeURIComponent(decodeStartParam(startParam.replace(/-cards$/, "")) || ""));
+    return;
+  }
+  var groupId = params.get("group") || decodeStartParam(startParam);
   var captionEl = document.getElementById("caption");
   var weekEl = document.getElementById("week");
   var badgeEl = document.getElementById("status-badge");
@@ -140,6 +147,15 @@
     if (tp.text_color) root.setProperty("--fg", tp.text_color);
     if (tp.hint_color) root.setProperty("--muted", tp.hint_color);
     if (tp.button_color) root.setProperty("--bar-fg-2", tp.button_color);
+  }
+
+  function decodeStartParam(param) {
+    // Mirrors bot.py's _encode_start_param: 'n<n>' -> -n (group chats have
+    // negative ids; start_param can't contain a literal '-'), 'p<n>' -> n.
+    if (!param) return null;
+    if (param.charAt(0) === "n") return "-" + param.slice(1);
+    if (param.charAt(0) === "p") return param.slice(1);
+    return null;
   }
 
   function num(v, dflt) {

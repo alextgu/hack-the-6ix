@@ -12,7 +12,6 @@ TODO seams:
     an engagement counter fed by `bot.py`'s message handler.
 """
 from __future__ import annotations
-from dataclasses import replace
 
 from state import GroupState, MarketSnapshot
 

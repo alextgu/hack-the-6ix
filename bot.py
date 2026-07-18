@@ -10,6 +10,13 @@ BotFather setup (do this once, otherwise the bot only sees /commands in groups):
   /mybots → pick your bot → Bot Settings → Group Privacy → **Turn off**
   Add the bot to a test group, then /start in the group.
 
+Mini App button (also one-time, in BotFather):
+  /mybots → pick your bot → Bot Settings → Configure Mini App → set it to
+  your PUBLIC_WEBAPP_URL. Required for the "open live pet" button — web_app=
+  inline buttons only work in private chats, so group buttons use a
+  t.me/<bot>?startapp=... deep link instead (see _miniapp_url_for), which
+  only opens as a real Mini App once BotFather has this registered.
+
 Commands (once running):
   /start           hatch the pet, post its image
   /health          post the current pet image + numbers
@@ -33,9 +40,8 @@ from io import BytesIO
 
 from dotenv import load_dotenv
 from telegram import (
-    Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
+    Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup,
 )
-from telegram.constants import ParseMode
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler,
     ContextTypes, MessageHandler, filters,
@@ -46,33 +52,42 @@ import health
 import pet
 import wire
 import cards
+import stay22
+import booking
 
 
-def _webapp_url_for(chat_id: int) -> str | None:
-    """Public HTTPS URL for the Mini App, with ?group=<chat_id> appended.
-    Returns None if PUBLIC_WEBAPP_URL isn't set (Mini App button then skipped)."""
-    base = os.environ.get("PUBLIC_WEBAPP_URL", "").strip()
-    if not base:
-        return None
-    sep = "&" if "?" in base else "?"
-    return f"{base}{sep}group={chat_id}"
+def _encode_start_param(chat_id: int) -> str:
+    """Telegram's start_param only allows [A-Za-z0-9_-]; group chat_ids are
+    negative, so stash the sign in a prefix letter instead of a leading '-'."""
+    return f"n{-chat_id}" if chat_id < 0 else f"p{chat_id}"
 
 
-def _webapp_keyboard(chat_id: int, label: str = "🐾 open pet") -> InlineKeyboardMarkup | None:
-    url = _webapp_url_for(chat_id)
-    if not url:
-        return None
-    return InlineKeyboardMarkup([[InlineKeyboardButton(label, web_app=WebAppInfo(url=url))]])
+def _miniapp_url_for(chat_id: int, bot_username: str) -> str:
+    """t.me deep link that opens the bot's BotFather-registered Mini App,
+    passing chat_id via start_param.
+
+    NOT a web_app= inline button: those are only valid in private chats with
+    the bot (Telegram rejects them with Button_type_invalid in groups). A
+    plain url= button pointing at a t.me Mini App deep link works from
+    anywhere, including groups, and Telegram still opens it as a full Mini
+    App (SDK/initData/theme) rather than a browser tab — but only once the
+    Mini App is registered via BotFather (Bot Settings → Configure Mini App)."""
+    return f"https://t.me/{bot_username}?startapp={_encode_start_param(chat_id)}"
 
 
-def _cards_keyboard(chat_id: int) -> InlineKeyboardMarkup | None:
-    """Mini App button for the hotel swipe deck (served at /cards)."""
-    base = os.environ.get("PUBLIC_WEBAPP_URL", "").strip()
-    if not base:
-        return None
-    url = f"{base.rstrip('/')}/cards?group={chat_id}"
-    return InlineKeyboardMarkup([[InlineKeyboardButton(
-        "🏨 swipe on hotels", web_app=WebAppInfo(url=url))]])
+def _webapp_keyboard(chat_id: int, bot_username: str, label: str = "🐾 open pet") -> InlineKeyboardMarkup:
+    url = _miniapp_url_for(chat_id, bot_username)
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, url=url)]])
+
+
+def _cards_keyboard(chat_id: int, bot_username: str) -> InlineKeyboardMarkup:
+    """Deep-link button for the hotel swipe deck. Same t.me?startapp trick as
+    _miniapp_url_for (web_app= buttons are invalid in groups) with a '-cards'
+    suffix on the start_param; webapp/app.js sees the suffix and forwards the
+    webview to /cards."""
+    url = (f"https://t.me/{bot_username}"
+           f"?startapp={_encode_start_param(chat_id)}-cards")
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🏨 swipe on hotels", url=url)]])
 
 
 async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -83,15 +98,13 @@ async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None
     For now the temporary "map" chat trigger below invokes it directly."""
     session = await asyncio.to_thread(cards.ensure_session, chat_id)
     n = len(session["active"])
-    kb = _cards_keyboard(chat_id)
+    kb = _cards_keyboard(chat_id, ctx.bot.username)
     text = (
         f"🏨 basecamp locked: {session['basecamp']} "
         f"({session['checkin']} → {session['checkout']})\n"
         f"i found {n} real places. everyone swipe — "
         "i'll keep cutting until we all land on one."
     )
-    if kb is None:
-        text += "\n(PUBLIC_WEBAPP_URL isn't set — start a tunnel to get the swipe button.)"
     await ctx.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
 
 
@@ -126,7 +139,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "start talking about the japan trip. every real decision heals me. "
         "silence and rising prices kill me. try /health any time. "
         "dev: /scrub 0..6 to fast-forward, /commit to book.",
-        reply_markup=_webapp_keyboard(g.chat_id, label="🐾 open live pet"),
+        reply_markup=_webapp_keyboard(g.chat_id, ctx.bot.username, label="🐾 open live pet"),
     )
     await _send_pet(update, ctx)
 
@@ -134,13 +147,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Launch the animated Mini App (the Face layer)."""
     chat_id = update.effective_chat.id
-    kb = _webapp_keyboard(chat_id, label="🐾 open live pet")
-    if not kb:
-        await update.effective_chat.send_message(
-            "PUBLIC_WEBAPP_URL isn't set — start a cloudflared/ngrok tunnel and "
-            "put the HTTPS URL in .env, then restart."
-        )
-        return
+    kb = _webapp_keyboard(chat_id, ctx.bot.username, label="🐾 open live pet")
     await update.effective_chat.send_message("tap to open the live pet:", reply_markup=kb)
 
 
@@ -168,10 +175,60 @@ async def cmd_scrub(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Graduation path: query Stay22, pick a hotel, post the Allez book link.
+    Falls back gracefully if the trip isn't locked or nothing fits the budget."""
     g = state.get_or_create(update.effective_chat.id)
+    trip = g.trip
+
+    if not (trip.city and trip.dates and trip.dates.start and trip.dates.end):
+        await update.effective_chat.send_message(
+            "still figuring out the trip — can't book yet. lock city + dates first, then /commit."
+        )
+        return
+
+    guests = int(trip.group_size or 2)
+    checkin = trip.dates.start.isoformat()
+    checkout = trip.dates.end.isoformat()
+    nights = max(1, (trip.dates.end - trip.dates.start).days)
+
+    results = await asyncio.to_thread(
+        stay22.search_raw, f"{trip.city}, Japan", checkin, checkout, guests
+    )
+    chosen = booking.pick_hotel(results or [], trip.budget_per_person, guests, nights) if results else None
+    opts = booking.booking_options(chosen) if chosen else None
+
+    if not opts or not opts.get("book_url"):
+        budget_note = f" under ${trip.budget_per_person}/person" if trip.budget_per_person else ""
+        await update.effective_chat.send_message(
+            f"no rooms{budget_note} for {trip.city} on {checkin} → {checkout}. "
+            "try raising budget or shifting dates, then /commit again."
+        )
+        return
+
+    # graduate (existing pet logic)
     health.commit_trip(g)
-    log.info("commit chat_id=%s → graduated", g.chat_id)
-    await update.effective_chat.send_message("🎉 booked. graduating the pet.")
+    log.info("commit chat_id=%s → graduated (booked: %s @ $%.0f)",
+             g.chat_id, opts["name"], opts["price_total"])
+
+    rating_str = f" · {opts['rating']:.1f}/10" if opts.get("rating") else ""
+    fallback_note = "\n(over budget — cheapest we could find)" if opts.get("fallback") else ""
+    caption = (
+        f"🎉 booked. graduating the pet.\n"
+        f"{opts['name']}{rating_str}\n"
+        f"${opts['price_total']:.0f} total · {guests} guests · {nights} night(s) in {trip.city}"
+        f"{fallback_note}"
+    )
+    buttons: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="🎉 Book your trip →", url=opts["book_url"])]
+    ]
+    for alt in (opts.get("alternates") or [])[:2]:
+        buttons.append([InlineKeyboardButton(
+            text=f"or: {alt['name']} — ${alt['price_total']:.0f}",
+            url=alt["book_url"],
+        )])
+    await update.effective_chat.send_message(
+        caption, reply_markup=InlineKeyboardMarkup(buttons)
+    )
     await _send_pet(update, ctx)
 
 
