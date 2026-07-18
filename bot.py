@@ -42,6 +42,7 @@ from telegram.ext import (
 import state
 import health
 import pet
+import wire
 
 
 def _webapp_url_for(chat_id: int) -> str | None:
@@ -142,15 +143,35 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Every non-command text message. Currently just logged; the Read layer
-    (LLM → trip constraints) attaches here later."""
+    """Every non-command text message. Buffered by wire.py; consensus +
+    Stay22 poll run behind a debounce so we don't burn the LLM / Stay22
+    quota on every keystroke."""
     if not update.message or not update.message.text:
         return
     chat_id = update.effective_chat.id
     speaker = (update.effective_user.first_name if update.effective_user else "someone") or "someone"
     log.info("msg chat_id=%s from=%s: %s", chat_id, speaker, update.message.text[:200])
-    # TODO(Read): call consensus.extract_and_merge(chat_buffer) and heal on locks.
-    # TODO(Nudge): bump an engagement counter used by health.apply_mental_delta.
+
+    wire.note_message(chat_id, speaker, update.message.text)
+    reconciled = await wire.maybe_process(chat_id)
+    if reconciled is None:
+        return
+
+    # Announce meaningful changes in-chat. Cheap: no re-render unless the
+    # pet visibly changed.
+    g = state.get_or_create(chat_id)
+    g.pet.refresh_mood()
+    blockers = wire.get_blockers(chat_id)
+    parts = []
+    if reconciled.get("city"):     parts.append(f"city: {reconciled['city']}")
+    dw = reconciled.get("dates") or {}
+    if dw.get("start") and dw.get("end"): parts.append(f"dates: {dw['start']} → {dw['end']}")
+    if reconciled.get("budget_per_person") is not None:
+        parts.append(f"budget: ${reconciled['budget_per_person']}")
+    if blockers:
+        parts.append("blockers: " + " | ".join(blockers))
+    if parts:
+        await update.effective_chat.send_message("🧠 " + " · ".join(parts))
 
 
 # ─── App factory (shared by standalone `main()` and `run.py`) ────────────────
