@@ -14,10 +14,10 @@ from collections import defaultdict, deque
 from datetime import date, datetime, timezone
 from typing import Optional
 
-import brain
-import stay22
-import state
-import health
+from app.agents import brain
+from app.integrations import stay22
+from app.core import state
+from app.core import health
 
 
 log = logging.getLogger("trippet.wire")

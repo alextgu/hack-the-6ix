@@ -19,8 +19,8 @@ import uvicorn
 from dotenv import load_dotenv
 from telegram import Update
 
-import bot           # keep the bot.py logic untouched — just call build_app()
-from api import app as fastapi_app
+from app.bot import bot   # keep the bot.py logic untouched — just call build_app()
+from app.api.api import app as fastapi_app
 
 
 load_dotenv()
@@ -76,9 +76,9 @@ async def _run_bot() -> None:
 async def _heartbeat(get_bot) -> None:
     """Every 10 min: for recently-active chats that have gone quiet, let the
     supervisor decide whether Tabi should initiate. The pet is not passive."""
-    import db
-    import supervisor
-    import bot as botmod
+    from app.integrations import db
+    from app.agents import supervisor
+    from app.bot import bot as botmod
     from datetime import datetime, timezone
 
     HEARTBEAT_EVERY_S = 600

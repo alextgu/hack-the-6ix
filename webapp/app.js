@@ -7,7 +7,6 @@
   var tg = (typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp) || null;
   if (tg) {
     try { tg.ready(); tg.expand(); } catch (e) { /* ignore */ }
-    applyTheme(tg.themeParams || {});
   }
 
   var params = new URLSearchParams(window.location.search);
@@ -138,15 +137,6 @@
     reconnecting = on;
     if (on) badgeEl.classList.add("on");
     else badgeEl.classList.remove("on");
-  }
-
-  function applyTheme(tp) {
-    var root = document.documentElement.style;
-    if (tp.bg_color) root.setProperty("--bg", tp.bg_color);
-    if (tp.secondary_bg_color) root.setProperty("--bg2", tp.secondary_bg_color);
-    if (tp.text_color) root.setProperty("--fg", tp.text_color);
-    if (tp.hint_color) root.setProperty("--muted", tp.hint_color);
-    if (tp.button_color) root.setProperty("--bar-fg-2", tp.button_color);
   }
 
   function decodeStartParam(param) {

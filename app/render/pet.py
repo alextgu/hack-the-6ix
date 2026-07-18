@@ -15,7 +15,7 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 
-from state import GroupState, PetState
+from app.core.state import GroupState, PetState
 
 
 CANVAS = (600, 640)

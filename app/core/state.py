@@ -109,7 +109,7 @@ def reset(chat_id: int) -> GroupState:
 
 
 def _hydrate_pet(g: GroupState) -> None:
-    import db  # late import: db has no state dependency, avoids cycles
+    from app.integrations import db  # late import: avoids cycles
     doc = db.load_pet(g.chat_id)
     if doc:
         g.pet.physical = int(doc.get("physical", 100))
@@ -121,5 +121,5 @@ def _hydrate_pet(g: GroupState) -> None:
 def persist_pet(g: GroupState) -> None:
     """Call after any health mutation. Blocking Mongo write — callers on the
     event loop should wrap in asyncio.to_thread."""
-    import db
+    from app.integrations import db
     db.save_pet(g.chat_id, g.pet.physical, g.pet.mental, g.pet.mood, g.sim_week)

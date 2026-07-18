@@ -27,7 +27,7 @@ Two options:
 
 ```bash
 # A) Bot only (no Mini App)
-./.venv/bin/python bot.py
+./.venv/bin/python -m app.bot.bot
 
 # B) Bot + Mini App face (recommended — this is the whole product)
 ./.venv/bin/python run.py     # binds :8000; set PORT=xxxx to override

@@ -1,0 +1,37 @@
+# GRPO — push past the teacher with the verifiable reward.
+# Ceiling = whatever score_response can measure. This is where the model
+# gets genuinely good at deadlock resolution.
+#
+#   flash train --config training/configs/rl.toml
+#
+# Warm-start from the OPD adapter — format is baked in, frontier-level
+# reasoning is baked in, GRPO tunes the reward-shaped policy on top.
+
+model = "Qwen/Qwen3.5-4B"
+algorithm = "grpo"
+seed = 42
+thinking = false                             # schema-bound outputs
+
+[environment]
+id = "<your-org>/phoebe-agent"
+
+[train]
+init_from_adapter = "<PASTE-OPD-RUN-ID>"
+epochs = 1
+max_examples = 800
+group_size = 8                               # RL needs spread — see slide 26
+temperature = 0.9                            # entropy for the group
+max_context_tokens = 4096
+max_completion_tokens = 640                  # raise the cap FIRST (failure #1)
+learning_rate = 3e-5                         # low — RL is fragile
+batch_size = 4
+kl_penalty_coef = 0.05                       # β leash (slide 25) — keeps policy near ref
+advantage_clip = 0.2
+save_at_steps = [50, 100, 200, 400]
+stop_sequences = ["\n\n\n"]
+
+structured_outputs = '{"type":"object","additionalProperties":false,"required":["blocker","action","message"],"properties":{"blocker":{"type":"object","additionalProperties":false,"required":["kind","subject","detail"],"properties":{"kind":{"type":"string","enum":["person","timing","issue","none"]},"subject":{"type":"string","maxLength":80},"detail":{"type":"string","maxLength":300}}},"action":{"type":"object","additionalProperties":false,"required":["kind","target","parameters"],"properties":{"kind":{"type":"string","enum":["dm_holdout","propose_cheaper_neighborhood","hold_rooms_48h","ask_group","no_action"]},"target":{"type":"string","maxLength":80},"parameters":{"type":"object"}}},"message":{"type":"string","minLength":5,"maxLength":240}}}'
+
+[gpu]
+provider = ""
+max_retries = 5

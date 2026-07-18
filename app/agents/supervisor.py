@@ -30,10 +30,10 @@ from typing import Optional, TypedDict
 
 from langgraph.graph import StateGraph, END
 
-import db
-import state
-import cards
-import flights
+from app.integrations import db
+from app.integrations import flights
+from app.core import state
+from app.bot import cards
 
 log = logging.getLogger("trippet.supervisor")
 
