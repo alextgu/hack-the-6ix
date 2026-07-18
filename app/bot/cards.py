@@ -84,6 +84,12 @@ def get_session(chat_id: int) -> Optional[dict]:
         return _SESSIONS.get(chat_id)
 
 
+def forget(chat_id: int) -> None:
+    """/reset: drop the in-memory session (Mongo nuke handles persistence)."""
+    with _LOCK:
+        _SESSIONS.pop(chat_id, None)
+
+
 # ─── Views (what the UI polls) ───────────────────────────────────────────────
 def view_for(chat_id: int, user_id: str, name: str) -> dict:
     """Deck state for one user. Registers them as a participant — opening the

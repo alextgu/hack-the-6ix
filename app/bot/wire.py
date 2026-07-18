@@ -46,6 +46,13 @@ def note_message(chat_id: int, sender: str, text: str) -> None:
     _new_msg_count[chat_id] += 1
 
 
+def reset_chat(chat_id: int) -> None:
+    """/reset: drop every buffer/timer this module holds for a chat."""
+    for store in (_messages, _new_msg_count, _last_consensus_at,
+                  _last_stay22_at, _blockers, _last_reconciled):
+        store.pop(chat_id, None)
+
+
 def get_blockers(chat_id: int) -> list[str]:
     return list(_blockers.get(chat_id, []))
 
