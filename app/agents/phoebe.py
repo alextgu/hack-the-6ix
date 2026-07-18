@@ -210,7 +210,7 @@ def diagnose(reconciled_state: dict) -> Blocker:
                 detail=str(data.get("detail", "")),
                 source=str(data.get("source", "llm.unknown")),
             )
-    except Exception as e:
+    except Exception:
         # LLM unavailable is fine — the flags said we're clean.
         pass
 

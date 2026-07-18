@@ -47,13 +47,13 @@ from telegram.ext import (
     ContextTypes, MessageHandler, filters,
 )
 
-import state
-import health
-import pet
-import wire
-import cards
-import stay22
-import booking
+from app.core import state
+from app.core import health
+from app.render import pet
+from app.bot import wire
+from app.bot import cards
+from app.integrations import stay22
+from app.integrations import booking
 
 
 def _encode_start_param(chat_id: int) -> str:
