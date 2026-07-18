@@ -8,16 +8,16 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
   <style>
     :root {
-      /* Japanese palette: sumi-ink navy, shu-iro vermillion, sakura pink, kin-iro gold */
-      --bg: #ffffff;
-      --bg2: #ffffff;
-      --fg: #e1e1e1;
-      --muted: #8fa0c0;
-      --bar-bg: #1f2c47;
-      --bar-fg: #e2543a;
-      --bar-fg-2: #f2a6c0;
-      --accent: #d4af37;
-      --danger: #d7003a;
+      /* Japanese palette: washi paper white, sumi-ink black, shu-iro vermillion red */
+      --bg: #f7f4ee;
+      --bg2: #ece2d0;
+      --fg: #1a1a1a;
+      --muted: #7a7266;
+      --bar-bg: #e3dccb;
+      --bar-fg: #c8102e;
+      --bar-fg-2: #1a1a1a;
+      --accent: #c8102e;
+      --danger: #8b0000;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -40,7 +40,7 @@
       width: 100%; max-width: 420px;
     }
     #title {
-      font-size: 18px; font-weight: 600; letter-spacing: 0.3px; color: black;
+      font-size: 18px; font-weight: 600; letter-spacing: 0.3px; color: var(--fg);
     }
     #week {
       font-size: 12px; color: var(--muted);
@@ -49,7 +49,7 @@
       display: none;
       font-size: 11px;
       color: var(--danger);
-      background: rgba(255,107,107,0.12);
+      background: rgba(139,0,0,0.1);
       padding: 3px 8px; border-radius: 999px;
     }
     #status-badge.on { display: inline-block; }
@@ -57,9 +57,9 @@
       width: 320px; height: 320px;
       max-width: 90vw; max-height: 90vw;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(255,255,255,0.02);
+      background: rgba(0,0,0,0.02);
       border-radius: 24px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12), inset 0 1px 0 rgba(0,0,0,0.04);
     }
     #lottie { width: 100%; height: 100%; }
     #bars {
@@ -92,7 +92,6 @@
       opacity: 0.9;
       min-height: 40px;
       padding: 4px 8px;
-      color: black;
     }
     #trip-line {
       width: 100%; max-width: 420px;
