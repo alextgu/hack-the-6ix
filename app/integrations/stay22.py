@@ -8,15 +8,16 @@ Not wired into the bot directly — `wire.py` calls this.
 """
 from __future__ import annotations
 import json
+import logging
 import os
-import sys
 import time
 import urllib.request
 import urllib.parse
-import urllib.error
 from statistics import median
 from typing import Optional
 
+
+log = logging.getLogger("trippet.stay22")
 
 ENDPOINT = "https://api.stay22.com/v2/accommodations"
 
@@ -95,8 +96,10 @@ def get_stay(
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
-    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as e:
-        print(f"[stay22] get_stay failed: {type(e).__name__}: {e}", file=sys.stderr)
+    except Exception as e:
+        # Any failure (HTTP, network, timeout, bad JSON) → None so the caller
+        # falls back to last-known state; a live demo never crashes on this.
+        log.warning("get_stay failed: %s: %s", type(e).__name__, e)
         return None
 
     results = data.get("results") or []
@@ -152,8 +155,9 @@ def search_raw(
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
-    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as e:
-        print(f"[stay22] search_raw failed: {type(e).__name__}: {e}", file=sys.stderr)
+    except Exception as e:
+        # Any failure → None; cmd_commit degrades to "no rooms" instead of crashing.
+        log.warning("search_raw failed: %s: %s", type(e).__name__, e)
         return None
 
     return data.get("results") or []
