@@ -113,14 +113,20 @@ async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ctx.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
 
 
-async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
+               reply_to: int | None = None) -> None:
     """Send with Markdown so [name](tg://user?id=...) mentions ping people;
-    fall back to plain text if Tabi's prose breaks Markdown parsing."""
-    try:
-        await ctx.bot.send_message(chat_id=chat_id, text=text,
-                                   parse_mode=ParseMode.MARKDOWN)
-    except Exception:
-        await ctx.bot.send_message(chat_id=chat_id, text=text)
+    fall back to plain text if Tabi's prose breaks Markdown parsing, and drop
+    the reply threading if the target message is gone."""
+    for parse_mode in (ParseMode.MARKDOWN, None):
+        for rt in (reply_to, None) if reply_to else (None,):
+            try:
+                await ctx.bot.send_message(chat_id=chat_id, text=text,
+                                           parse_mode=parse_mode,
+                                           reply_to_message_id=rt)
+                return
+            except Exception:
+                continue
 
 
 async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -209,7 +215,7 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         supervisor.note_flights_posted(chat_id)
         return
     if d.message:
-        await _say(chat_id, d.message, ctx)
+        await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
     if d.show_health:
         await send_pet_card(chat_id, ctx)
 
@@ -255,6 +261,22 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # conversation (kickoff bypasses the cooldown, always sends).
     decision = await asyncio.to_thread(supervisor.run_turn, g.chat_id, "kickoff")
     await execute_decision(g.chat_id, decision, ctx)
+
+
+async def cmd_reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Nuke EVERYTHING for this group — Mongo docs, in-memory buffers, deck
+    sessions, pacing caches — then hatch completely fresh."""
+    chat_id = update.effective_chat.id
+    removed = await asyncio.to_thread(db.nuke_chat, chat_id)
+    wire.reset_chat(chat_id)
+    cards.forget(chat_id)
+    supervisor.reset_chat(chat_id)
+    state.reset(chat_id)
+    log.info("RESET chat=%s (%d docs wiped)", chat_id, removed)
+    await update.effective_chat.send_message(
+        f"🧹 wiped everything ({removed} records). fresh egg incoming…"
+    )
+    await cmd_start(update, ctx)
 
 
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -364,7 +386,7 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     user_id = str(update.effective_user.id) if update.effective_user else "unknown"
     await asyncio.to_thread(db.log_chat_message, chat_id, user_id, speaker,
-                            update.message.text)
+                            update.message.text, update.message.message_id)
 
     # TEMPORARY: "map" stays as a manual override for demos. The supervisor
     # now deals the deck itself when the stage reaches HOTELS.
@@ -425,6 +447,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("scrub", cmd_scrub))
     app.add_handler(CommandHandler("commit", cmd_commit))
     app.add_handler(CommandHandler("open", cmd_open))
+    app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))
     app.add_error_handler(on_error)
     return app
