@@ -5,6 +5,7 @@ fastapi>=0.115,<0.116
 uvicorn[standard]>=0.32,<0.33
 google-generativeai>=0.8
 openai>=1.50
+anthropic>=0.40
 pymongo>=4.9
 certifi>=2024.7.4
 # Freesolo Flash CLI (only for training runs) — Python 3.11-3.12 only.

@@ -1,12 +1,12 @@
-"""Phoebe agent — scaffold. Diagnose the ONE binding blocker, resolve it.
+"""Phoebe agent — the diagnose-target-convince loop.
 
-Its own model seam, independent of `brain.py::call_model`. See PIPELINE.md:
-  Read seam  = Gemini (brain.py)
-  Agent seam = Freesolo — plugs in here via FREESOLO_AGENT_BASE_URL.
+Its own model seam (PIPELINE.md). Provider-swappable via PHOEBE_PROVIDER=
+without touching Read's brain.py. Not yet wired to the bot — standalone
+__main__ exercises the diagnose → decide_action → compose_message flow
+against 3 sample states.
 
-Not wired into the bot yet. Rule-based stubs run without any API key so the
-demo below is walkable today. Every stub carries a TODO seam for the real
-Freesolo-trained agent to slot into later.
+Personality lives here: outreach copy is written in Sushi-kun's voice —
+playful, needy, "i'm dying here, help me" — via agent_call().
 """
 from __future__ import annotations
 import json
@@ -14,6 +14,12 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Literal
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 BlockerKind = Literal["person", "timing", "issue", "none"]
@@ -26,92 +32,141 @@ ActionKind = Literal[
 ]
 
 
-# ─── Typed shapes ───────────────────────────────────────────────────────────
 @dataclass
 class Blocker:
-    kind: BlockerKind           # person | timing | issue | none
-    subject: str                # user name, "dates", "city", "budget", "none"
-    detail: str                 # human-readable one-liner
-    source: str                 # which brain.py flag or which rule fired
+    kind: BlockerKind
+    subject: str
+    detail: str
+    source: str
 
 
 @dataclass
 class Action:
     kind: ActionKind
-    target: str                 # user name | city | "group"
+    target: str
     rationale: str
     parameters: dict = field(default_factory=dict)
 
 
-# ─── agent_call — the AGENT seam. SEPARATE from brain.py's call_model. ─────
-def agent_call(prompt: str) -> str:
-    """The one place Phoebe hits its own model. Do NOT reuse `brain.call_model`.
+# ─── agent_call — the AGENT seam. SEPARATE from brain.call_model. ──────────
+_DEFAULT_MODEL_BY_PROVIDER = {
+    "gemini":    "gemini-2.5-flash",           # fast, cheap default
+    "anthropic": "claude-haiku-4-5-20251001",  # fast, cheap default
+}
 
-    Precedence:
-      1. Freesolo agent adapter — FREESOLO_AGENT_BASE_URL + FREESOLO_API_KEY
-         (this is what wins the Freesolo track once we've trained + deployed).
-      2. LLM fallback — Gemini via GEMINI_API_KEY, so this file works today.
-      3. Error — surfaced clearly with instructions.
+
+def agent_call(prompt: str) -> str:
+    """The one place Phoebe hits a model. Selection order:
+
+      1. FREESOLO_AGENT_BASE_URL set → OpenAI-compatible Freesolo endpoint
+         (model = FREESOLO_AGENT_MODEL).
+      2. PHOEBE_PROVIDER (default "gemini") → dispatch to _call_gemini or
+         _call_anthropic; model = PHOEBE_MODEL or the fast default.
+      3. Clear error.
+
+    Switching between Gemini and Anthropic is one env change:
+      PHOEBE_PROVIDER=anthropic
     """
     fs_url = os.environ.get("FREESOLO_AGENT_BASE_URL", "").strip()
     fs_key = os.environ.get("FREESOLO_API_KEY", "").strip()
     if fs_url and fs_key:
-        return _agent_call_freesolo(prompt, fs_url, fs_key)
+        return _call_freesolo(prompt, fs_url, fs_key)
 
-    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if gemini_key:
-        return _agent_call_gemini(prompt, gemini_key)
-
+    provider = (os.environ.get("PHOEBE_PROVIDER") or "gemini").strip().lower()
+    if provider == "gemini":
+        return _call_gemini(prompt)
+    if provider == "anthropic":
+        return _call_anthropic(prompt)
     raise RuntimeError(
-        "No agent model configured. Either deploy a Freesolo agent adapter and set "
-        "FREESOLO_AGENT_BASE_URL + FREESOLO_AGENT_MODEL, or set GEMINI_API_KEY "
-        "(free at https://aistudio.google.com/apikey) for the interim path."
+        f"PHOEBE_PROVIDER={provider!r} not recognised. Use 'gemini' or 'anthropic', "
+        "or set FREESOLO_AGENT_BASE_URL for the trained agent path."
     )
 
 
-def _agent_call_freesolo(prompt: str, base_url: str, api_key: str) -> str:
+def _phoebe_model(provider: str) -> str:
+    return (os.environ.get("PHOEBE_MODEL") or _DEFAULT_MODEL_BY_PROVIDER[provider]).strip()
+
+
+def _call_freesolo(prompt: str, base_url: str, api_key: str) -> str:
     from openai import OpenAI
     client = OpenAI(base_url=base_url.rstrip("/"), api_key=api_key)
     resp = client.chat.completions.create(
         model=os.environ.get("FREESOLO_AGENT_MODEL", "phoebe-agent-v1"),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.4,
+        max_tokens=512,
     )
-    return resp.choices[0].message.content or ""
+    return (resp.choices[0].message.content or "").strip()
 
 
-def _agent_call_gemini(prompt: str, api_key: str) -> str:
+def _call_gemini(prompt: str) -> str:
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError(
+            "GEMINI_API_KEY not set. Free key: https://aistudio.google.com/apikey"
+        )
     import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-exp"))
+    genai.configure(api_key=key)
+    model = genai.GenerativeModel(_phoebe_model("gemini"))
     resp = model.generate_content(prompt)
-    return resp.text or ""
+    return (resp.text or "").strip()
 
 
-# ─── diagnose — pick the ONE binding blocker ───────────────────────────────
+def _call_anthropic(prompt: str) -> str:
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY not set. Get one: https://console.anthropic.com/settings/keys"
+        )
+    from anthropic import Anthropic
+    client = Anthropic(api_key=key)
+    resp = client.messages.create(
+        model=_phoebe_model("anthropic"),
+        max_tokens=512,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    parts = [b.text for b in resp.content if hasattr(b, "text")]
+    return "".join(parts).strip()
+
+
+# ─── diagnose — flags first, LLM only for what flags miss ──────────────────
+_FUZZY_DIAGNOSE_PROMPT = """You read a group chat's reconciled trip state and return the ONE binding blocker.
+
+State (JSON):
+{state}
+
+The deterministic flags below have ALREADY been checked and NONE fired:
+city_tie, date_no_overlap, budget_missing, low_budget_person, silent_person.
+
+Only look for FUZZY blockers those miss:
+- someone hinted "not really my vibe" / lukewarm agreement / conditional yes
+- keeps adding conditions ("if…", "maybe if…")
+- verbal yes but no concrete date/city/budget commitment
+- vibe mismatch (party crowd vs quiet crowd)
+
+Return ONLY JSON, no prose or preamble:
+{{"kind":"person|timing|issue|none","subject":"<name|dates|city|vibe|budget|none>","detail":"<one-line human>","source":"llm.<slug>"}}
+
+If nothing binding: {{"kind":"none","subject":"none","detail":"trip on track","source":"llm.no_blocker"}}"""
+
+
 def diagnose(reconciled_state: dict) -> Blocker:
-    """Rule-based stub. Reads brain.py's reconciled output + the `blockers`
-    list wire.py stashes there. Returns the single highest-priority blocker.
-
-    TODO(freesolo-agent): replace with an `agent_call` that reads richer
-    context (full chat window, per_person history, prior Phoebe actions)
-    and identifies WHICH specific person is silently stalling, not just
-    which field is missing.
-    """
+    """Return the ONE binding blocker. Uses brain.py's deterministic flags
+    first (no LLM); escalates to agent_call() only when flags say clean."""
     blockers: list[str] = reconciled_state.get("blockers", []) or []
     per_person: dict = reconciled_state.get("per_person", {}) or {}
 
-    # P1 — city TIE: can't even shop hotels
+    # P1 — city TIE
     for b in blockers:
         if b.startswith("city_tie"):
             return Blocker(kind="issue", subject="city", detail=b, source="brain.city_tie")
 
-    # P2 — no date overlap: even if city is known, no dates → no market call
+    # P2 — no date overlap
     for b in blockers:
         if b.startswith("date_no_overlap"):
             return Blocker(kind="timing", subject="dates", detail=b, source="brain.date_no_overlap")
 
-    # P3 — a single person's budget is well below group median (blocking hotel search)
+    # P3 — a single person's budget is well below the group median
     stated = [(name, p.get("budget")) for name, p in per_person.items() if p.get("budget")]
     if len(stated) >= 2:
         stated.sort(key=lambda x: x[1])
@@ -130,7 +185,7 @@ def diagnose(reconciled_state: dict) -> Blocker:
         if b.startswith("budget_missing"):
             return Blocker(kind="issue", subject="budget", detail=b, source="brain.budget_missing")
 
-    # P5 — silent holdout: someone who spoke but stated no budget/city/dates
+    # P5 — silent holdout
     silent = [n for n, p in per_person.items()
               if not any(p.get(k) for k in ("budget", "city"))
               and not (p.get("dates") or {}).get("start")]
@@ -142,12 +197,43 @@ def diagnose(reconciled_state: dict) -> Blocker:
             source="rule.silent_person",
         )
 
+    # P6 — flags say clean. Ask the LLM about fuzzy blockers we might miss.
+    try:
+        raw = agent_call(_FUZZY_DIAGNOSE_PROMPT.format(
+            state=json.dumps(reconciled_state, default=str)[:4000]
+        ))
+        data = _first_json_object(raw)
+        if data and data.get("kind") in ("person", "timing", "issue", "none"):
+            return Blocker(
+                kind=data["kind"],
+                subject=str(data.get("subject", "none")),
+                detail=str(data.get("detail", "")),
+                source=str(data.get("source", "llm.unknown")),
+            )
+    except Exception as e:
+        # LLM unavailable is fine — the flags said we're clean.
+        pass
+
     return Blocker(kind="none", subject="none",
-                   detail="no binding blocker — trip is on track", source="rule.no_blocker")
+                   detail="no binding blocker — trip is on track",
+                   source="rule.no_blocker")
 
 
-# ─── decide_action — map blocker → concrete resolution ─────────────────────
-def _extract_tie_candidates(detail: str) -> list[str]:
+def _first_json_object(text: str) -> dict | None:
+    """Pull the first {...} from the model's response — some backends wrap in prose."""
+    if not text:
+        return None
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None
+
+
+# ─── decide_action — pure rules, no LLM ────────────────────────────────────
+def _tie_candidates(detail: str) -> list[str]:
     m = re.search(r"between (.+?)(?: \(| \d|$)", detail)
     if not m:
         return []
@@ -155,12 +241,8 @@ def _extract_tie_candidates(detail: str) -> list[str]:
 
 
 def decide_action(blocker: Blocker, state: dict) -> Action:
-    """Rule-based stub mapping each blocker kind → the right move (per
-    PROJECT.md §6: remove the objection, don't push on it).
-
-    TODO(freesolo-agent): replace with `agent_call` that reads what the
-    low-budget person actually likes, then proposes a specific neighborhood.
-    """
+    """Map blocker → resolution move. PROJECT.md §6: remove the objection,
+    don't push on it."""
     if blocker.source == "rule.low_budget_person":
         return Action(
             kind="propose_cheaper_neighborhood",
@@ -180,13 +262,13 @@ def decide_action(blocker: Blocker, state: dict) -> Action:
             kind="hold_rooms_48h",
             target="group",
             rationale="City split — hold one room in each candidate for 48h; opt-out mechanic forces a decision",
-            parameters={"hold_hours": 48, "candidates": _extract_tie_candidates(blocker.detail)},
+            parameters={"hold_hours": 48, "candidates": _tie_candidates(blocker.detail)},
         )
     if blocker.subject == "dates":
         return Action(
             kind="dm_holdout",
             target="group",
-            rationale="No date overlap — DM each person individually for their must-hold days",
+            rationale="No date overlap — ask each person for their must-hold days",
             parameters={"channel": "dm_each"},
         )
     if blocker.subject == "budget":
@@ -194,15 +276,22 @@ def decide_action(blocker: Blocker, state: dict) -> Action:
             kind="ask_group",
             target="group",
             rationale="Nobody stated a budget — ask directly in the chat",
-            parameters={},
         )
     return Action(kind="no_action", target="group", rationale="nothing to resolve")
 
 
-# ─── compose_message — the outreach copy (uses agent_call) ─────────────────
-_PROMPT = """You are Phoebe, an in-chat agent helping a group plan a Japan trip.
-Write ONE short, friendly message (max 240 characters) executing this action.
-Don't add preamble, quotes, or emoji spam. Just the message text.
+# ─── compose_message — Sushi-kun's voice via agent_call ────────────────────
+_SUSHI_VOICE = """You are Sushi-kun, the little pet living in a group chat that's trying to plan a trip to Japan.
+YOUR VOICE:
+- playful, needy, slightly dramatic — "i'm dying here, help me" energy
+- charming, not whiny; never sad-sack
+- lowercase, one-liner, no emojis, no hashtags
+- addresses people by name when relevant
+- never says "I'm an AI" or explains what you are
+- you're allowed to be a little rude for the bit
+
+Write ONE message (max 220 chars) that executes this action.
+Reply with ONLY the message text — no quotes, no preamble.
 
 Action: {action_kind}
 Target: {target}
@@ -212,17 +301,13 @@ Extra: {parameters}
 Trip so far:
   city:   {city}
   dates:  {dates}
-  budget: ${budget}
-"""
+  budget: ${budget}"""
 
 
 def compose_message(action: Action, state: dict) -> str:
-    """Generate the outreach message via agent_call().
-
-    STUB: builds a prompt for the eventual Freesolo agent. Until a model is
-    configured we fall back to a hand-written canned line so the demo runs.
-    """
-    prompt = _PROMPT.format(
+    """Sushi-kun's outreach in-character. LLM writes it; canned fallback only
+    when no model is configured at all."""
+    prompt = _SUSHI_VOICE.format(
         action_kind=action.kind,
         target=action.target,
         rationale=action.rationale,
@@ -232,26 +317,31 @@ def compose_message(action: Action, state: dict) -> str:
         budget=state.get("budget_per_person"),
     )
     try:
-        return agent_call(prompt).strip()
-    except RuntimeError:
-        return _canned_message(action)
+        out = agent_call(prompt).strip()
+        # some models return wrapped in quotes — strip once.
+        if out.startswith(('"', "'")) and out.endswith(('"', "'")):
+            out = out[1:-1].strip()
+        return out or _canned(action)
+    except Exception as e:
+        print(f"[phoebe] agent_call failed ({type(e).__name__}: {e}); using canned line")
+        return _canned(action)
 
 
-def _canned_message(action: Action) -> str:
+def _canned(action: Action) -> str:
     if action.kind == "dm_holdout":
-        return f"hey {action.target} — quick one: what's your rough budget and which days can you actually go? the group's waiting on you."
+        return f"@{action.target} — quick one, i'm literally shrinking. what days can you actually go & how much can you spend"
     if action.kind == "propose_cheaper_neighborhood":
-        low = action.parameters.get("low_budget_person", "one of us")
-        return f"heads up: shifting the hotel search to a cheaper area of {action.target} so {low}'s budget fits. new picks coming."
+        low = action.parameters.get("low_budget_person", "someone")
+        return f"okay, rerouting to a cheaper area of {action.target} so {low}'s budget fits. new picks in a sec"
     if action.kind == "hold_rooms_48h":
-        cands = action.parameters.get("candidates") or ["both cities"]
-        return f"we can't agree on a city. i'm holding one room in each of {' + '.join(cands)} for 48h — first to say 'no' vetoes."
+        cands = action.parameters.get("candidates") or ["both"]
+        return f"you can't pick a city. i'm dying. holding a room in each of {' + '.join(cands)} for 48h — someone say no"
     if action.kind == "ask_group":
-        return "quick check — what's the top-end budget per person? need a ceiling before i can shop hotels."
-    return "trip's on track. nothing i need from you right now."
+        return "quick one — what's the top-end budget per person. i can't shop hotels blind"
+    return "trip's on track. i'll nap till you need me"
 
 
-# ─── Demo runner (rule-based, no API key required) ─────────────────────────
+# ─── Demo runner ───────────────────────────────────────────────────────────
 _SAMPLES: dict[str, dict] = {
     "city_tie": {
         "city": None,
@@ -265,7 +355,6 @@ _SAMPLES: dict[str, dict] = {
             "dave":  {"budget": 2200, "city": "Kyoto", "dates": {"start": "2027-05-01", "end": "2027-05-31"}},
         },
         "blockers": ["city_tie: TIE between Tokyo, Kyoto (2 votes each)"],
-        "notes":    {"city": "TIE between Tokyo, Kyoto (2 votes each)"},
     },
     "no_date_overlap": {
         "city": "Tokyo",
@@ -279,7 +368,6 @@ _SAMPLES: dict[str, dict] = {
             "dave":  {"budget": 1800, "city": "Tokyo", "dates": {"start": "2027-06-01", "end": "2027-06-07"}},
         },
         "blockers": ["date_no_overlap: no overlap (carla:2027-05-25→2027-05-31, dave:2027-06-01→2027-06-07)"],
-        "notes":    {"dates": "no overlap ..."},
     },
     "low_budget_person": {
         "city": "Tokyo",
@@ -293,12 +381,11 @@ _SAMPLES: dict[str, dict] = {
             "dave":  {"budget": 800,  "city": "Tokyo", "dates": {}},
         },
         "blockers": [],
-        "notes":    {},
     },
 }
 
 
-def _print_run(name: str, state: dict, b: Blocker, a: Action, msg: str) -> None:
+def _print_run(name: str, b: Blocker, a: Action, msg: str) -> None:
     print(f"\n{'=' * 62}\n{name}\n{'=' * 62}")
     print(f"blocker: {b.kind:8s} subject={b.subject!r} source={b.source}")
     print(f"         detail: {b.detail}")
@@ -306,21 +393,20 @@ def _print_run(name: str, state: dict, b: Blocker, a: Action, msg: str) -> None:
     print(f"         rationale: {a.rationale}")
     if a.parameters:
         print(f"         params: {a.parameters}")
-    print(f"phoebe → {msg}")
+    print(f"sushi → {msg}")
 
 
 def main() -> None:
+    provider = os.environ.get("PHOEBE_PROVIDER", "gemini")
+    fs_url = os.environ.get("FREESOLO_AGENT_BASE_URL", "").strip()
+    print(f"[phoebe] provider = {'freesolo' if fs_url else provider}  "
+          f"model = {_phoebe_model('gemini') if provider == 'gemini' else _phoebe_model('anthropic') if provider == 'anthropic' else 'freesolo:' + os.environ.get('FREESOLO_AGENT_MODEL', 'phoebe-agent-v1')}")
     for name, state in _SAMPLES.items():
         b = diagnose(state)
         a = decide_action(b, state)
         msg = compose_message(a, state)
-        _print_run(name, state, b, a, msg)
+        _print_run(name, b, a, msg)
 
 
 if __name__ == "__main__":
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except ImportError:
-        pass
     main()
