@@ -1,0 +1,49 @@
+# Push to main → deploy to Cloud Run. Keyless (Workload Identity Federation):
+# GitHub's OIDC token impersonates github-deployer@hackthe6ix-502813 — no
+# secrets stored anywhere. Runtime env vars (bot token, API keys, Mongo) live
+# on the Cloud Run service itself and persist across deploys; this workflow
+# only ships code.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write   # OIDC token for GCP auth
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/69987838202/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: github-deployer@hackthe6ix-502813.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy trippet \
+            --source . \
+            --project hackthe6ix-502813 \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --min-instances 1 --max-instances 1 \
+            --no-cpu-throttling \
+            --memory 512Mi \
+            --quiet
+
+      - name: Smoke test
+        run: |
+          sleep 10
+          curl -sf https://trippet-69987838202.us-central1.run.app/api/health
