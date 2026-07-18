@@ -146,7 +146,7 @@ async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Post the pet health PNG to a chat (guilt-trip visual)."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
-    await _sync_avatar(g.pet.mood, ctx)
+    asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
@@ -248,7 +248,7 @@ async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
     await asyncio.to_thread(state.persist_pet, g)
-    await _sync_avatar(g.pet.mood, ctx)
+    asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
@@ -422,7 +422,7 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         g = state.get_or_create(chat_id)
         g.pet.refresh_mood()
         await asyncio.to_thread(state.persist_pet, g)
-        await _sync_avatar(g.pet.mood, ctx)
+        asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
         # If live prices just pushed the pet to death's door, let it speak once.
         await maybe_speak_deathbed(chat_id, ctx)
 
