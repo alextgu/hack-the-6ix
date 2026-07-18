@@ -57,6 +57,7 @@ from app.integrations import stay22
 from app.integrations import booking
 from app.integrations import db
 from app.integrations import flights
+from app.integrations import elevenlabs
 from app.agents import supervisor
 
 
@@ -135,6 +136,59 @@ async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+# ─── Voice (ElevenLabs) — gated: deathbed + graduation only ─────────────────
+# The pet speaks aloud only at the two moments that earn it: crossing into
+# critical health (the deathbed plea) and graduating. Never on a normal
+# message. Deduped per chat so each fires at most once; re-armed on /start.
+_spoke_deathbed: set[int] = set()
+_spoke_graduated: set[int] = set()
+_DEATHBED_PHYSICAL = 20  # physical at/below this counts as the deathbed moment
+
+
+async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
+                    mood: str | None = None, physical: int | None = None) -> None:
+    """Post a mood-aware ElevenLabs voice note with `text` as the caption.
+    Falls back to a plain-text message if synthesis, conversion, or the voice
+    send fails. Never raises — a voice failure must not break the chat."""
+    ogg = None
+    try:
+        ogg = await asyncio.to_thread(elevenlabs.synthesize_voice_note, text, mood, physical)
+    except Exception as e:
+        log.warning("voice synth raised (chat=%s): %s", chat_id, e)
+    if ogg:
+        try:
+            await ctx.bot.send_voice(
+                chat_id=chat_id,
+                voice=InputFile(BytesIO(ogg), filename="pet.ogg"),
+                caption=text,
+            )
+            return
+        except Exception as e:
+            log.warning("send_voice failed (chat=%s): %s — falling back to text", chat_id, e)
+    # Fallback: plain text, best-effort.
+    try:
+        await ctx.bot.send_message(chat_id=chat_id, text=text)
+    except Exception:
+        pass
+
+
+async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Speak the deathbed plea the first time the pet crosses into critical
+    health for this chat. Gated + deduped — reads state only, changes nothing."""
+    g = state.get_or_create(chat_id)
+    g.pet.refresh_mood()
+    critical = g.pet.mood == "dying" or g.pet.physical <= _DEATHBED_PHYSICAL
+    if not critical or chat_id in _spoke_deathbed:
+        return
+    _spoke_deathbed.add(chat_id)
+    await speak_pet(
+        chat_id,
+        "i'm fading here... the prices keep climbing and nobody's deciding. "
+        "please — just book something.",
+        ctx, mood="dying", physical=g.pet.physical,
+    )
+
+
 async def execute_decision(chat_id: int, d: "supervisor.Decision",
                            ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Carry out what the supervisor decided. The supervisor is the only
@@ -186,6 +240,8 @@ async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─── Handlers ────────────────────────────────────────────────────────────────
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
+    _spoke_deathbed.discard(g.chat_id)   # re-arm voice moments for the fresh pet
+    _spoke_graduated.discard(g.chat_id)
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
         "hi. i'm the pet. i live here now.\n"
@@ -229,6 +285,7 @@ async def cmd_scrub(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     log.info("scrub chat_id=%s week=%d → phys=%d ment=%d mood=%s",
              g.chat_id, week, g.pet.physical, g.pet.mental, g.pet.mood)
     await _send_pet(update, ctx)
+    await maybe_speak_deathbed(update.effective_chat.id, ctx)
 
 
 async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -287,6 +344,12 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         caption, reply_markup=InlineKeyboardMarkup(buttons)
     )
     await _send_pet(update, ctx)
+    # Graduation moment — the pet speaks its send-off (once per chat).
+    if g.chat_id not in _spoke_graduated:
+        _spoke_graduated.add(g.chat_id)
+        await speak_pet(g.chat_id,
+                        "we did it — i'm free! pack your bags, we're going to japan.",
+                        ctx, mood="graduated", physical=g.pet.physical)
 
 
 async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -322,6 +385,8 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         g = state.get_or_create(chat_id)
         g.pet.refresh_mood()
         await asyncio.to_thread(state.persist_pet, g)
+        # If live prices just pushed the pet to death's door, let it speak once.
+        await maybe_speak_deathbed(chat_id, ctx)
 
     # The supervisor gets a chance on EVERY message — its send-cooldown is
     # the pacing, not the reader's 3-message debounce. Skip the LLM turn

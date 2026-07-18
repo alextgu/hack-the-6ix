@@ -223,7 +223,9 @@
 
   function speak(text) {
     isSpeaking = true;
-    var audio = new Audio("/api/speak?text=" + encodeURIComponent(text));
+    var url = "/api/speak?text=" + encodeURIComponent(text);
+    if (currentMood) url += "&mood=" + encodeURIComponent(currentMood);
+    var audio = new Audio(url);
     audio.addEventListener("ended", function () { isSpeaking = false; });
     audio.addEventListener("error", function () { isSpeaking = false; });
     audio.play().catch(function () { isSpeaking = false; /* autoplay/network failure */ });
