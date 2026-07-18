@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Trip Pet — mock</title>
+<style>
+  :root {
+    --bg: #12141a;
+    --panel: #1c1f28;
+    --ink: #eef1f6;
+    --dim: #8a92a5;
+    --accent: #7cc3ff;
+    --bar-bg: #262a35;
+    --phys: #6fd08c;
+    --ment: #b28cff;
+    --danger: #ff6b6b;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, sans-serif; }
+  body { min-height: 100vh; display: grid; place-items: center; padding: 32px 16px; box-sizing: border-box; }
+  .stage {
+    width: 100%; max-width: 520px;
+    background: var(--panel);
+    border-radius: 24px;
+    padding: 28px 28px 24px;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,.6);
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  h1 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: .04em; color: var(--dim); text-transform: uppercase; }
+  .pet-wrap { display: grid; place-items: center; padding: 8px 0 4px; }
+  .pet { width: 220px; height: 220px; transition: filter .3s; }
+  .pet.celebrate { animation: bounce .6s ease-in-out 3; }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    25% { transform: translateY(-14px) rotate(-4deg); }
+    75% { transform: translateY(-14px) rotate(4deg); }
+  }
+  .stats { display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .stats b { color: var(--ink); font-weight: 600; }
+  .bar { display: flex; flex-direction: column; gap: 6px; }
+  .bar-row { display: flex; justify-content: space-between; font-size: 13px; }
+  .bar-row span:first-child { color: var(--dim); }
+  .bar-row span:last-child { font-variant-numeric: tabular-nums; }
+  .track { height: 12px; background: var(--bar-bg); border-radius: 999px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 999px; transition: width .35s ease, background .35s ease; }
+  .fill.phys { background: var(--phys); }
+  .fill.ment { background: var(--ment); }
+  .fill.low { background: var(--danger); }
+  .slider-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .slider-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); }
+  .slider-row b { color: var(--ink); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .buttons { display: flex; gap: 12px; }
+  button {
+    flex: 1;
+    background: #262a35; color: var(--ink); border: 1px solid #333846;
+    padding: 12px 14px; font-size: 14px; border-radius: 12px; cursor: pointer;
+    transition: transform .06s, background .15s, border-color .15s;
+  }
+  button:hover { background: #2d3240; border-color: #444a5c; }
+  button:active { transform: scale(.98); }
+  button.primary { background: var(--accent); color: #0a1220; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { background: #9cd3ff; }
+  .narration {
+    min-height: 44px; padding: 12px 14px;
+    background: #171922; border-radius: 12px;
+    font-size: 14px; line-height: 1.4; color: var(--ink);
+    border-left: 3px solid var(--accent);
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <h1>Trip Pet · Osaka group · mock</h1>
+
+    <div class="pet-wrap">
+      <svg id="pet" class="pet" viewBox="0 0 200 200" aria-hidden="true"></svg>
+    </div>
+
+    <div class="stats">
+      <span>Avg room · <b id="price">$—</b></span>
+      <span>Rooms left · <b id="avail">—</b></span>
+    </div>
+
+    <div class="bar">
+      <div class="bar-row"><span>Physical (booking)</span><span id="physLabel">100%</span></div>
+      <div class="track"><div id="physFill" class="fill phys" style="width:100%"></div></div>
+    </div>
+
+    <div class="bar">
+      <div class="bar-row"><span>Mental (group vibe)</span><span id="mentLabel">100%</span></div>
+      <div class="track"><div id="mentFill" class="fill ment" style="width:100%"></div></div>
+    </div>
+
+    <div class="slider-wrap">
+      <div class="slider-row"><span>Time</span><span>Week <b id="weekLabel">0</b> / 6</span></div>
+      <input id="slider" type="range" min="0" max="6" step="0.05" value="0" />
+    </div>
+
+    <div class="buttons">
+      <button id="groupBtn">Group decides</button>
+      <button id="commitBtn" class="primary">Commit trip</button>
+    </div>
+
+    <div id="narration" class="narration">Everyone's in the chat. Prices are OK. Rooms are open. The pet is happy.</div>
+  </div>
+
+<script>
+// ---- TUNE THE FEEL HERE ----
+const CFG = {
+  WEEKS: 6,
+  PHYSICAL_PRICE_WEIGHT: 1.8,        // pts of damage per 1% price rise
+  PHYSICAL_AVAIL_WEIGHT: 1.3,        // pts of damage per 1% rooms-sold
+  RECOVERY_MULT: 0.5,                // good weeks heal at this fraction of the damage rate
+  MAX_DAMAGE_PER_WEEK: 22,           // cap so one bad week can't kill the pet
+  MENTAL_WEEKLY_DECAY: 13,           // mental drops this per full week of silence
+  MENTAL_BUMP: 28,                   // "group decides" adds this
+  BASE_PRICE: 220,
+  BASE_AVAIL: 100,
+};
+
+// deterministic PRNG so reload is the same story
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// pre-generate 7 weeks (0..6). weeks 2 & 4 are the "good weeks" — dips.
+function generateWeeks() {
+  const rand = mulberry32(7);
+  const scenario = [
+    { priceMul: 1.07, availMul: 0.90 }, // w1 rising, filling up
+    { priceMul: 0.96, availMul: 1.03 }, // w2 dip — good week
+    { priceMul: 1.10, availMul: 0.87 }, // w3 bad
+    { priceMul: 0.98, availMul: 1.01 }, // w4 small good week
+    { priceMul: 1.12, availMul: 0.84 }, // w5 rough
+    { priceMul: 1.09, availMul: 0.80 }, // w6 final squeeze
+  ];
+  const weeks = [{ week: 0, price: CFG.BASE_PRICE, avail: CFG.BASE_AVAIL }];
+  let price = CFG.BASE_PRICE, avail = CFG.BASE_AVAIL;
+  for (let i = 0; i < CFG.WEEKS; i++) {
+    const noise = (rand() - 0.5) * 0.04;
+    price = price * (scenario[i].priceMul + noise);
+    avail = Math.max(1, avail * (scenario[i].availMul + noise));
+    weeks.push({ week: i + 1, price, avail });
+  }
+  return weeks;
+}
+const WEEKS = generateWeeks();
+
+// cumulative physical damage through an integer week
+function physicalDamageAtWeek(n) {
+  let dmg = 0;
+  for (let i = 1; i <= n; i++) {
+    const prev = WEEKS[i - 1], cur = WEEKS[i];
+    const pricePct = (cur.price - prev.price) / prev.price * 100;
+    const availPct = (prev.avail - cur.avail) / prev.avail * 100;
+    const rawDamage =
+      Math.max(0, pricePct) * CFG.PHYSICAL_PRICE_WEIGHT +
+      Math.max(0, availPct) * CFG.PHYSICAL_AVAIL_WEIGHT;
+    const rawRecovery =
+      Math.max(0, -pricePct) * CFG.PHYSICAL_PRICE_WEIGHT * CFG.RECOVERY_MULT +
+      Math.max(0, -availPct) * CFG.PHYSICAL_AVAIL_WEIGHT * CFG.RECOVERY_MULT;
+    dmg += Math.min(CFG.MAX_DAMAGE_PER_WEEK, rawDamage) - rawRecovery;
+  }
+  return dmg;
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// smooth interpolation between integer-week states
+function physicalAt(weekFloat) {
+  const lo = Math.floor(weekFloat);
+  const hi = Math.min(CFG.WEEKS, lo + 1);
+  const t = weekFloat - lo;
+  const d = lerp(physicalDamageAtWeek(lo), physicalDamageAtWeek(hi), t);
+  return clamp(100 - d, 0, 100);
+}
+function mentalAt(weekFloat, bonus) {
+  return clamp(100 - weekFloat * CFG.MENTAL_WEEKLY_DECAY + bonus, 0, 100);
+}
+function weekDataAt(weekFloat) {
+  const lo = Math.floor(weekFloat);
+  const hi = Math.min(CFG.WEEKS, lo + 1);
+  const t = weekFloat - lo;
+  return {
+    price: lerp(WEEKS[lo].price, WEEKS[hi].price, t),
+    avail: lerp(WEEKS[lo].avail, WEEKS[hi].avail, t),
+    prev: WEEKS[lo],
+  };
+}
+
+// ---- pet SVG ----
+const PET_COLORS = {
+  happy:   { body: '#7cd992', cheek: '#5bb974' },
+  worried: { body: '#f0d47a', cheek: '#d4b658' },
+  sick:    { body: '#e89e5e', cheek: '#c47f43' },
+  dying:   { body: '#8f8f9a', cheek: '#6b6b76' },
+};
+function faceState(physical, mental) {
+  const avg = (physical + mental) / 2;
+  if (avg > 70) return 'happy';
+  if (avg > 45) return 'worried';
+  if (avg > 22) return 'sick';
+  return 'dying';
+}
+function renderPet(state, celebrating) {
+  const c = PET_COLORS[state];
+  const mouths = {
+    happy:   `<path d="M65 128 Q100 158 135 128" stroke="#1a1a22" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+    worried: `<path d="M70 138 Q100 132 130 138" stroke="#1a1a22" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+    sick:    `<path d="M70 145 Q100 128 130 145" stroke="#1a1a22" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+    dying:   `<path d="M72 142 Q84 148 96 140 Q108 132 120 144 Q126 148 132 140" stroke="#1a1a22" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+  };
+  const eyes = state === 'dying'
+    ? `<g stroke="#1a1a22" stroke-width="4" stroke-linecap="round">
+         <line x1="65" y1="82" x2="80" y2="97"/><line x1="80" y1="82" x2="65" y2="97"/>
+         <line x1="120" y1="82" x2="135" y2="97"/><line x1="135" y1="82" x2="120" y2="97"/>
+       </g>`
+    : `<g fill="#1a1a22">
+         <circle cx="72" cy="90" r="7"/>
+         <circle cx="128" cy="90" r="7"/>
+       </g>`;
+  const sweat = state === 'sick'
+    ? `<path d="M150 78 Q156 90 150 96 Q144 90 150 78 Z" fill="#7cc3ff" opacity="0.85"/>`
+    : '';
+  const sparkle = celebrating
+    ? `<g fill="#ffd447" font-size="20" font-family="sans-serif">
+         <text x="30" y="40">✦</text><text x="160" y="55">✦</text>
+         <text x="20" y="150">✦</text><text x="170" y="140">✦</text>
+       </g>` : '';
+  return `
+    <ellipse cx="100" cy="118" rx="78" ry="70" fill="${c.body}"/>
+    <ellipse cx="100" cy="180" rx="60" ry="10" fill="rgba(0,0,0,.18)"/>
+    <circle cx="60" cy="128" r="10" fill="${c.cheek}" opacity="0.7"/>
+    <circle cx="140" cy="128" r="10" fill="${c.cheek}" opacity="0.7"/>
+    ${eyes}
+    ${mouths[state]}
+    ${sweat}
+    ${sparkle}
+  `;
+}
+
+// ---- narration ----
+function narrate(week, physical, mental, state, wd) {
+  if (state === 'dying') return "The pet's barely moving. Trip's slipping away.";
+  const prev = wd.prev;
+  const pricePct = week === 0 ? 0 : (wd.price - prev.price) / prev.price * 100;
+  const availPct = week === 0 ? 0 : (prev.avail - wd.avail) / prev.avail * 100;
+  if (week < 0.3) return "Everyone's in the chat. Prices are OK. Rooms are open.";
+  const parts = [];
+  if (pricePct > 4) parts.push(`Osaka rooms up ${pricePct.toFixed(0)}%`);
+  else if (pricePct < -1) parts.push(`prices dipped ${(-pricePct).toFixed(0)}%`);
+  if (availPct > 5) parts.push(`${availPct.toFixed(0)}% of rooms just sold`);
+  if (mental < 40) parts.push("chat's gone quiet");
+  else if (mental > 85) parts.push("group's hyped");
+  const head = parts.length ? parts.join(" · ") : "Steady week.";
+  const tails = {
+    happy: "Pet's chill.",
+    worried: "Pet's getting antsy.",
+    sick: "Pet's looking rough.",
+    dying: "Pet's fading.",
+  };
+  return `${head} — ${tails[state]}`;
+}
+
+// ---- state + wiring ----
+const state = { week: 0, mentalBonus: 0, celebrating: false };
+const el = {
+  slider: document.getElementById('slider'),
+  weekLabel: document.getElementById('weekLabel'),
+  price: document.getElementById('price'),
+  avail: document.getElementById('avail'),
+  physFill: document.getElementById('physFill'),
+  mentFill: document.getElementById('mentFill'),
+  physLabel: document.getElementById('physLabel'),
+  mentLabel: document.getElementById('mentLabel'),
+  pet: document.getElementById('pet'),
+  narration: document.getElementById('narration'),
+  groupBtn: document.getElementById('groupBtn'),
+  commitBtn: document.getElementById('commitBtn'),
+};
+
+function render() {
+  const w = state.week;
+  const wd = weekDataAt(w);
+  const phys = state.celebrating ? 100 : physicalAt(w);
+  const ment = state.celebrating ? 100 : mentalAt(w, state.mentalBonus);
+  const face = state.celebrating ? 'happy' : faceState(phys, ment);
+
+  el.weekLabel.textContent = w.toFixed(1);
+  el.price.textContent = '$' + wd.price.toFixed(0);
+  el.avail.textContent = wd.avail.toFixed(0);
+  el.physFill.style.width = phys + '%';
+  el.mentFill.style.width = ment + '%';
+  el.physLabel.textContent = phys.toFixed(0) + '%';
+  el.mentLabel.textContent = ment.toFixed(0) + '%';
+  el.physFill.classList.toggle('low', phys < 25);
+  el.mentFill.classList.toggle('low', ment < 25);
+  el.pet.innerHTML = renderPet(face, state.celebrating);
+  el.narration.textContent = state.celebrating
+    ? "🎉 Trip locked in. Osaka in July. The pet is thriving."
+    : narrate(w, phys, ment, face, wd);
+}
+
+el.slider.addEventListener('input', e => {
+  state.week = parseFloat(e.target.value);
+  state.celebrating = false;
+  render();
+});
+el.groupBtn.addEventListener('click', () => {
+  state.mentalBonus = Math.min(100, state.mentalBonus + CFG.MENTAL_BUMP);
+  state.celebrating = false;
+  render();
+});
+el.commitBtn.addEventListener('click', () => {
+  state.celebrating = true;
+  el.pet.classList.remove('celebrate');
+  void el.pet.offsetWidth; // restart animation
+  el.pet.classList.add('celebrate');
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
