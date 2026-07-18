@@ -1,0 +1,40 @@
+/* Tabi shared design tokens — source of truth for webapp + landing.
+ * Import this file; do not redefine these variables elsewhere.
+ */
+:root {
+  --bg: #ede8d0;
+  --surface: #ffffff;
+  --fg: #2a241c;
+  --muted: #7a7266;
+
+  /* soft category pastels (card fills / tags) */
+  --card-peach: #f0d5c0;
+  --card-peach-ink: #6b3f28;
+  --card-sky: #c9dff0;
+  --card-sky-ink: #2a5578;
+  --card-mint: #cfe8d4;
+  --card-mint-ink: #2f6b4a;
+  --card-butter: #efe3a8;
+  --card-butter-ink: #6b5a1e;
+  --card-coral: #f0c8c0;
+  --card-coral-ink: #7a3530;
+
+  /* health bar thresholds — ≥70 green, ≥40 orange, else red (webapp/app.js) */
+  --health-good: #3d9a5f;
+  --health-warn: #e08a2e;
+  --health-bad: #d13b2e;
+
+  --shadow: 0 10px 28px rgba(42, 36, 28, 0.08);
+  --radius: 28px;
+  --radius-sm: 18px;
+
+  --font-display: "Unbounded", system-ui, sans-serif;
+  --font-body: "Geist Sans", "Geist", system-ui, sans-serif;
+}
+
+/* Utility: solid health fill from a 0–100 value (set --health-pct on the element) */
+.health-fill {
+  background: var(--health-good);
+}
+.health-fill[data-level="warn"] { background: var(--health-warn); }
+.health-fill[data-level="bad"] { background: var(--health-bad); }

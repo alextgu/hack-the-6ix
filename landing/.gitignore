@@ -36,6 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# synced from repo-root /design-system (see scripts/sync-ds.js)
+/app/theme/
+/theme/

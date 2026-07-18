@@ -28,6 +28,7 @@ from app.integrations import elevenlabs
 
 ROOT = Path(__file__).resolve().parents[2]   # app/api/api.py -> repo root
 WEBAPP_DIR = ROOT / "webapp"
+DESIGN_SYSTEM_DIR = ROOT / "design-system"
 
 
 app = FastAPI(title="trippet-face", docs_url="/api/docs", redoc_url=None)
@@ -53,6 +54,14 @@ async def _no_cache(request, call_next):
 # Static asset routes: /webapp/animations/{mood}.json, /webapp/app.js, etc.
 if WEBAPP_DIR.exists():
     app.mount("/webapp", StaticFiles(directory=str(WEBAPP_DIR)), name="webapp")
+
+# Shared theme tokens/components (imported by webapp/ds.css + landing).
+if DESIGN_SYSTEM_DIR.exists():
+    app.mount(
+        "/design-system",
+        StaticFiles(directory=str(DESIGN_SYSTEM_DIR)),
+        name="design-system",
+    )
 
 
 def _iso_or_none(d) -> Optional[str]:

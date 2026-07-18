@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync-ds": "node scripts/sync-ds.js",
+    "predev": "node scripts/sync-ds.js",
+    "prebuild": "node scripts/sync-ds.js",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

@@ -10,126 +10,102 @@ const SPONSORS = ["Stay22", "Phoebe", "Freesolo", "MongoDB Atlas", "ElevenLabs",
 
 const STEPS = [
   {
-    kanji: "一",
+    icon: "heroicons:sparkles",
     title: "It hatches",
     body: "Add the bot to your group chat. Sushi-kun hatches and starts reading the Japan trip taking shape — city, dates, budget, group size.",
   },
   {
-    kanji: "二",
+    icon: "heroicons:heart",
     title: "It reacts",
     body: "Live Stay22 hotel prices drive its physical health; group engagement drives its mental health. Every real decision heals it; silence and rising prices make it sick.",
   },
   {
-    kanji: "三",
+    icon: "heroicons:magnifying-glass",
     title: "It finds the holdup",
     body: "Phoebe, the coordination agent, diagnoses the one blocker — a person, a date clash, a budget gap — and works to remove it instead of nagging everyone.",
   },
   {
-    kanji: "四",
+    icon: "heroicons:check-badge",
     title: "You commit",
     body: "When the group commits, Stay22 returns the real booking and Sushi-kun graduates. The sentence in the group chat finally becomes a booked trip.",
   },
 ];
 
-function CTAButton() {
+function CTAButton({ large = false }: { large?: boolean }) {
   return (
-    <a
-      href={BOT_URL}
-      className="cta-glow inline-flex items-center gap-2.5 rounded-2xl px-7 py-3.5 text-sm font-semibold"
-      style={{
-        background: "linear-gradient(90deg, var(--amber), var(--amber-deep))",
-        color: "var(--night)",
-      }}
-    >
+    <a href={BOT_URL} className={large ? "ds-cta hero-cta" : "ds-cta"}>
       Add to Telegram
-      <span style={{ color: "rgba(18,19,31,0.55)" }}>{BOT_HANDLE}</span>
+      <span
+        style={{
+          opacity: 0.7,
+          fontFamily: "var(--font-body)",
+          fontSize: large ? 14 : 13,
+        }}
+      >
+        {BOT_HANDLE}
+      </span>
     </a>
   );
 }
 
 export default function Home() {
   return (
-    <main className="min-h-screen" style={{ background: "var(--night)", color: "var(--ink)" }}>
-      {/* ─── Hero — indigo night, lanterns, falling petals ────────────────── */}
-      <section className="relative overflow-hidden">
-        {/* breathing sky */}
-        <div
-          aria-hidden
-          className="animate-breathe absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(60% 55% at 50% 0%, rgba(246,198,208,0.14), transparent 70%)," +
-              "radial-gradient(45% 40% at 82% 28%, rgba(245,165,36,0.10), transparent 70%)," +
-              "radial-gradient(50% 45% at 12% 34%, rgba(178,140,255,0.08), transparent 70%)",
-          }}
-        />
-        {/* lantern glows */}
-        <div
-          aria-hidden
-          className="animate-lantern absolute left-[8%] top-40 h-24 w-24 rounded-full"
-          style={{ background: "var(--amber)", opacity: 0.5 }}
-        />
-        <div
-          aria-hidden
-          className="animate-lantern absolute right-[10%] top-64 h-16 w-16 rounded-full"
-          style={{ background: "var(--sakura-deep)", opacity: 0.4, animationDelay: "2.5s" }}
-        />
-        <Petals />
+    <main className="min-h-screen" style={{ color: "var(--fg)" }}>
+      {/* ─── Hero — split: copy ~55% / poster ~45% ─────────────────────────── */}
+      <section className="hero-split relative lg:grid lg:min-h-dvh lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
+        <div className="relative flex flex-col justify-center px-6 py-16 sm:px-10 sm:py-20 lg:px-12 lg:py-24 xl:px-16">
+          <Petals />
 
-        <div className="relative mx-auto max-w-5xl px-6 pb-24 pt-28 text-center sm:pt-36">
-          <Reveal>
-            <p
-              className="font-display mb-5 text-sm font-semibold uppercase tracking-[0.35em]"
-              style={{ color: "var(--sakura)" }}
-            >
-              ⛩ Plan That Trip to Japan
-            </p>
-          </Reveal>
-          <Reveal delay={120}>
-            <h1
-              className="font-display mx-auto max-w-3xl text-4xl font-bold leading-[1.15] tracking-tight sm:text-6xl sm:leading-[1.1]"
-              style={{ color: "var(--paper)" }}
-            >
-              Everyone wants to go to Japan.
-              <br />
-              <span
-                style={{
-                  background: "linear-gradient(90deg, var(--sakura-deep), var(--amber))",
-                  WebkitBackgroundClip: "text",
-                  backgroundClip: "text",
-                  color: "transparent",
-                }}
+          <div className="relative mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[34rem]">
+            <Reveal>
+              <p className="ds-chip mb-7" style={{ display: "inline-flex" }}>
+                <iconify-icon icon="heroicons:map-pin" width="14" height="14" />
+                Plan That Trip to Japan
+              </p>
+            </Reveal>
+            <Reveal delay={100}>
+              <h1 className="ds-title text-[2.15rem] leading-[1.12] sm:text-5xl lg:text-[3.15rem]">
+                Everyone wants to go to Japan.
+                <br />
+                <span style={{ color: "var(--card-coral-ink)" }}>Nobody books it.</span>
+              </h1>
+            </Reveal>
+            <Reveal delay={200}>
+              <p
+                className="mt-6 max-w-md text-base leading-relaxed sm:text-lg"
+                style={{ color: "var(--muted)" }}
               >
-                Nobody books it.
-              </span>
-            </h1>
-          </Reveal>
-          <Reveal delay={240}>
-            <p className="mx-auto mt-7 max-w-2xl text-lg leading-relaxed" style={{ color: "var(--ink-dim)" }}>
-              A Telegram bot turns your stalled group chat into a pet whose health is live
-              hotel data. It gets sick as you procrastinate. The only way to save it is to
-              actually book the trip.
-            </p>
-          </Reveal>
-          <Reveal delay={360}>
-            <div className="mt-10">
-              <CTAButton />
-            </div>
-          </Reveal>
+                A Telegram bot turns your stalled group chat into a pet whose health is live
+                hotel data. It gets sick as you procrastinate. The only way to save it is to
+                actually book the trip.
+              </p>
+            </Reveal>
+            <Reveal delay={320}>
+              <div className="mt-10 sm:mt-12">
+                <CTAButton large />
+              </div>
+            </Reveal>
+          </div>
+        </div>
+
+        <div className="hero-poster relative isolate h-[min(62vh,520px)] w-full overflow-hidden lg:h-auto lg:min-h-dvh">
+          {/* eslint-disable-next-line @next/next/no-img-element -- full-bleed editorial panel */}
+          <img
+            src="/tokyo-poster.png"
+            alt="Vintage Tokyo travel poster — pagoda and cherry blossoms"
+            className="absolute inset-0 h-full w-full object-cover object-[center_20%] lg:object-center"
+            decoding="async"
+            fetchPriority="high"
+          />
         </div>
       </section>
 
-      {/* ─── Interactive demo — feel it rot ───────────────────────────────── */}
+      {/* ─── Interactive demo ─────────────────────────────────────────────── */}
       <section className="relative mx-auto max-w-5xl px-6 py-16">
         <Reveal>
           <div className="mb-10 text-center">
-            <div className="font-display mb-2 text-3xl" style={{ color: "var(--sakura-deep)" }} aria-hidden>
-              寿司くん
-            </div>
-            <h2 className="font-display text-3xl font-bold sm:text-4xl" style={{ color: "var(--paper)" }}>
-              Meet Sushi-kun
-            </h2>
-            <p className="mx-auto mt-3 max-w-xl leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+            <h2 className="ds-title text-3xl sm:text-4xl">Meet Sushi-kun</h2>
+            <p className="mx-auto mt-3 max-w-xl leading-relaxed" style={{ color: "var(--muted)" }}>
               Drag the slider to fast-forward the weeks. Watch the 時価 climb, the rooms
               sell off, and Sushi-kun spoil. Then book it.
             </p>
@@ -140,37 +116,22 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* ─── How it works — four kanji steps ──────────────────────────────── */}
+      {/* ─── How it works ─────────────────────────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-6 py-20">
         <Reveal>
-          <h2
-            className="font-display mb-12 text-center text-3xl font-bold sm:text-4xl"
-            style={{ color: "var(--paper)" }}
-          >
-            How it works
-          </h2>
+          <h2 className="ds-title mb-12 text-center text-3xl sm:text-4xl">How it works</h2>
         </Reveal>
         <div className="grid gap-5 sm:grid-cols-2">
           {STEPS.map((s, i) => (
-            <Reveal key={s.kanji} delay={i * 110}>
-              <div
-                className="card-lift h-full rounded-3xl border p-7"
-                style={{
-                  borderColor: "rgba(246,198,208,0.12)",
-                  background: "linear-gradient(180deg, rgba(35,36,65,0.6), rgba(26,27,46,0.9))",
-                }}
-              >
-                <div
-                  className="font-display mb-4 text-4xl font-semibold"
-                  style={{ color: "var(--amber)" }}
-                  aria-hidden
-                >
-                  {s.kanji}
+            <Reveal key={s.title} delay={i * 110}>
+              <div className="ds-health-card card-lift h-full">
+                <div className="bar-top">
+                  <div className="bar-icon">
+                    <iconify-icon icon={s.icon} width="22" height="22" />
+                  </div>
+                  <h3 className="bar-name">{s.title}</h3>
                 </div>
-                <h3 className="font-display mb-2.5 text-xl font-bold" style={{ color: "var(--paper)" }}>
-                  {s.title}
-                </h3>
-                <p className="text-sm leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
                   {s.body}
                 </p>
               </div>
@@ -179,45 +140,28 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 時価 market price — the sushi-counter metaphor ───────────────── */}
+      {/* ─── 時価 market price ────────────────────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-6 py-16">
         <Reveal>
           <div
-            className="relative overflow-hidden rounded-3xl border p-9 sm:p-14"
+            className="relative overflow-hidden p-9 sm:p-14"
             style={{
-              borderColor: "rgba(245,165,36,0.22)",
-              background:
-                "radial-gradient(70% 90% at 15% 20%, rgba(245,165,36,0.10), transparent 60%)," +
-                "linear-gradient(160deg, var(--night-mist), var(--night-soft) 60%, var(--night))",
+              borderRadius: "var(--radius)",
+              background: "var(--surface)",
+              boxShadow: "var(--shadow)",
             }}
           >
-            <div
-              aria-hidden
-              className="animate-lantern absolute -right-8 -top-8 h-32 w-32 rounded-full"
-              style={{ background: "var(--amber)", opacity: 0.25 }}
-            />
             <div className="grid items-center gap-10 sm:grid-cols-[auto_1fr]">
               <div className="text-center sm:text-left">
-                <div
-                  className="font-display text-7xl font-bold leading-none sm:text-8xl"
-                  style={{
-                    background: "linear-gradient(180deg, var(--paper), var(--amber))",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  時価
-                </div>
-                <div className="mt-3 text-sm tracking-wide" style={{ color: "var(--ink-dim)" }}>
+                <div className="ds-title text-7xl leading-none sm:text-8xl">時価</div>
+                <div className="mt-3 flex items-center justify-center gap-2 text-sm sm:justify-start" style={{ color: "var(--muted)" }}>
+                  <iconify-icon icon="heroicons:currency-dollar" width="14" height="14" />
                   jika — &ldquo;market price&rdquo;
                 </div>
               </div>
               <div>
-                <h2 className="font-display text-2xl font-bold sm:text-3xl" style={{ color: "var(--paper)" }}>
-                  Priced like the sushi counter
-                </h2>
-                <p className="mt-4 leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+                <h2 className="ds-title text-2xl sm:text-3xl">Priced like the sushi counter</h2>
+                <p className="mt-4 leading-relaxed" style={{ color: "var(--muted)" }}>
                   At a sushi bar, 時価 means &ldquo;market price&rdquo; — no number on the menu,
                   it&apos;s whatever the market says today. Sushi-kun&apos;s physical health is
                   exactly that: live Stay22 prices and availability across Expedia, Booking,
@@ -231,38 +175,23 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* ─── Final CTA — dawn breaks, go to Japan ─────────────────────────── */}
+      {/* ─── Final CTA ────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
-        <div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(80% 100% at 50% 100%, rgba(245,165,36,0.16), transparent 60%)," +
-              "radial-gradient(60% 70% at 50% 85%, rgba(246,198,208,0.12), transparent 70%)",
-          }}
-        />
         <Petals />
         <div className="relative mx-auto max-w-5xl px-6 py-28 text-center">
           <Reveal>
-            <div className="font-display mb-4 text-2xl" style={{ color: "var(--sakura)" }} aria-hidden>
-              🏮
-            </div>
-            <h2
-              className="font-display mx-auto max-w-2xl text-3xl font-bold leading-snug sm:text-5xl"
-              style={{ color: "var(--paper)" }}
-            >
+            <h2 className="ds-title mx-auto max-w-2xl text-3xl leading-snug sm:text-5xl">
               Stop letting the trip die in the group chat.
             </h2>
           </Reveal>
           <Reveal delay={150}>
-            <p className="mx-auto mt-5 max-w-xl leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+            <p className="mx-auto mt-5 max-w-xl leading-relaxed" style={{ color: "var(--muted)" }}>
               Add Sushi-kun. Give your friends something that gets sad when you don&apos;t
               book — and a spring morning in Kyoto when you do.
             </p>
           </Reveal>
           <Reveal delay={300}>
-            <div className="mt-10">
+            <div className="mt-10 flex justify-center">
               <CTAButton />
             </div>
           </Reveal>
@@ -270,22 +199,20 @@ export default function Home() {
       </section>
 
       {/* ─── Footer ───────────────────────────────────────────────────────── */}
-      <footer className="border-t px-6 py-12" style={{ borderColor: "rgba(246,198,208,0.08)" }}>
+      <footer className="px-6 py-12" style={{ borderTop: "1px solid rgba(42, 36, 28, 0.08)" }}>
         <div className="mx-auto max-w-5xl text-center">
-          <div className="text-xs uppercase tracking-[0.3em]" style={{ color: "var(--ink-dim)" }}>
+          <div className="text-xs uppercase tracking-[0.3em]" style={{ color: "var(--muted)" }}>
             Powered by
           </div>
           <div
             className="mt-4 flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-sm"
-            style={{ color: "var(--ink-dim)" }}
+            style={{ color: "var(--muted)" }}
           >
             {SPONSORS.map((s) => (
-              <span key={s} className="transition-colors duration-200 hover:text-[var(--sakura)]">
-                {s}
-              </span>
+              <span key={s}>{s}</span>
             ))}
           </div>
-          <div className="font-display mt-8 text-xs" style={{ color: "rgba(169,165,184,0.55)" }}>
+          <div className="ds-title mt-8 text-xs" style={{ color: "var(--muted)" }}>
             Built at Hack the 6ix · Plan That Trip to Japan · いってらっしゃい
           </div>
         </div>

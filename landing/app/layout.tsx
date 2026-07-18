@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Shippori_Mincho } from "next/font/google";
+import type { CSSProperties, ReactNode } from "react";
+import { Geist, Unbounded } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -7,15 +9,9 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-// Editorial Japanese serif — headlines + kanji accents.
-const shippori = Shippori_Mincho({
-  variable: "--font-display",
-  weight: ["400", "600", "700", "800"],
+const unbounded = Unbounded({
+  variable: "--font-unbounded",
+  weight: ["400"],
   subsets: ["latin"],
 });
 
@@ -25,17 +21,25 @@ export const metadata: Metadata = {
     "A Telegram bot that turns your stalled group chat into a pet whose health is live hotel data. The only way to save it is to actually book the trip.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: ReactNode }) {
+  const fontVars = {
+    ["--font-body" as string]: "var(--font-geist-sans), 'Geist Sans', system-ui, sans-serif",
+    ["--font-display" as string]: "var(--font-unbounded), Unbounded, system-ui, sans-serif",
+  } as CSSProperties;
+
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${shippori.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${unbounded.variable} h-full antialiased`}
+      style={fontVars}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <Script
+          src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"
+          strategy="afterInteractive"
+        />
+      </body>
     </html>
   );
 }

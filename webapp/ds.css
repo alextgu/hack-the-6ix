@@ -1,34 +1,9 @@
-/* Tabi design system */
-:root {
-  --bg: #EDE8D0;
-  --surface: #ffffff;
-  --fg: #2a241c;
-  --muted: #7a7266;
-
-  /* soft category pastels (card fills) */
-  --card-peach: #f0d5c0;
-  --card-peach-ink: #6b3f28;
-  --card-sky: #c9dff0;
-  --card-sky-ink: #2a5578;
-  --card-mint: #cfe8d4;
-  --card-mint-ink: #2f6b4a;
-  --card-butter: #efe3a8;
-  --card-butter-ink: #6b5a1e;
-  --card-coral: #f0c8c0;
-  --card-coral-ink: #7a3530;
-
-  /* health bar thresholds */
-  --health-good: #3d9a5f;     /* 70+ */
-  --health-warn: #e08a2e;     /* 40–70 */
-  --health-bad: #d13b2e;      /* <40 */
-
-  --shadow: 0 10px 28px rgba(42, 36, 28, 0.08);
-  --radius: 28px;
-  --radius-sm: 18px;
-
-  --font-display: "Unbounded", system-ui, sans-serif;
-  --font-body: "Geist Sans", "Geist", system-ui, sans-serif;
-}
+/* Tabi design system — webapp entry.
+ * Tokens + shared components live in /design-system (shared with landing).
+ * Served at /design-system/* via FastAPI StaticFiles mount.
+ */
+@import url("/design-system/tokens.css");
+@import url("/design-system/components.css");
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -61,76 +36,15 @@ body::before {
   z-index: 1;
 }
 
-.ds-title {
-  font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  color: var(--fg);
-}
-.ds-muted { color: var(--muted); }
-
-.ds-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--fg);
-  background: var(--surface);
-  border-radius: 999px;
-  padding: 6px 12px;
-  box-shadow: var(--shadow);
-  white-space: nowrap;
-}
 .ds-chip iconify-icon { flex: 0 0 auto; }
-
-.ds-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--muted);
-}
 .ds-stat iconify-icon {
   flex: 0 0 auto;
   color: var(--fg);
   opacity: 0.7;
 }
 
-.ds-icon-btn {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: none;
-  background: var(--surface);
-  color: var(--fg);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow);
-  transition: transform 120ms ease;
-}
-.ds-icon-btn:active { transform: scale(0.92); }
-.ds-icon-btn.is-like {
-  background: var(--card-coral);
-  color: var(--card-coral-ink);
-}
-.ds-icon-btn:disabled { opacity: 0.35; pointer-events: none; }
-
 .ds-cta {
   display: block;
   width: 100%;
   max-width: 340px;
-  text-align: center;
-  background: var(--fg);
-  color: var(--bg);
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 15px;
-  letter-spacing: -0.01em;
-  padding: 14px 16px;
-  border-radius: 999px;
-  text-decoration: none;
-  border: none;
 }

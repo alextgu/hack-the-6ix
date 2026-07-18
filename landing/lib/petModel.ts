@@ -119,18 +119,27 @@ export function caption(physical: number, mental: number, mood: Mood): string {
   return lines.join(" — ");
 }
 
-// pet.py::MOOD_COLORS (RGB → hex).
+// Mood chip colors — aligned with Tabi DS health palette.
 export const MOOD_COLOR: Record<Mood, string> = {
-  happy: "#7CD992",
-  worried: "#F0D47A",
-  sick: "#E89E5E",
-  dying: "#8F8F9A",
-  graduated: "#F5C518",
+  happy: "#3d9a5f",
+  worried: "#e08a2e",
+  sick: "#d13b2e",
+  dying: "#7a7266",
+  graduated: "#2f6b4a",
 };
 
-// Bar colors: physical (green) + mental (purple), matching pet.py's bars.
-export const PHYSICAL_COLOR = "#7CD992";
-export const MENTAL_COLOR = "#B28CFF";
+/** Same thresholds as webapp/app.js healthColor: ≥70 green, ≥40 orange, else red. */
+export function healthColor(val: number): string {
+  if (val >= 70) return "#3d9a5f";
+  if (val >= 40) return "#e08a2e";
+  return "#d13b2e";
+}
+
+export function healthLevel(val: number): "good" | "warn" | "bad" {
+  if (val >= 70) return "good";
+  if (val >= 40) return "warn";
+  return "bad";
+}
 
 // How spoiled the 🍣 looks per mood — CSS filter + transform on the placeholder.
 // (Replace the emoji with a Lottie animation later; these map cleanly to mood.)
@@ -139,5 +148,5 @@ export const MOOD_SUSHI_STYLE: Record<Mood, { filter: string; transform: string;
   worried: { filter: "grayscale(0.25) saturate(0.9)", transform: "translateY(4px) rotate(-4deg) scale(0.98)", opacity: 1 },
   sick: { filter: "grayscale(0.5) sepia(0.35) saturate(0.8)", transform: "translateY(10px) rotate(-8deg) scale(0.94)", opacity: 0.9 },
   dying: { filter: "grayscale(0.85) brightness(0.8) blur(0.4px)", transform: "translateY(18px) rotate(-12deg) scale(0.9)", opacity: 0.55 },
-  graduated: { filter: "saturate(1.35) brightness(1.1) drop-shadow(0 0 14px #F5C518)", transform: "translateY(-6px) rotate(0deg) scale(1.1)", opacity: 1 },
+  graduated: { filter: "saturate(1.35) brightness(1.1) drop-shadow(0 0 14px #3d9a5f)", transform: "translateY(-6px) rotate(0deg) scale(1.1)", opacity: 1 },
 };

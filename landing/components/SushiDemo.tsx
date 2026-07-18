@@ -1,40 +1,49 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   MAX_WEEK,
   MOOD_COLOR,
   MOOD_SUSHI_STYLE,
-  PHYSICAL_COLOR,
-  MENTAL_COLOR,
   committedState,
+  healthColor,
   stateAtWeek,
 } from "@/lib/petModel";
 
-function Bar({ label, value, color }: { label: string; value: number; color: string }) {
+function HealthCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: number;
+  icon: string;
+}) {
+  // Same hex thresholds as webapp/app.js healthColor (≥70 / ≥40 / else).
+  const color = healthColor(value);
   return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between text-xs" style={{ color: "var(--ink-dim)" }}>
-        <span>{label}</span>
-        <span className="tabular-nums font-medium" style={{ color: "var(--ink)" }}>
-          {value}%
-        </span>
+    <div className="ds-health-card" style={{ padding: "14px 16px", gap: 12 }}>
+      <div className="bar-top">
+        <div className="bar-icon">
+          <iconify-icon icon={icon} width="20" height="20" />
+        </div>
+        <div className="bar-name" style={{ fontSize: 14 }}>
+          {label}
+        </div>
+        <div className="bar-val" style={{ fontSize: 24, color }}>
+          {Math.round(value)}
+        </div>
       </div>
-      <div className="h-3 w-full overflow-hidden rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.07)" }}>
+      <div className="bar-outer">
         <div
-          className="h-full rounded-full transition-all duration-500 ease-out"
-          style={{
-            width: `${value}%`,
-            background: `linear-gradient(90deg, ${color}88, ${color})`,
-            boxShadow: `0 0 12px ${color}55`,
-          }}
+          className="bar-inner"
+          style={{ width: `${value}%`, background: color }}
         />
       </div>
     </div>
   );
 }
 
-/* Sparkle burst shown once on graduation. */
 const SPARKS = [
   { x: -70, y: -50, delay: 0 },
   { x: 70, y: -55, delay: 0.08 },
@@ -54,157 +63,185 @@ export default function SushiDemo() {
   const glow = MOOD_COLOR[pet.mood];
 
   return (
-    <div
-      className="mx-auto w-full max-w-md rounded-3xl border p-6 shadow-2xl backdrop-blur-sm sm:p-7"
-      style={{
-        borderColor: "rgba(246,198,208,0.16)",
-        background: "linear-gradient(180deg, rgba(35,36,65,0.85), rgba(18,19,31,0.95))",
-      }}
-    >
-      {/* Stage */}
+    <div className="mx-auto grid w-full max-w-4xl gap-5 lg:grid-cols-2">
       <div
-        className="relative mb-5 flex h-60 items-center justify-center overflow-hidden rounded-2xl transition-shadow duration-700"
+        className="card-lift flex flex-col overflow-hidden"
         style={{
-          background: "radial-gradient(ellipse at 50% 70%, rgba(255,255,255,0.05), transparent 65%), var(--night-soft)",
-          boxShadow: `inset 0 0 90px ${glow}2e`,
+          borderRadius: "var(--radius)",
+          background: "var(--surface)",
+          boxShadow: "var(--shadow)",
         }}
       >
-        {/* mood glow floor */}
         <div
-          aria-hidden
-          className="absolute bottom-6 h-8 w-40 rounded-full transition-all duration-700"
-          style={{ background: glow, opacity: 0.18, filter: "blur(22px)" }}
-        />
-
-        {/* ART SLOT — placeholder 🍣. Swap this <span> for a Lottie animation
-            keyed on `pet.mood` when the designer's Sushi-kun art lands. */}
-        <span
-          key={booked ? "booked" : "alive"}
-          className={`select-none text-8xl transition-all duration-500 ${
-            booked ? "animate-pop" : pet.mood === "dying" ? "" : "animate-floaty"
-          }`}
-          style={{
-            filter: sushi.filter,
-            transform: sushi.transform,
-            opacity: sushi.opacity,
-            transitionTimingFunction: "cubic-bezier(0.22, 1.2, 0.36, 1)",
-          }}
-          role="img"
-          aria-label={`Sushi-kun looking ${pet.mood}`}
+          className="relative flex h-56 items-center justify-center overflow-hidden sm:h-64"
+          style={{ background: "var(--card-peach)" }}
         >
-          🍣
-        </span>
+          <div
+            aria-hidden
+            className="absolute bottom-6 h-8 w-40 rounded-full transition-all duration-700"
+            style={{ background: glow, opacity: 0.22, filter: "blur(22px)" }}
+          />
 
-        {/* graduation sparkles */}
-        {booked && (
-          <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            {SPARKS.map((s, i) => (
-              <span
-                key={i}
-                className="animate-sparkle absolute text-xl"
-                style={
-                  {
-                    "--spark-x": `${s.x}px`,
-                    "--spark-y": `${s.y}px`,
-                    "--spark-delay": `${s.delay}s`,
-                  } as React.CSSProperties
-                }
-              >
-                ✨
-              </span>
-            ))}
-          </div>
-        )}
+          <span
+            key={booked ? "booked" : "alive"}
+            className={`select-none text-8xl transition-all duration-500 ${
+              booked ? "animate-pop" : pet.mood === "dying" ? "" : "animate-floaty"
+            }`}
+            style={{
+              filter: sushi.filter,
+              transform: sushi.transform,
+              opacity: sushi.opacity,
+              transitionTimingFunction: "cubic-bezier(0.22, 1.2, 0.36, 1)",
+            }}
+            role="img"
+            aria-label={`Sushi-kun looking ${pet.mood}`}
+          >
+            🍣
+          </span>
 
-        <span
-          className="absolute right-3 top-3 rounded-full px-2.5 py-1 text-xs font-medium tracking-wide transition-colors duration-500"
-          style={{ backgroundColor: `${glow}1f`, color: glow, border: `1px solid ${glow}44` }}
-        >
-          {pet.mood}
-        </span>
-      </div>
+          {booked && (
+            <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              {SPARKS.map((s, i) => (
+                <span
+                  key={i}
+                  className="animate-sparkle absolute text-xl"
+                  style={
+                    {
+                      "--spark-x": `${s.x}px`,
+                      "--spark-y": `${s.y}px`,
+                      "--spark-delay": `${s.delay}s`,
+                    } as CSSProperties
+                  }
+                >
+                  ✨
+                </span>
+              ))}
+            </div>
+          )}
 
-      {/* Dialogue */}
-      <p
-        className="font-display mb-5 min-h-[1.75rem] text-center text-[15px] italic transition-opacity duration-300"
-        style={{ color: "var(--sakura)" }}
-      >
-        「{pet.caption}」
-      </p>
-
-      {/* Market ticker — 時価 */}
-      <div className="mb-5 flex items-stretch gap-3">
-        <div
-          className="flex-1 rounded-xl border px-3.5 py-2.5"
-          style={{ borderColor: "rgba(245,165,36,0.25)", background: "rgba(245,165,36,0.06)" }}
-        >
-          <div className="text-[10px] uppercase tracking-widest" style={{ color: "var(--amber)" }}>
-            時価 · market price
-          </div>
-          <div className="tabular-nums text-lg font-semibold transition-all duration-300" style={{ color: "var(--paper)" }}>
-            ${pet.price}
-            <span className="ml-1 text-xs font-normal" style={{ color: "var(--ink-dim)" }}>
-              / night
-            </span>
-          </div>
-        </div>
-        <div
-          className="flex-1 rounded-xl border px-3.5 py-2.5"
-          style={{ borderColor: "rgba(246,198,208,0.2)", background: "rgba(246,198,208,0.05)" }}
-        >
-          <div className="text-[10px] uppercase tracking-widest" style={{ color: "var(--sakura-deep)" }}>
-            rooms left
-          </div>
-          <div className="tabular-nums text-lg font-semibold transition-all duration-300" style={{ color: "var(--paper)" }}>
-            {pet.rooms}
-          </div>
-        </div>
-      </div>
-
-      {/* Health bars */}
-      <div className="mb-6 space-y-3.5">
-        <Bar label="Physical (booking pressure)" value={pet.physical} color={PHYSICAL_COLOR} />
-        <Bar label="Mental (group vibe)" value={pet.mental} color={MENTAL_COLOR} />
-      </div>
-
-      {/* Week slider 0–6 */}
-      <div className="mb-5">
-        <div className="mb-2.5 flex items-center justify-between text-xs" style={{ color: "var(--ink-dim)" }}>
-          <span>drag to procrastinate →</span>
-          <span className="tabular-nums font-medium" style={{ color: "var(--ink)" }}>
-            week {booked ? "—" : pet.week}
+          <span
+            className="ds-chip absolute right-3 top-3"
+            style={{ color: glow, background: "var(--surface)" }}
+          >
+            {pet.mood}
           </span>
         </div>
-        <input
-          type="range"
-          min={0}
-          max={MAX_WEEK}
-          step={1}
-          value={week}
-          onChange={(e) => {
-            setBooked(false); // dragging un-books him
-            setWeek(Number(e.target.value));
-          }}
-          className="scrubber w-full"
-          aria-label="Weeks of procrastination"
-        />
+
+        <div className="flex flex-1 flex-col gap-4 p-5">
+          <p className="ds-title min-h-[1.5rem] text-center text-[15px]" style={{ color: "var(--muted)" }}>
+            「{pet.caption}」
+          </p>
+
+          <div className="flex flex-wrap justify-center gap-2">
+            <span className="ds-stat">
+              <iconify-icon icon="heroicons:currency-dollar" width="14" height="14" />
+              ${pet.price}/night
+            </span>
+            <span className="ds-stat">
+              <iconify-icon icon="heroicons:building-office-2" width="14" height="14" />
+              {pet.rooms} rooms left
+            </span>
+            <span className="ds-stat">
+              <iconify-icon icon="heroicons:calendar-days" width="14" height="14" />
+              week {booked ? "—" : pet.week}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <HealthCard label="Physical" value={pet.physical} icon="heroicons:heart" />
+            <HealthCard
+              label="Mental"
+              value={pet.mental}
+              icon="heroicons:chat-bubble-left-right"
+            />
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between text-xs" style={{ color: "var(--muted)" }}>
+              <span>drag to procrastinate →</span>
+              <span className="tabular-nums" style={{ color: "var(--fg)" }}>
+                week {booked ? "—" : pet.week}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={MAX_WEEK}
+              step={1}
+              value={week}
+              onChange={(e) => {
+                setBooked(false);
+                setWeek(Number(e.target.value));
+              }}
+              className="scrubber w-full"
+              aria-label="Weeks of procrastination"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setBooked(true)}
+            disabled={booked}
+            className="ds-cta w-full"
+            style={
+              booked
+                ? { background: "var(--health-good)", color: "var(--surface)" }
+                : undefined
+            }
+          >
+            {booked ? "Booked — Sushi-kun is free" : "Book it → revive Sushi-kun"}
+          </button>
+        </div>
       </div>
 
-      {/* Revive */}
-      <button
-        type="button"
-        onClick={() => setBooked(true)}
-        disabled={booked}
-        className="cta-glow w-full rounded-2xl px-4 py-3.5 text-sm font-semibold disabled:cursor-default"
-        style={{
-          background: booked
-            ? "linear-gradient(90deg, #7CD992, #5cbf78)"
-            : "linear-gradient(90deg, var(--amber), var(--amber-deep))",
-          color: "var(--night)",
-        }}
-      >
-        {booked ? "🎉 booked — Sushi-kun is free" : "Book it → revive Sushi-kun"}
-      </button>
+      <article className="ds-hotel-card card-lift" style={{ minHeight: 420 }}>
+        <div className="photo" style={{ minHeight: 200, flex: "1 1 auto" }}>
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{
+              background: "linear-gradient(145deg, var(--card-peach), var(--card-sky))",
+              color: "var(--card-peach-ink)",
+            }}
+          >
+            <iconify-icon icon="heroicons:photo" width="64" height="64" />
+          </div>
+          <div className="fade" />
+        </div>
+        <div className="info">
+          <div className="name-row">
+            <div className="name">Shibuya Stream Hotel</div>
+            <div className="price">
+              <div className="total">${pet.price}</div>
+              <div className="per">
+                <iconify-icon icon="heroicons:moon" width="12" height="12" />
+                / night
+              </div>
+            </div>
+          </div>
+          <div className="meta">
+            <span className="tag rating">
+              <iconify-icon icon="heroicons:star" width="12" height="12" />
+              4.7
+            </span>
+            <span className="tag type">
+              <iconify-icon icon="heroicons:building-office-2" width="12" height="12" />
+              hotel
+            </span>
+            <span className="tag guests">
+              <iconify-icon icon="heroicons:user-group" width="12" height="12" />
+              sleeps 2
+            </span>
+            <span className="tag cancel">
+              <iconify-icon icon="heroicons:shield-check" width="12" height="12" />
+              free cancel
+            </span>
+          </div>
+          <div className="addr">
+            <iconify-icon icon="heroicons:map-pin" width="14" height="14" />
+            <span>1-2-3 Shibuya, Tokyo</span>
+          </div>
+        </div>
+      </article>
     </div>
   );
 }

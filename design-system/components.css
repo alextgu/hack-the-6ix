@@ -1,0 +1,229 @@
+/* Shared Tabi utilities (chips, stats, CTAs). Tokens live in tokens.css. */
+
+.ds-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--fg);
+}
+.ds-muted { color: var(--muted); }
+
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 12px;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+
+.ds-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ds-icon-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+  transition: transform 120ms ease;
+}
+.ds-icon-btn:active { transform: scale(0.92); }
+.ds-icon-btn.is-like {
+  background: var(--card-coral);
+  color: var(--card-coral-ink);
+}
+.ds-icon-btn:disabled { opacity: 0.35; pointer-events: none; }
+
+.ds-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  background: var(--fg);
+  color: var(--surface);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  padding: 14px 22px;
+  border-radius: 999px;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform 120ms ease, box-shadow 200ms ease;
+}
+.ds-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(42, 36, 28, 0.14);
+}
+.ds-cta:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+
+/* Hotel / content card shell — matches webapp/cards.html `.card` */
+.ds-hotel-card {
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ds-hotel-card .photo {
+  position: relative;
+  min-height: 180px;
+  background: var(--card-peach);
+  overflow: hidden;
+}
+.ds-hotel-card .photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ds-hotel-card .photo .fade {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 72px;
+  background: linear-gradient(transparent, rgba(42, 36, 28, 0.35));
+  pointer-events: none;
+}
+.ds-hotel-card .info {
+  padding: 16px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+}
+.ds-hotel-card .name-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.ds-hotel-card .name {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+.ds-hotel-card .price .total {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+.ds-hotel-card .price .per {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.ds-hotel-card .meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ds-hotel-card .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.ds-hotel-card .tag.rating { background: var(--card-butter); color: var(--card-butter-ink); }
+.ds-hotel-card .tag.cancel { background: var(--card-mint); color: var(--card-mint-ink); }
+.ds-hotel-card .tag.type { background: var(--card-sky); color: var(--card-sky-ink); }
+.ds-hotel-card .tag.guests { background: var(--card-peach); color: var(--card-peach-ink); }
+.ds-hotel-card .addr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+/* Health bar row — matches Mini App physical/mental cards */
+.ds-health-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: var(--surface);
+}
+.ds-health-card .bar-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ds-health-card .bar-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: rgba(42, 36, 28, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--fg);
+}
+.ds-health-card .bar-name {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  flex: 1;
+}
+.ds-health-card .bar-val {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--fg);
+}
+.ds-health-card .bar-outer {
+  width: 100%;
+  height: 10px;
+  background: rgba(42, 36, 28, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.ds-health-card .bar-inner {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 400ms cubic-bezier(0.4, 0, 0.2, 1), background 400ms ease;
+}
