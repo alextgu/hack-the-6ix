@@ -39,6 +39,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _no_cache(request, call_next):
+    """Telegram's in-app WebView caches the Mini App aggressively across
+    launches from the same URL — without this, UI edits silently keep
+    showing the old version until the client's cache happens to expire."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 # Static asset routes: /webapp/animations/{mood}.json, /webapp/app.js, etc.
 if WEBAPP_DIR.exists():
     app.mount("/webapp", StaticFiles(directory=str(WEBAPP_DIR)), name="webapp")
