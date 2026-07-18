@@ -3,194 +3,381 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>trippet · pick the hotel</title>
+  <title>Tabi · pick the hotel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.css" />
+  <link rel="stylesheet" href="/webapp/ds.css" />
+  <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    :root {
-      /* Japanese palette: washi paper white, sumi-ink black, shu-iro vermillion red */
-      --bg: #f7f4ee;
-      --bg2: #ece2d0;
-      --card: #ffffff;
-      --fg: #1a1a1a;
-      --muted: #7a7266;
-      --line: rgba(0,0,0,0.12);
-      --like: #c8102e;
-      --nope: #1a1a1a;
-      --accent: #c8102e;
-      --gold: #1a1a1a;
-    }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
-      margin: 0; padding: 0;
-      width: 100%; height: 100%;
-      background: radial-gradient(1200px 800px at 50% 0%, var(--bg2), var(--bg) 65%);
-      color: var(--fg);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
       overscroll-behavior: none;
       touch-action: pan-y;
     }
     #app {
-      height: 100%; height: 100dvh;
-      display: flex; flex-direction: column;
+      height: 100%;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
       align-items: center;
-      padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-      gap: 8px;
-      max-width: 480px; margin: 0 auto;
+      padding: 16px 16px calc(14px + env(safe-area-inset-bottom));
+      gap: 10px;
+      max-width: 480px;
+      margin: 0 auto;
     }
 
-    /* ── header ── */
-    #header { width: 100%; display: flex; align-items: baseline; justify-content: space-between; }
-    #title { font-size: 16px; font-weight: 700; letter-spacing: 0.2px; }
-    #round-badge {
-      font-size: 11px; color: var(--muted);
-      background: rgba(0,0,0,0.04); border: 1px solid var(--line);
-      padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+    #header {
+      width: 100%;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
     }
+    #title { font-size: 22px; }
     #subtitle {
-      width: 100%; font-size: 12px; color: var(--muted);
-      display: flex; justify-content: space-between; gap: 8px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
     }
-    #subtitle .basecamp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    /* ── participants strip ── */
     #people {
-      width: 100%; display: flex; gap: 6px; flex-wrap: wrap; min-height: 22px;
+      width: 100%;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-height: 22px;
     }
     .chip {
-      font-size: 11px; padding: 2px 9px; border-radius: 999px;
-      background: rgba(0,0,0,0.04); border: 1px solid var(--line); color: var(--muted);
-      max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      padding: 4px 11px;
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      box-shadow: var(--shadow);
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .chip.done { color: var(--like); border-color: rgba(200,16,46,0.4); }
+    .chip.done {
+      color: var(--card-mint-ink);
+      background: var(--card-mint);
+      box-shadow: none;
+    }
 
-    /* ── card stack ── */
     #stack {
-      position: relative; width: 100%; flex: 1 1 auto; min-height: 0;
+      position: relative;
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .card {
-      position: absolute; inset: 0;
+      position: absolute;
+      inset: 0;
       margin: auto;
-      width: 100%; max-width: 420px;
-      height: 100%; max-height: 560px;
-      border-radius: 20px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      width: 100%;
+      max-width: 420px;
+      height: 100%;
+      max-height: 560px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
       overflow: hidden;
-      display: flex; flex-direction: column;
+      display: flex;
+      flex-direction: column;
       touch-action: none;
-      user-select: none; -webkit-user-select: none;
+      user-select: none;
+      -webkit-user-select: none;
       will-change: transform;
     }
     .card.behind { pointer-events: none; }
     .card .photo {
-      flex: 1 1 60%; min-height: 0; position: relative; background: #1a1a1a;
+      flex: 1 1 58%;
+      min-height: 0;
+      position: relative;
+      background: var(--card-peach);
     }
     .card .photo img {
-      width: 100%; height: 100%; object-fit: cover; display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
       pointer-events: none;
     }
     .card .photo .noimg {
-      position: absolute; inset: 0; display: none;
-      align-items: center; justify-content: center; font-size: 56px;
-      background: linear-gradient(140deg, #2a0d12, #1a1a1a);
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: var(--card-peach-ink);
+      background: linear-gradient(145deg, var(--card-peach), var(--card-sky));
     }
     .card .photo .fade {
-      position: absolute; left: 0; right: 0; bottom: 0; height: 90px;
-      background: linear-gradient(transparent, rgba(20,20,20,0.92));
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 72px;
+      background: linear-gradient(transparent, rgba(42, 36, 28, 0.35));
       pointer-events: none;
     }
     .stamp {
-      position: absolute; top: 22px;
-      font-size: 28px; font-weight: 800; letter-spacing: 2px;
-      padding: 4px 14px; border-radius: 8px; border: 3px solid;
-      opacity: 0; transform: rotate(-14deg); pointer-events: none;
+      position: absolute;
+      top: 22px;
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 20px;
+      letter-spacing: 0.04em;
+      padding: 6px 14px;
+      border-radius: 14px;
+      border: 2px solid;
+      opacity: 0;
+      transform: rotate(-12deg);
+      pointer-events: none;
+      background: rgba(255, 255, 255, 0.92);
     }
-    .stamp.like { left: 18px; color: var(--like); border-color: var(--like); }
-    .stamp.nope { right: 18px; color: var(--nope); border-color: var(--nope); transform: rotate(14deg); }
+    .stamp.like { left: 18px; color: var(--health-bad); border-color: var(--health-bad); }
+    .stamp.nope { right: 18px; color: var(--fg); border-color: var(--fg); transform: rotate(12deg); }
 
-    .card .info { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
-    .card .name-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .card .info {
+      padding: 16px 18px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--surface);
+    }
+    .card .name-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
     .card .name {
-      font-size: 17px; font-weight: 700; line-height: 1.25;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 18px;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     .card .price { text-align: right; white-space: nowrap; }
-    .card .price .total { font-size: 19px; font-weight: 800; }
-    .card .price .per { font-size: 11px; color: var(--muted); }
-    .card .meta { display: flex; gap: 6px; flex-wrap: wrap; }
+    .card .price .total {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+      color: var(--fg);
+    }
+    .card .price .per {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    .card .meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .tag {
-      font-size: 11px; padding: 3px 9px; border-radius: 999px;
-      background: rgba(0,0,0,0.04); border: 1px solid var(--line); color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: var(--bg);
+      color: var(--fg);
     }
-    .tag.rating { color: var(--gold); border-color: rgba(26,26,26,0.35); }
-    .tag.cancel { color: var(--like); border-color: rgba(200,16,46,0.35); }
+    .tag.rating { background: var(--card-butter); color: var(--card-butter-ink); }
+    .tag.cancel { background: var(--card-mint); color: var(--card-mint-ink); }
+    .tag.type { background: var(--card-sky); color: var(--card-sky-ink); }
+    .tag.guests { background: var(--card-peach); color: var(--card-peach-ink); }
     .card .addr {
-      font-size: 11px; color: var(--muted);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      min-width: 0;
+    }
+    .card .addr span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    /* ── action buttons ── */
     #actions {
-      display: flex; gap: 34px; align-items: center; justify-content: center;
-      padding: 4px 0 2px; flex: 0 0 auto;
+      display: flex;
+      gap: 28px;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 0 2px;
+      flex: 0 0 auto;
     }
-    .act {
-      width: 60px; height: 60px; border-radius: 50%;
-      border: 1px solid var(--line); background: var(--card);
-      color: var(--fg); font-size: 26px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-      transition: transform 120ms ease;
+    #progress {
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
-    .act:active { transform: scale(0.9); }
-    .act.nope { color: var(--nope); }
-    .act.like { color: var(--like); }
-    .act:disabled { opacity: 0.35; pointer-events: none; }
 
-    #progress { font-size: 12px; color: var(--muted); min-height: 16px; }
-
-    /* ── overlay panels (waiting / winner / message) ── */
     .panel {
-      position: absolute; inset: 0; z-index: 30;
-      display: none; flex-direction: column; align-items: center; justify-content: center;
-      gap: 14px; padding: 24px 20px;
-      background: radial-gradient(1200px 800px at 50% 0%, var(--bg2), var(--bg) 65%);
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 24px 20px;
       text-align: center;
+      background-color: var(--bg);
     }
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image: url("/webapp/assets/seigaiha.png");
+      background-repeat: repeat;
+      background-size: 220px auto;
+      opacity: 0.14;
+    }
+    .panel > * { position: relative; z-index: 1; }
     .panel.on { display: flex; }
-    .panel h2 { margin: 0; font-size: 20px; }
-    .panel p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; max-width: 320px; }
-    .pulse { font-size: 40px; animation: pulse 1.6s ease-in-out infinite; }
-    @keyframes pulse { 0%,100% { transform: scale(1); opacity: .8 } 50% { transform: scale(1.15); opacity: 1 } }
+    .panel h2 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 22px;
+      letter-spacing: -0.02em;
+    }
+    .panel p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 320px;
+    }
+    .panel-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow);
+      animation: softpulse 1.8s ease-in-out infinite;
+    }
+    .panel-icon.loading { background: var(--card-sky); color: var(--card-sky-ink); }
+    .panel-icon.waiting { background: var(--card-butter); color: var(--card-butter-ink); }
+    .panel-icon.winner { background: var(--card-mint); color: var(--card-mint-ink); }
+    .panel-icon.error { background: var(--card-coral); color: var(--card-coral-ink); }
+    @keyframes softpulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
 
-    #tally { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 8px; }
-    .tally-row { display: flex; flex-direction: column; gap: 3px; text-align: left; }
-    .tally-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .tally-bar-outer { height: 8px; background: rgba(0,0,0,0.06); border-radius: 999px; overflow: hidden; }
-    .tally-bar { height: 100%; width: 0%; background: var(--like); border-radius: 999px; transition: width 400ms ease; }
+    #tally {
+      width: 100%;
+      max-width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .tally-row { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+    .tally-name {
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tally-bar-outer {
+      height: 8px;
+      background: rgba(42, 36, 28, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .tally-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--health-good);
+      border-radius: 999px;
+      transition: width 400ms ease;
+    }
 
     #winner-card {
-      width: 100%; max-width: 340px; border-radius: 18px; overflow: hidden;
-      background: var(--card); border: 1px solid var(--line);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.45); text-align: left;
+      width: 100%;
+      max-width: 340px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      text-align: left;
     }
-    #winner-card img { width: 100%; height: 180px; object-fit: cover; display: block; }
-    #winner-card .wbody { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
-    #winner-card .wname { font-weight: 700; font-size: 16px; }
-    #winner-card .wmeta { font-size: 12px; color: var(--muted); }
-    .cta {
-      display: block; width: 100%; max-width: 340px; text-align: center;
-      background: var(--accent); color: #ffffff; font-weight: 700;
-      padding: 13px 16px; border-radius: 14px; text-decoration: none; font-size: 15px;
+    #winner-card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      display: block;
     }
+    #winner-card .wbody {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #winner-card .wname {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+    }
+    #winner-card .wmeta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+    }
+
     .round-toast {
-      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-      z-index: 40; background: rgba(26,26,26,0.92); border: 1px solid var(--line);
-      color: #f7f4ee; font-size: 13px; padding: 9px 16px; border-radius: 999px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-      opacity: 0; transition: opacity 300ms ease; pointer-events: none; white-space: nowrap;
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 40;
+      background: var(--fg);
+      color: var(--bg);
+      font-size: 13px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transition: opacity 300ms ease;
+      pointer-events: none;
+      white-space: nowrap;
     }
     .round-toast.on { opacity: 1; }
   </style>
@@ -198,46 +385,70 @@
 <body>
   <div id="app">
     <div id="header">
-      <div id="title">🏨 pick the basecamp hotel</div>
-      <div id="round-badge">round –</div>
+      <div id="title" class="ds-title">Pick the<br>basecamp</div>
+      <div id="round-badge" class="ds-chip">
+        <iconify-icon icon="heroicons:squares-2x2" width="14" height="14"></iconify-icon>
+        <span id="round-label">round –</span>
+      </div>
     </div>
     <div id="subtitle">
-      <span class="basecamp" id="basecamp">…</span>
-      <span id="dates"></span>
+      <span class="ds-stat" id="basecamp-stat">
+        <iconify-icon icon="heroicons:map-pin" width="14" height="14"></iconify-icon>
+        <span id="basecamp">…</span>
+      </span>
+      <span class="ds-stat" id="dates-stat">
+        <iconify-icon icon="heroicons:calendar-days" width="14" height="14"></iconify-icon>
+        <span id="dates"></span>
+      </span>
     </div>
     <div id="people"></div>
     <div id="stack"></div>
     <div id="actions">
-      <button class="act nope" id="btn-nope" aria-label="pass">✕</button>
-      <button class="act like" id="btn-like" aria-label="like">♥</button>
+      <button class="ds-icon-btn" id="btn-nope" aria-label="pass">
+        <iconify-icon icon="heroicons:x-mark" width="28" height="28"></iconify-icon>
+      </button>
+      <button class="ds-icon-btn is-like" id="btn-like" aria-label="like">
+        <iconify-icon icon="heroicons:heart" width="28" height="28"></iconify-icon>
+      </button>
     </div>
-    <div id="progress"></div>
+    <div id="progress">
+      <iconify-icon icon="heroicons:hand-raised" width="14" height="14"></iconify-icon>
+      <span id="progress-label"></span>
+    </div>
   </div>
 
   <div class="panel" id="panel-loading">
-    <div class="pulse">🃏</div>
-    <h2>dealing the deck…</h2>
+    <div class="panel-icon loading">
+      <iconify-icon icon="heroicons:cloud" width="34" height="34"></iconify-icon>
+    </div>
+    <h2>Dealing the deck</h2>
     <p>pulling real hotels near the basecamp</p>
   </div>
 
   <div class="panel" id="panel-waiting">
-    <div class="pulse">⏳</div>
-    <h2>you're done — waiting on the others</h2>
+    <div class="panel-icon waiting">
+      <iconify-icon icon="heroicons:clock" width="34" height="34"></iconify-icon>
+    </div>
+    <h2>You're done</h2>
     <p id="waiting-line"></p>
     <div id="tally"></div>
   </div>
 
   <div class="panel" id="panel-winner">
-    <div style="font-size:40px">🎉</div>
-    <h2>the group picked it</h2>
+    <div class="panel-icon winner">
+      <iconify-icon icon="heroicons:check-badge" width="34" height="34"></iconify-icon>
+    </div>
+    <h2>The group picked it</h2>
     <div id="winner-card"></div>
-    <a class="cta" id="winner-link" href="#" target="_blank" rel="noopener">book it on Stay22 →</a>
+    <a class="ds-cta" id="winner-link" href="#" target="_blank" rel="noopener">Book it on Stay22 →</a>
     <p id="winner-reason"></p>
   </div>
 
   <div class="panel" id="panel-error">
-    <div style="font-size:40px">😵</div>
-    <h2 id="error-title">can't reach the pet</h2>
+    <div class="panel-icon error">
+      <iconify-icon icon="heroicons:exclamation-triangle" width="34" height="34"></iconify-icon>
+    </div>
+    <h2 id="error-title">Can't reach the pet</h2>
     <p id="error-line">retrying…</p>
   </div>
 

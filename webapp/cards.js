@@ -119,9 +119,9 @@
     view = v; round = v.round;
     hidePanel("loading");
 
-    $("basecamp").textContent = "📍 " + v.basecamp;
+    $("basecamp").textContent = v.basecamp;
     $("dates").textContent = v.checkin + " → " + v.checkout;
-    $("round-badge").textContent = v.status === "decided" ? "decided" :
+    $("round-label").textContent = v.status === "decided" ? "decided" :
       "round " + v.round + " · " + v.active_count + " left";
     renderPeople(v.participants);
 
@@ -180,12 +180,15 @@
     el.style.transition = "transform 250ms ease";
     el.dataset.id = c.id;
 
-    var rating = c.rating != null ? "★ " + c.rating + (c.rating_count ? " (" + c.rating_count + ")" : "") : "";
-    var per = c.price_per_night ? "$" + c.price_per_night + "/night · " + c.nights + " nights" : "";
+    var rating = c.rating != null
+      ? String(c.rating) + (c.rating_count ? " (" + c.rating_count + ")" : "")
+      : "";
+    var perNight = c.price_per_night != null ? "$" + c.price_per_night + "/night" : "";
+    var nights = c.nights ? c.nights + " nights" : "";
     el.innerHTML =
       '<div class="photo">' +
         '<img alt="" draggable="false" src="' + escAttr(c.thumbnail || "") + '">' +
-        '<div class="noimg">🏨</div>' +
+        '<div class="noimg"><iconify-icon icon="heroicons:photo" width="64" height="64"></iconify-icon></div>' +
         '<div class="fade"></div>' +
         '<div class="stamp like">LIKE</div>' +
         '<div class="stamp nope">NOPE</div>' +
@@ -193,17 +196,34 @@
       '<div class="info">' +
         '<div class="name-row">' +
           '<div class="name">' + esc(c.name) + '</div>' +
-          '<div class="price"><div class="total">$' + c.price_total + '</div>' +
-            '<div class="per">' + esc(per) + '</div></div>' +
-        '</div>' +
+          '<div class="price">' +
+            '<div class="total">$' + c.price_total + '</div>' +
+            (perNight
+              ? '<div class="per"><iconify-icon icon="heroicons:moon" width="12" height="12"></iconify-icon>' +
+                  esc(perNight + (nights ? " · " + nights : "")) + "</div>"
+              : "") +
+          "</div>" +
+        "</div>" +
         '<div class="meta">' +
-          (rating ? '<span class="tag rating">' + esc(rating) + '</span>' : '') +
-          '<span class="tag">' + esc(c.type || "Hotel") + '</span>' +
-          (c.guests ? '<span class="tag">sleeps ' + c.guests + '</span>' : '') +
-          (c.free_cancellation ? '<span class="tag cancel">free cancel</span>' : '') +
-        '</div>' +
-        '<div class="addr">' + esc(c.address || "") + '</div>' +
-      '</div>';
+          (rating
+            ? '<span class="tag rating"><iconify-icon icon="heroicons:star" width="12" height="12"></iconify-icon>' +
+                esc(rating) + "</span>"
+            : "") +
+          '<span class="tag type"><iconify-icon icon="heroicons:building-office-2" width="12" height="12"></iconify-icon>' +
+            esc(c.type || "Hotel") + "</span>" +
+          (c.guests
+            ? '<span class="tag guests"><iconify-icon icon="heroicons:user-group" width="12" height="12"></iconify-icon>sleeps ' +
+                c.guests + "</span>"
+            : "") +
+          (c.free_cancellation
+            ? '<span class="tag cancel"><iconify-icon icon="heroicons:shield-check" width="12" height="12"></iconify-icon>free cancel</span>'
+            : "") +
+        "</div>" +
+        (c.address
+          ? '<div class="addr"><iconify-icon icon="heroicons:map-pin" width="14" height="14"></iconify-icon><span>' +
+              esc(c.address) + "</span></div>"
+          : "") +
+      "</div>";
 
     var img = el.querySelector("img");
     img.onerror = function () { img.style.display = "none"; el.querySelector(".noimg").style.display = "flex"; };
@@ -322,7 +342,9 @@
     (people || []).forEach(function (p) {
       var c = document.createElement("span");
       c.className = "chip" + (p.done ? " done" : "");
-      c.textContent = (p.done ? "✓ " : "") + p.name;
+      c.innerHTML =
+        '<iconify-icon icon="heroicons:' + (p.done ? "check-circle" : "user") +
+        '" width="12" height="12"></iconify-icon>' + esc(p.name);
       peopleEl.appendChild(c);
     });
   }
@@ -341,7 +363,11 @@
       var t = (v.tally || {})[c.id] || { likes: 0 };
       var row = document.createElement("div");
       row.className = "tally-row";
-      row.innerHTML = '<div class="tally-name">' + esc(c.name) + ' · ❤ ' + t.likes + '</div>' +
+      row.innerHTML =
+        '<div class="tally-name">' +
+          '<iconify-icon icon="heroicons:heart" width="12" height="12"></iconify-icon>' +
+          esc(c.name) + " · " + t.likes + " likes" +
+        "</div>" +
         '<div class="tally-bar-outer"><div class="tally-bar" style="width:' +
         Math.round((t.likes / maxLikes) * 100) + '%"></div></div>';
       tallyEl.appendChild(row);
@@ -355,13 +381,22 @@
     var w = v.winner;
     var wc = $("winner-card");
     wc.innerHTML =
-      (w.thumbnail ? '<img alt="" src="' + escAttr(w.thumbnail) + '">' : '') +
+      (w.thumbnail ? '<img alt="" src="' + escAttr(w.thumbnail) + '">' : "") +
       '<div class="wbody">' +
-        '<div class="wname">' + esc(w.name) + '</div>' +
-        '<div class="wmeta">★ ' + (w.rating || "–") + ' · $' + w.price_total + ' total · ' +
-          esc(v.checkin + " → " + v.checkout) + '</div>' +
-        '<div class="wmeta">' + esc(w.address || "") + '</div>' +
-      '</div>';
+        '<div class="wname">' + esc(w.name) + "</div>" +
+        '<div class="wmeta">' +
+          '<span class="ds-stat"><iconify-icon icon="heroicons:star" width="14" height="14"></iconify-icon>' +
+            (w.rating || "–") + "</span>" +
+          '<span class="ds-stat"><iconify-icon icon="heroicons:currency-dollar" width="14" height="14"></iconify-icon>' +
+            w.price_total + " total</span>" +
+          '<span class="ds-stat"><iconify-icon icon="heroicons:calendar-days" width="14" height="14"></iconify-icon>' +
+            esc(v.checkin + " → " + v.checkout) + "</span>" +
+        "</div>" +
+        (w.address
+          ? '<div class="ds-stat"><iconify-icon icon="heroicons:map-pin" width="14" height="14"></iconify-icon>' +
+              esc(w.address) + "</div>"
+          : "") +
+      "</div>";
     var link = $("winner-link");
     link.href = w.url || "#";
     link.onclick = function () { sendEvent("link_out", w.id, { from: "winner_screen" }); };
@@ -385,7 +420,8 @@
   function updateProgress() {
     if (!view) return;
     var done = view.active_count - queue.length;
-    progressEl.textContent = queue.length
+    var label = $("progress-label") || progressEl;
+    label.textContent = queue.length
       ? "card " + (done + 1) + " of " + view.active_count + " · swipe → to like, ← to pass"
       : "";
   }

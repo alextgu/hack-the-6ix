@@ -12,21 +12,24 @@
   var params = new URLSearchParams(window.location.search);
   var startParam = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
   if (startParam && /-cards$/.test(startParam)) {
-    // hotel-deck deep link (bot.py _cards_keyboard) — hand the webview to /cards
     location.replace("/cards?group=" +
       encodeURIComponent(decodeStartParam(startParam.replace(/-cards$/, "")) || ""));
     return;
   }
   var groupId = params.get("group") || decodeStartParam(startParam);
+  var previewMood = params.get("mood");
+  var previewPhys = params.get("physical");
+  var previewMent = params.get("mental");
+
   var captionEl = document.getElementById("caption");
-  var weekEl = document.getElementById("week");
+  var weekLabelEl = document.getElementById("week-label");
   var badgeEl = document.getElementById("status-badge");
-  var tripEl = document.getElementById("trip-line");
+  var tripStatsEl = document.getElementById("trip-stats");
   var physRow = document.getElementById("bar-physical");
   var mentRow = document.getElementById("bar-mental");
 
-  if (!groupId) {
-    captionEl.textContent = "no group id in url — open me from telegram, or add ?group=demo-chat";
+  if (!groupId && !previewMood) {
+    captionEl.textContent = "no group id in url — open me from telegram, or add ?group=12345";
     return;
   }
 
@@ -35,13 +38,30 @@
   var currentAnim = null;
   var reconnecting = false;
 
-  loadMood("happy"); // preload a neutral animation so the stage isn't empty
-  fetchState();
-  setInterval(fetchState, POLL_MS);
+  loadMood("happy");
+
+  if (previewMood || previewPhys != null || previewMent != null) {
+    render({
+      pet: {
+        mood: previewMood || "happy",
+        physical: previewPhys != null ? Number(previewPhys) : 100,
+        mental: previewMent != null ? Number(previewMent) : 100,
+      },
+      sim_week: Number(params.get("week") || 0),
+      trip: {
+        city: params.get("city") || "Tokyo",
+        dates: { start: "2026-04-12", end: "2026-04-19" },
+        budget_per_person: 1200,
+        group_size: 4,
+      },
+    });
+  } else {
+    fetchState();
+    setInterval(fetchState, POLL_MS);
+  }
 
   function fetchState() {
-    var url = "/api/state/" + encodeURIComponent(groupId);
-    fetch(url, { cache: "no-store" })
+    fetch("/api/state/" + encodeURIComponent(groupId), { cache: "no-store" })
       .then(function (r) {
         if (!r.ok) throw new Error("http " + r.status);
         return r.json();
@@ -64,8 +84,8 @@
     setBar(physRow, phys);
     setBar(mentRow, ment);
     captionEl.textContent = deriveCaption(phys, ment, mood);
-    weekEl.textContent = "week " + num(state.sim_week, 0);
-    tripEl.textContent = deriveTripLine(state.trip);
+    if (weekLabelEl) weekLabelEl.textContent = "week " + num(state.sim_week, 0);
+    renderTripStats(state.trip);
 
     if (mood !== currentMood) {
       currentMood = mood;
@@ -73,14 +93,86 @@
     }
   }
 
+  function healthColor(val) {
+    if (val >= 70) return "#3d9a5f"; // green
+    if (val >= 40) return "#e08a2e"; // orange
+    return "#d13b2e";               // red
+  }
+
   function setBar(row, val) {
     var inner = row.querySelector(".bar-inner");
     var label = row.querySelector(".bar-val");
     inner.style.width = val + "%";
+    inner.style.background = healthColor(val);
     label.textContent = Math.round(val);
-    if (val < 25) inner.style.background = "#8b0000";      // deep blood red — critical
-    else if (val < 50) inner.style.background = "#c8102e"; // shu-iro vermillion — warning
-    else inner.style.background = ""; // fall back to CSS default (red physical / ink black mental)
+  }
+
+  function formatDate(iso) {
+    if (!iso) return "";
+    var d = new Date(String(iso).slice(0, 10) + "T12:00:00");
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  function formatDateRange(start, end) {
+    if (!start && !end) return "";
+    var a = start ? new Date(String(start).slice(0, 10) + "T12:00:00") : null;
+    var b = end ? new Date(String(end).slice(0, 10) + "T12:00:00") : null;
+    if (a && isNaN(a.getTime())) a = null;
+    if (b && isNaN(b.getTime())) b = null;
+    if (!a && !b) return "";
+    if (a && !b) return formatDate(start);
+    if (!a && b) return formatDate(end);
+
+    var sameYear = a.getFullYear() === b.getFullYear();
+    var sameMonth = sameYear && a.getMonth() === b.getMonth();
+    var months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
+    ];
+
+    if (sameMonth) {
+      return months[a.getMonth()] + " " + a.getDate() + "–" + b.getDate() + ", " + a.getFullYear();
+    }
+    if (sameYear) {
+      return months[a.getMonth()] + " " + a.getDate() + " → " +
+        months[b.getMonth()] + " " + b.getDate() + ", " + a.getFullYear();
+    }
+    return formatDate(start) + " → " + formatDate(end);
+  }
+
+  function renderTripStats(trip) {
+    if (!tripStatsEl) return;
+    var bits = [];
+    if (trip && trip.city) {
+      bits.push(stat("heroicons:map-pin", String(trip.city)));
+    }
+    if (trip && trip.dates && (trip.dates.start || trip.dates.end)) {
+      bits.push(stat(
+        "heroicons:calendar-days",
+        formatDateRange(trip.dates.start, trip.dates.end)
+      ));
+    }
+    if (trip && trip.budget_per_person != null) {
+      bits.push(stat("heroicons:currency-dollar", trip.budget_per_person + "/pp"));
+    }
+    if (trip && trip.group_size != null) {
+      bits.push(stat("heroicons:users", trip.group_size + " people"));
+    }
+    tripStatsEl.innerHTML = bits.join("");
+  }
+
+  function stat(icon, text) {
+    return (
+      '<span class="ds-stat">' +
+        '<iconify-icon icon="' + icon + '" width="14" height="14"></iconify-icon>' +
+        '<span>' + esc(text) + "</span>" +
+      "</span>"
+    );
   }
 
   function loadMood(mood) {
@@ -95,7 +187,7 @@
       renderer: "svg",
       loop: true,
       autoplay: true,
-      path: "/webapp/animations/" + mood + ".json"
+      path: "/webapp/animations/" + mood + ".json",
     });
   }
 
@@ -120,18 +212,6 @@
     return "just hanging out. keep talking, keep booking.";
   }
 
-  function deriveTripLine(trip) {
-    if (!trip) return "";
-    var parts = [];
-    if (trip.city) parts.push(String(trip.city));
-    if (trip.dates && (trip.dates.start || trip.dates.end)) {
-      parts.push([trip.dates.start, trip.dates.end].filter(Boolean).join(" → "));
-    }
-    if (trip.budget_per_person != null) parts.push("$" + trip.budget_per_person + "/pp");
-    if (trip.group_size != null) parts.push(trip.group_size + " people");
-    return parts.join("  ·  ");
-  }
-
   function setReconnecting(on) {
     if (on === reconnecting) return;
     reconnecting = on;
@@ -140,8 +220,6 @@
   }
 
   function decodeStartParam(param) {
-    // Mirrors bot.py's _encode_start_param: 'n<n>' -> -n (group chats have
-    // negative ids; start_param can't contain a literal '-'), 'p<n>' -> n.
     if (!param) return null;
     if (param.charAt(0) === "n") return "-" + param.slice(1);
     if (param.charAt(0) === "p") return param.slice(1);
@@ -153,4 +231,9 @@
     return isFinite(n) ? n : dflt;
   }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
 })();
