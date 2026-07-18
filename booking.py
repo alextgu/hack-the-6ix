@@ -8,7 +8,7 @@ it before the query).
 Not wired to health or brain. Called only from bot.py::cmd_commit.
 """
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Optional
 
 
 # ─── helpers ────────────────────────────────────────────────────────────────

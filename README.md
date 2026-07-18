@@ -8,16 +8,7 @@ Working name: **trippet** (not permanent).
 
 ## Layout
 
-```
-bot.py           the brain (python-telegram-bot v20). handlers: /start /health /scrub /commit /open
-state.py         per-group in-memory state (TripState + PetState) — the shared source of truth
-health.py        two-bar delta formula (§5), fake 6-week Stay22 series drives /scrub
-pet.py           Pillow PNG renderer (in-chat pet)
-api.py           FastAPI: GET /api/state/{group_id}, serves webapp/
-run.py           runs bot polling + FastAPI in ONE asyncio loop (share state.py)
-webapp/          Telegram Mini App — Lottie face, live-polls /api/state
-kamagachi/       earlier scoped-too-wide scaffold (ignore for now; keeping for parts)
-```
+See `REPO_MAP.md` for a one-line-per-module map + who calls what.
 
 ## Setup
 

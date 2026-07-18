@@ -14,7 +14,6 @@ fixture extractions so you can see the aggregation rules work.
 from __future__ import annotations
 import json
 import os
-import sys
 from collections import Counter
 from datetime import date
 from typing import Optional
@@ -26,55 +25,21 @@ except ImportError:
     pass
 
 
-# ─── ONE place the model is called ──────────────────────────────────────────
-# Precedence: Freesolo (if FREESOLO_BASE_URL is set) → Gemini → error.
-# Both branches return the same shape: a JSON string. Swap-safe.
-
+# ─── ONE place the model is called — Gemini only, permanently ───────────────
+# Per PIPELINE.md: Read seam = Gemini. Freesolo lives on the Agent seam in
+# phoebe.py. Do NOT re-add Freesolo here. Cross-wiring is exactly the
+# foot-gun PIPELINE.md exists to prevent.
 MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-exp")
-FREESOLO_MODEL = os.environ.get("FREESOLO_MODEL", "freesolo-read-v1")
 
 
 def call_model(prompt: str) -> str:
-    """The only place we hit a model. Returns raw JSON string.
-
-    Freesolo Flash serves inference over an OpenAI-compatible endpoint (per
-    https://freesolo.co/docs/guides/deploy-and-chat). To activate:
-      1. Train an adapter (in a Python 3.11-3.12 venv): `flash run ...`
-      2. Deploy it: `flash deploy <run-id>`
-      3. Copy the openai_base_url from `flash deployments --json` and set
-         FREESOLO_BASE_URL in .env. FREESOLO_MODEL is the run-id (or
-         catalog id for a base model).
-    Until then this falls back to Gemini so brain.py stays functional.
-    """
-    freesolo_url = os.environ.get("FREESOLO_BASE_URL", "").strip()
-    freesolo_key = os.environ.get("FREESOLO_API_KEY", "").strip()
-    if freesolo_url and freesolo_key:
-        return _call_freesolo(prompt, freesolo_url, freesolo_key)
-
-    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if gemini_key:
-        return _call_gemini(prompt, gemini_key)
-
-    raise RuntimeError(
-        "No model configured. Set FREESOLO_BASE_URL + FREESOLO_API_KEY "
-        "(after deploying a run via `flash deploy`), or GEMINI_API_KEY "
-        "(free at https://aistudio.google.com/apikey)."
-    )
-
-
-def _call_freesolo(prompt: str, base_url: str, api_key: str) -> str:
-    from openai import OpenAI
-    client = OpenAI(base_url=base_url.rstrip("/"), api_key=api_key)
-    resp = client.chat.completions.create(
-        model=FREESOLO_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    )
-    return resp.choices[0].message.content or ""
-
-
-def _call_gemini(prompt: str, api_key: str) -> str:
+    """The only place we hit a model for the Read layer. Returns raw JSON string."""
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "GEMINI_API_KEY not set. Get a free key at https://aistudio.google.com/apikey. "
+            "The Read seam is Gemini only — see PIPELINE.md."
+        )
     import google.generativeai as genai
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(MODEL_NAME)

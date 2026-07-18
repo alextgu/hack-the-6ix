@@ -13,7 +13,7 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Literal
 
 
 BlockerKind = Literal["person", "timing", "issue", "none"]

@@ -33,7 +33,6 @@ from dotenv import load_dotenv
 from telegram import (
     Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
 )
-from telegram.constants import ParseMode
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler,
     ContextTypes, MessageHandler, filters,
