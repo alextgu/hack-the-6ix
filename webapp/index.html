@@ -4,141 +4,243 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Tabi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.css" />
+  <link rel="stylesheet" href="/webapp/ds.css" />
+  <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
   <style>
-    :root {
-      /* Japanese palette: washi paper white, sumi-ink black, shu-iro vermillion red */
-      --bg: #f7f4ee;
-      --bg2: #ece2d0;
-      --fg: #1a1a1a;
-      --muted: #7a7266;
-      --bar-bg: #e3dccb;
-      --bar-fg: #c8102e;
-      --bar-fg-2: #1a1a1a;
-      --accent: #c8102e;
-      --danger: #8b0000;
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0; padding: 0;
-      width: 100%; min-height: 100vh;
-      background: radial-gradient(1200px 800px at 50% 0%, var(--bg2), var(--bg) 65%);
-      color: var(--fg);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      overflow-x: hidden;
-    }
+    html, body { width: 100%; min-height: 100vh; overflow-x: hidden; }
     #app {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: flex-start;
-      padding: 24px 20px 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 20px 48px;
       min-height: 100vh;
-      gap: 18px;
+      gap: 16px;
+      max-width: 440px;
+      margin: 0 auto;
     }
     #header {
-      display: flex; align-items: center; justify-content: space-between;
-      width: 100%; max-width: 420px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 340px;
+      gap: 12px;
     }
-    #title {
-      font-size: 18px; font-weight: 600; letter-spacing: 0.3px; color: var(--fg);
-    }
-    #week {
-      font-size: 12px; color: var(--muted);
+    #title { font-size: 28px; }
+    #header-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
     }
     #status-badge {
       display: none;
       font-size: 11px;
-      color: var(--danger);
-      background: rgba(139,0,0,0.1);
-      padding: 3px 8px; border-radius: 999px;
+      color: var(--health-bad);
+      background: rgba(209, 59, 46, 0.12);
+      padding: 4px 10px;
+      border-radius: 999px;
     }
     #status-badge.on { display: inline-block; }
+
+    #pet-card,
+    #bars,
+    .bar-row {
+      width: 100%;
+      max-width: 340px;
+    }
+
+    #pet-card {
+      background: #ffffff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
     #stage {
-      width: 320px; height: 320px;
-      max-width: 90vw; max-height: 90vw;
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.02);
-      border-radius: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.12), inset 0 1px 0 rgba(0,0,0,0.04);
+      width: 100%;
+      aspect-ratio: 1.05;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      flex: 0 0 auto;
       cursor: pointer;
     }
-    #lottie { width: 100%; height: 100%; }
-    #caption {
-      width: 100%; max-width: 420px;
-      text-align: center;
-      font-size: 14px; line-height: 1.4;
-      color: var(--fg);
-      background: #fff;
-      border: 1px solid rgba(0,0,0,0.06);
-      border-radius: 16px;
-      min-height: 20px;
-      padding: 10px 16px;
+    #lottie {
+      width: 78%;
+      height: 78%;
       position: relative;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+      z-index: 1;
+      margin-bottom: 8%;
     }
-    #caption::after {
-      content: "";
-      position: absolute;
-      top: -7px; left: 50%;
-      transform: translateX(-50%) rotate(45deg);
-      width: 12px; height: 12px;
-      background: #fff;
-      border-left: 1px solid rgba(0,0,0,0.06);
-      border-top: 1px solid rgba(0,0,0,0.06);
+
+    #pet-footer {
+      position: relative;
+      z-index: 2;
+      margin-top: -8px;
+      padding: 4px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
+    #caption {
+      font-size: 14px;
+      line-height: 1.35;
+      color: var(--fg);
+      min-height: 1.2em;
+    }
+    #trip-stats {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      width: 100%;
+    }
+    #trip-stats:empty { display: none; }
+    #trip-stats .ds-stat {
+      flex: 0 1 auto;
+      min-width: 0;
+      font-size: 11px;
+      gap: 3px;
+      white-space: nowrap;
+    }
+    #trip-stats .ds-stat span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #trip-stats .ds-stat iconify-icon {
+      width: 12px;
+      height: 12px;
+    }
+
     #bars {
-      width: 100%; max-width: 420px;
-      display: flex; flex-direction: column; gap: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
-    .bar-row { display: flex; flex-direction: column; gap: 6px; }
-    .bar-label {
-      display: flex; justify-content: space-between;
-      font-size: 12px; color: var(--muted); letter-spacing: 0.4px;
-      text-transform: uppercase;
+    .bar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      background: #ffffff;
+      box-sizing: border-box;
+    }
+    .bar-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .bar-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: rgba(42, 36, 28, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      color: var(--fg);
+    }
+    .bar-copy {
+      flex: 1;
+      min-width: 0;
+    }
+    .bar-name {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+      color: var(--fg);
+    }
+    .bar-val {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 40px;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      color: var(--fg);
+      flex: 0 0 auto;
     }
     .bar-outer {
-      width: 100%; height: 10px;
-      background: var(--bar-bg);
-      border-radius: 999px; overflow: hidden;
+      width: 100%;
+      height: 10px;
+      background: rgba(42, 36, 28, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
     }
     .bar-inner {
-      height: 100%; width: 0%;
-      background: var(--bar-fg);
+      height: 100%;
+      width: 0%;
+      background: var(--health-good);
       border-radius: 999px;
       transition: width 400ms cubic-bezier(0.4, 0, 0.2, 1), background 400ms ease;
-    }
-    #bar-mental .bar-inner { background: var(--bar-fg-2); }
-    #trip-line {
-      width: 100%; max-width: 420px;
-      text-align: center;
-      font-size: 11px;
-      color: var(--muted);
-      letter-spacing: 0.3px;
     }
   </style>
 </head>
 <body>
   <div id="app">
     <div id="header">
-      <div id="title">Tabi Testing</div>
-      <div style="display:flex;align-items:center;gap:8px;">
+      <div id="title" class="ds-title">Tabi</div>
+      <div id="header-meta">
         <span id="status-badge">reconnecting…</span>
-        <span id="week">week 0</span>
+        <span id="week" class="ds-chip">
+          <iconify-icon icon="heroicons:clock" width="14" height="14"></iconify-icon>
+          <span id="week-label">week 0</span>
+        </span>
       </div>
     </div>
-    <div id="stage"><div id="lottie"></div></div>
-    <div id="caption">waking up…</div>
+
+    <div id="pet-card">
+      <div id="stage">
+        <div id="lottie"></div>
+      </div>
+      <div id="pet-footer">
+        <div id="caption">waking up…</div>
+        <div id="trip-stats"></div>
+      </div>
+    </div>
+
     <div id="bars">
       <div class="bar-row" id="bar-physical">
-        <div class="bar-label"><span>physical</span><span class="bar-val">--</span></div>
+        <div class="bar-top">
+          <div class="bar-icon">
+            <iconify-icon icon="heroicons:heart" width="22" height="22"></iconify-icon>
+          </div>
+          <div class="bar-copy">
+            <div class="bar-name">Physical</div>
+          </div>
+          <span class="bar-val">--</span>
+        </div>
         <div class="bar-outer"><div class="bar-inner"></div></div>
       </div>
+
       <div class="bar-row" id="bar-mental">
-        <div class="bar-label"><span>mental</span><span class="bar-val">--</span></div>
+        <div class="bar-top">
+          <div class="bar-icon">
+            <iconify-icon icon="heroicons:chat-bubble-left-right" width="22" height="22"></iconify-icon>
+          </div>
+          <div class="bar-copy">
+            <div class="bar-name">Mental</div>
+          </div>
+          <span class="bar-val">--</span>
+        </div>
         <div class="bar-outer"><div class="bar-inner"></div></div>
       </div>
     </div>
-    <div id="trip-line"></div>
   </div>
   <script src="/webapp/app.js"></script>
 </body>

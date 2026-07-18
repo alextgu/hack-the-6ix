@@ -81,7 +81,7 @@ async def _heartbeat(get_bot) -> None:
     from app.bot import bot as botmod
     from datetime import datetime, timezone
 
-    HEARTBEAT_EVERY_S = 600
+    HEARTBEAT_EVERY_S = 120  # check often; supervisor's silence rule decides
     while True:
         await asyncio.sleep(HEARTBEAT_EVERY_S)
         try:
