@@ -18,11 +18,13 @@ Mini App button (also one-time, in BotFather):
   only opens as a real Mini App once BotFather has this registered.
 
 Commands (once running):
-  /start           hatch the pet, post its image
+  /start           hatch the pet, post its image (also wakes a /stop'd pet)
   /health          post the current pet image + numbers
   /scrub <0..6>    dev: jump the simulated timeline; watch the bars move
   /commit          both bars full — celebrated 'graduated' pet
-  /stop            pause the bot on this chat (no reads, no Gemini calls)
+  /saved           green ledger: CO2e avoided so far, in human units
+  /itinerary       green-routed day-by-day plan (rail > car, savings counted)
+  /stop            full mute: no reads, no Gemini calls, heartbeat skips the chat
   /resume          un-pause; /start also clears it
 
 TODO seams (later lanes plug in here without changing the shape):
@@ -62,7 +64,9 @@ from app.integrations import db
 from app.integrations import flights
 from app.integrations import elevenlabs
 from app.integrations import telegram_avatar
+from app.integrations import green
 from app.agents import supervisor
+from app.agents import greenplanner
 
 
 def _encode_start_param(chat_id: int) -> str:
@@ -186,11 +190,6 @@ _spoke_deathbed: set[int] = set()
 _spoke_graduated: set[int] = set()
 _DEATHBED_PHYSICAL = 20  # physical at/below this counts as the deathbed moment
 
-# /stop: kill switch for the automatic message pipeline (buffering, brain
-# extraction, Stay22 polling, supervisor/Gemini turns). Explicit commands
-# (/health, /scrub, /commit, /resume) still work while paused.
-_paused: set[int] = set()
-
 
 async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
                     mood: str | None = None, physical: int | None = None) -> None:
@@ -236,11 +235,53 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
+# ─── /stop mute state (memory cache over the persisted plan flag) ───────────
+# One mechanism, checked everywhere the bot can act: message ingestion,
+# execute_decision, and the run.py heartbeat. Persisted (trip_plans.muted) so
+# a redeploy mid-demo doesn't quietly un-stop a chat that asked for silence.
+_mute_cache: dict[int, bool] = {}
+
+
+def is_muted(chat_id: int) -> bool:
+    """BLOCKING on first check per chat (one Mongo read, then cached).
+    Memory-only when Atlas is down — /stop still works for this process."""
+    if chat_id not in _mute_cache:
+        _mute_cache[chat_id] = bool(db.get_plan(chat_id).get("muted"))
+    return _mute_cache[chat_id]
+
+
+def set_muted(chat_id: int, muted: bool) -> None:
+    """BLOCKING (Mongo write) — call via asyncio.to_thread."""
+    _mute_cache[chat_id] = muted
+    db.update_plan(chat_id, {"muted": muted})
+    log.info("mute chat=%s → %s", chat_id, muted)
+
+
+async def _green_react(ctx: ContextTypes.DEFAULT_TYPE, chat_id: int,
+                       message_id: int | None) -> None:
+    """The subtle nudge: the pet reacts 🕊 to its own message whenever a green
+    suggestion/saving just happened. Best-effort — reactions aren't allowed in
+    every chat, and older setups may lack the API; never let it raise."""
+    if not message_id:
+        return
+    try:
+        from telegram.constants import ReactionEmoji
+        emoji = ReactionEmoji.DOVE
+    except Exception:
+        emoji = "🕊"
+    try:
+        await ctx.bot.set_message_reaction(chat_id=chat_id,
+                                           message_id=message_id,
+                                           reaction=emoji)
+    except Exception as e:
+        log.info("green react skipped (chat=%s): %s", chat_id, e)
+
+
 async def execute_decision(chat_id: int, d: "supervisor.Decision",
                            ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Carry out what the supervisor decided. The supervisor is the only
     place that decides; this just has hands."""
-    if not d.send:
+    if not d.send or _mute_cache.get(chat_id):
         return
     if d.action == "deal_cards":
         if d.message:
@@ -250,10 +291,20 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         return
     if d.action == "post_flights":
         g = state.get_or_create(chat_id)
-        opts = flights.mock_options(chat_id, g.trip.city, g.trip.budget_per_person)
+        opts = await asyncio.to_thread(flights.get_options, chat_id,
+                                       g.trip.city, g.trip.budget_per_person)
         text = (d.message + "\n\n" if d.message else "") + flights.render_options(opts)
-        await ctx.bot.send_message(chat_id=chat_id, text=text)
-        supervisor.note_flights_posted(chat_id)
+        msg = await ctx.bot.send_message(chat_id=chat_id, text=text)
+        supervisor.note_flights_posted(chat_id, opts)
+        await _green_react(ctx, chat_id, msg.message_id)  # a 🌱 option is on the table
+        return
+    if d.action == "post_itinerary":
+        text = await asyncio.to_thread(greenplanner.build_itinerary, chat_id)
+        if d.message:
+            await _say(chat_id, d.message, ctx)
+        msg = await ctx.bot.send_message(chat_id=chat_id, text=text)
+        supervisor.note_itinerary_posted(chat_id)
+        await _green_react(ctx, chat_id, msg.message_id)
         return
     if d.message:
         await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
@@ -285,12 +336,22 @@ async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+# Natural-language route into the green ledger. Deliberately narrow: it must
+# mention the saving/carbon subject AND read as a question about it, so normal
+# trip talk ("we saved money on flights") never hijacks the turn.
+_ASK_SAVED_RE = re.compile(
+    r"(how much|what'?s|whats|show|tell me).{0,30}"
+    r"(saved|savings|carbon|co2|emissions|footprint|impact)"
+    r"|(carbon|co2|emissions|green)\s+(ledger|total|so far|savings?)"
+    r"|how green", re.IGNORECASE)
+
+
 # ─── Handlers ────────────────────────────────────────────────────────────────
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
     _spoke_deathbed.discard(g.chat_id)   # re-arm voice moments for the fresh pet
     _spoke_graduated.discard(g.chat_id)
-    _paused.discard(g.chat_id)
+    await asyncio.to_thread(set_muted, g.chat_id, False)  # /start always wakes
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
         "hi. i'm the pet. i live here now.\n"
@@ -314,34 +375,15 @@ async def cmd_reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     wire.reset_chat(chat_id)
     cards.forget(chat_id)
     supervisor.reset_chat(chat_id)
+    green.forget(chat_id)
+    flights.forget(chat_id)
+    _mute_cache.pop(chat_id, None)
     state.reset(chat_id)
     log.info("RESET chat=%s (%d docs wiped)", chat_id, removed)
     await update.effective_chat.send_message(
         f"🧹 wiped everything ({removed} records). fresh egg incoming…"
     )
     await cmd_start(update, ctx)
-
-
-async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Kill switch: the bot goes silent on this chat — no more message
-    logging, brain extraction, Stay22 polling, or supervisor/Gemini turns.
-    Nothing is deleted (unlike /reset); /resume or /start un-pauses."""
-    chat_id = update.effective_chat.id
-    _paused.add(chat_id)
-    log.info("STOP chat=%s — automatic pipeline paused", chat_id)
-    await update.effective_chat.send_message(
-        "🛑 stopped. i'll stay quiet and stop reading messages until /resume or /start."
-    )
-
-
-async def cmd_resume(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    if chat_id not in _paused:
-        await update.effective_chat.send_message("i wasn't stopped.")
-        return
-    _paused.discard(chat_id)
-    log.info("RESUME chat=%s", chat_id)
-    await update.effective_chat.send_message("back. talk to me.")
 
 
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -440,6 +482,49 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                         ctx, mood="graduated", physical=g.pet.physical)
 
 
+async def cmd_saved(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Green ledger: total CO2e avoided, EPA human units, scale-up line."""
+    chat_id = update.effective_chat.id
+    text = await asyncio.to_thread(green.render_saved, chat_id)
+    try:
+        await update.effective_chat.send_message(text, parse_mode=ParseMode.MARKDOWN)
+    except Exception:
+        await update.effective_chat.send_message(text)
+
+
+async def cmd_itinerary(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Green-routed day-by-day plan; transit savings counted once."""
+    chat_id = update.effective_chat.id
+    text = await asyncio.to_thread(greenplanner.build_itinerary, chat_id)
+    msg = await update.effective_chat.send_message(text)
+    supervisor.note_itinerary_posted(chat_id)
+    await _green_react(ctx, chat_id, msg.message_id)
+
+
+async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kill switch: the bot goes silent on this chat — no message logging,
+    brain extraction, Stay22 polling, supervisor/Gemini turns, or heartbeat
+    nudges. Nothing is deleted (unlike /reset), and the mute is persisted so a
+    redeploy can't un-stop the chat. Explicit commands (/health, /scrub,
+    /commit, /saved, /resume) still work. /resume or /start un-pauses."""
+    chat_id = update.effective_chat.id
+    await asyncio.to_thread(set_muted, chat_id, True)
+    log.info("STOP chat=%s — automatic pipeline paused", chat_id)
+    await update.effective_chat.send_message(
+        "🛑 stopped. i'll stay quiet and stop reading messages until /resume or /start."
+    )
+
+
+async def cmd_resume(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    if not await asyncio.to_thread(is_muted, chat_id):
+        await update.effective_chat.send_message("i wasn't stopped.")
+        return
+    await asyncio.to_thread(set_muted, chat_id, False)
+    log.info("RESUME chat=%s", chat_id)
+    await update.effective_chat.send_message("back. talk to me.")
+
+
 async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Every non-command text message. Buffered by wire.py; consensus +
     Stay22 poll run behind a debounce so we don't burn the LLM / Stay22
@@ -447,14 +532,24 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
     chat_id = update.effective_chat.id
-    if chat_id in _paused:
-        return
+    if await asyncio.to_thread(is_muted, chat_id):
+        return  # /stop means STOPPED: no logging, no brain, no supervisor
     speaker = (update.effective_user.first_name if update.effective_user else "someone") or "someone"
     log.info("msg chat_id=%s from=%s: %s", chat_id, speaker, update.message.text[:200])
 
     user_id = str(update.effective_user.id) if update.effective_user else "unknown"
     await asyncio.to_thread(db.log_chat_message, chat_id, user_id, speaker,
                             update.message.text, update.message.message_id)
+
+    # Asking Tabi directly ("how much have we saved?", "carbon footprint?")
+    # answers with the ledger — same card as /saved, no LLM round-trip needed.
+    if _ASK_SAVED_RE.search(update.message.text):
+        text = await asyncio.to_thread(green.render_saved, chat_id)
+        try:
+            await update.effective_chat.send_message(text, parse_mode=ParseMode.MARKDOWN)
+        except Exception:
+            await update.effective_chat.send_message(text)
+        return
 
     # TEMPORARY: "map" stays as a manual override for demos. The supervisor
     # now deals the deck itself when the stage reaches HOTELS.
@@ -463,11 +558,14 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         supervisor.note_cards_dealt(chat_id)
         return
 
-    # "flight 2" locks the mock flight stage
-    lock_msg = await asyncio.to_thread(supervisor.try_lock_flight, chat_id,
-                                       update.message.text)
-    if lock_msg:
-        await update.effective_chat.send_message(lock_msg)
+    # "flight 2" locks a flight option; picking the 🌱 one earns a dove
+    locked = await asyncio.to_thread(supervisor.try_lock_flight, chat_id,
+                                     update.message.text)
+    if locked:
+        lock_msg, was_greenest = locked
+        msg = await update.effective_chat.send_message(lock_msg)
+        if was_greenest:
+            await _green_react(ctx, chat_id, msg.message_id)
 
     wire.note_message(chat_id, speaker, update.message.text)
     reconciled = await wire.maybe_process(chat_id)  # brain keeps its own debounce
@@ -517,6 +615,8 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("commit", cmd_commit))
     app.add_handler(CommandHandler("open", cmd_open))
     app.add_handler(CommandHandler("reset", cmd_reset))
+    app.add_handler(CommandHandler("saved", cmd_saved))
+    app.add_handler(CommandHandler("itinerary", cmd_itinerary))
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("resume", cmd_resume))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))

@@ -218,6 +218,13 @@
           (c.free_cancellation
             ? '<span class="tag cancel"><iconify-icon icon="heroicons:shield-check" width="12" height="12"></iconify-icon>free cancel</span>'
             : "") +
+          (c.green_pick
+            ? '<span class="tag green" title="lowest estimated stay footprint on this deck">' +
+                '<iconify-icon icon="heroicons:sparkles" width="12" height="12"></iconify-icon>lowest carbon</span>'
+            : "") +
+          (c.est_stay_kg
+            ? '<span class="tag co2">~' + Math.round(c.est_stay_kg) + ' kg CO2e stay</span>'
+            : "") +
         "</div>" +
         (c.address
           ? '<div class="addr"><iconify-icon icon="heroicons:map-pin" width="14" height="14"></iconify-icon><span>' +

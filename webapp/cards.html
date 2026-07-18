@@ -208,6 +208,14 @@
     .tag.cancel { background: var(--card-mint); color: var(--card-mint-ink); }
     .tag.type { background: var(--card-sky); color: var(--card-sky-ink); }
     .tag.guests { background: var(--card-peach); color: var(--card-peach-ink); }
+    /* the green nudge: a badge, deliberately louder than the neutral tags */
+    .tag.green {
+      background: var(--card-mint);
+      color: var(--card-mint-ink);
+      font-weight: 700;
+      box-shadow: inset 0 0 0 1.5px var(--card-mint-ink);
+    }
+    .tag.co2 { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px currentColor; }
     .card .addr {
       display: flex;
       align-items: center;

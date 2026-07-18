@@ -149,6 +149,32 @@ def _buffer(doc: dict) -> None:
         _pending_events.append(doc)
 
 
+# ─── Green ledger (avoided-emissions events; memory-first in green.py) ──────
+def log_green_event(chat_id: int, kind: str, co2_kg: float, note: str,
+                    meta: Optional[dict] = None) -> None:
+    d = _db()
+    if d is None:
+        return
+    try:
+        d.green_ledger.insert_one({"chat_id": chat_id, "kind": kind,
+                                   "co2_kg": float(co2_kg), "note": note,
+                                   "meta": meta or {}, "ts": _utcnow()})
+    except Exception as e:
+        log.warning("log_green_event failed: %s", e)
+
+
+def green_events(chat_id: int) -> list[dict]:
+    """All persisted savings for a chat (green.py hydrates memory from this)."""
+    d = _db()
+    if d is None:
+        return []
+    try:
+        return list(d.green_ledger.find({"chat_id": chat_id}, {"_id": 0}).sort("ts", 1))
+    except Exception as e:
+        log.warning("green_events failed: %s", e)
+        return []
+
+
 # ─── Pet persistence (pet survives deploys) ─────────────────────────────────
 def save_pet(chat_id: int, physical: int, mental: int, mood: str, sim_week: int) -> None:
     d = _db()
@@ -199,7 +225,7 @@ def nuke_chat(chat_id: int) -> int:
         return 0
     removed = 0
     for coll in ("chat_log", "user_profiles", "trip_plans", "pets",
-                 "card_sessions", "analytics"):
+                 "card_sessions", "analytics", "green_ledger"):
         try:
             removed += d[coll].delete_many({"chat_id": chat_id}).deleted_count
         except Exception as e:

@@ -32,6 +32,7 @@ from langgraph.graph import StateGraph, END
 
 from app.integrations import db
 from app.integrations import flights
+from app.integrations import green
 from app.core import state
 from app.bot import cards
 
@@ -204,6 +205,14 @@ def messenger(s: AgentState) -> AgentState:
     members = json.dumps(db.known_members(s["chat_id"]))[:600]
     pending = json.dumps(s.get("pending", []))[:800]
     already_flights = bool(s["plan"].get("flights_posted"))
+    saved = green.totals(s["chat_id"])["total_kg"]
+    green_line = (f"GREEN LEDGER: the group has avoided {saved} kg CO2e so far by "
+                  "green choices (🌱 flight/hotel/rail). if anyone asks about "
+                  "carbon, savings, or 'how green is this trip', answer with that "
+                  "number proudly and point them at /saved."
+                  if saved > 0 else
+                  "GREEN LEDGER: nothing saved yet — when flights appear, gently "
+                  "root for the 🌱 lowest-carbon option (never nag).")
     trigger_line = {
         "kickoff": "you JUST hatched — introduce yourself in one line, then "
                    "immediately start the plan: ask everyone for their dates, "
@@ -222,6 +231,7 @@ mock flight) → HOTELS (swipe the card deck) → BOOK.
 
 Current stage: {s['stage']}. Missing fields: {s['missing']}.
 Pet health: physical {g.pet.physical}, mental {g.pet.mental} ({g.pet.mood}).
+{green_line}
 Trigger: {trigger_line}
 Group members (for mentions): {members}
 To @ someone use a Telegram mention: [their name](tg://user?id=<user_id>).
@@ -268,6 +278,8 @@ Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
         action, send = "post_flights", True
     if s["stage"] == "HOTELS" and s["plan"].get("cards_dealt_stage") != "HOTELS":
         action, send = "deal_cards", True
+    if s["stage"] == "BOOK" and not s["plan"].get("itinerary_posted"):
+        action, send = "post_itinerary", True
 
     log.info("messenger chat=%s stage=%s send=%s action=%s best=%s(%.1f) why=%s",
              s["chat_id"], s["stage"], send, action,
@@ -382,24 +394,56 @@ def reset_chat(chat_id: int) -> None:
     _last_profiled_n.pop(chat_id, None)
 
 
-def try_lock_flight(chat_id: int, text: str) -> Optional[str]:
-    """'flight 2' in chat locks the mock flight. Returns confirmation text."""
-    m = re.search(r"\bflight\s*([123])\b", text, re.IGNORECASE)
+def try_lock_flight(chat_id: int, text: str) -> Optional[tuple[str, bool]]:
+    """'flight 2' in chat locks that option. Scores it against the SAME list
+    that was posted (persisted in the plan) and, when the pick beats the
+    dirtiest option, credits the CO2e delta × group size to the green ledger.
+    Returns (confirmation_text, picked_the_greenest) or None."""
+    m = re.search(r"\bflight\s*([1-4])\b", text, re.IGNORECASE)
     if not m:
         return None
     plan = db.get_plan(chat_id)
     if plan.get("flight_locked"):
         return None
     g = state.get_or_create(chat_id)
-    opts = flights.mock_options(chat_id, g.trip.city, g.trip.budget_per_person)
-    pick = opts[int(m.group(1)) - 1]
+    opts = plan.get("flight_options") or flights.get_options(
+        chat_id, g.trip.city, g.trip.budget_per_person)
+    idx = int(m.group(1)) - 1
+    if idx >= len(opts):
+        return None
+    pick = opts[idx]
     db.update_plan(chat_id, {"flight_locked": pick, "stage": "HOTELS"})
-    return (f"✈️ locked: {pick['airline']} {pick['route']} at ${pick['price']}/person. "
-            "now the fun part — hotels.")
+
+    people = int(g.trip.group_size or 4)
+    dirtiest = max(o.get("co2_kg", 0) for o in opts)
+    delta_pp = round(dirtiest - pick.get("co2_kg", dirtiest), 1)
+    if delta_pp > 0:
+        green.record_saving(chat_id, "flight", delta_pp * people,
+                            f"chose {pick['airline']} over the dirtiest option",
+                            {"per_person_kg": delta_pp, "people": people,
+                             "picked": pick.get("n"), "source": pick.get("source")})
+    text_out = (f"✈️ locked: {pick['airline']} {pick['route']} at "
+                f"${pick['price']}/person.")
+    if pick.get("green"):
+        eq = green.fun_equivalents(delta_pp * people)
+        eq_line = f" ({eq[0]})" if eq else ""
+        text_out += (f"\n🌱 greenest option — your group just avoided "
+                     f"~{delta_pp * people:,.0f} kg CO2e{eq_line}. /saved anytime.")
+    elif delta_pp > 0:
+        text_out += f"\n🌱 still avoided ~{delta_pp * people:,.0f} kg CO2e vs the dirtiest option."
+    text_out += "\nnow the fun part — hotels."
+    return text_out, bool(pick.get("green"))
 
 
-def note_flights_posted(chat_id: int) -> None:
-    db.update_plan(chat_id, {"flights_posted": True})
+def note_flights_posted(chat_id: int, opts: Optional[list[dict]] = None) -> None:
+    updates: dict = {"flights_posted": True}
+    if opts:
+        updates["flight_options"] = opts
+    db.update_plan(chat_id, updates)
+
+
+def note_itinerary_posted(chat_id: int) -> None:
+    db.update_plan(chat_id, {"itinerary_posted": True})
 
 
 def note_cards_dealt(chat_id: int) -> None:
