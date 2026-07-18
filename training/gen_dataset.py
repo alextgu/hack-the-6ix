@@ -1,110 +1,85 @@
-"""Distill gold {blocker, action, message} outputs from the working Phoebe.
+"""Generate the STARTER training dataset for the Phoebe agent env.
 
-Pipeline:
-  1. scenario_gen.generate(...) → N labelled scenarios (deterministic labels)
-  2. phoebe.compose_message(...) → dynamic Sushi-kun gold message (LLM call)
-  3. dedup + decontaminate → train.jsonl / eval.jsonl
+FIRST PASS: a handful of rows distilled from the sample states in
+`phoebe.py`'s __main__ (phoebe._SAMPLES). Labels come from the REAL production
+logic — phoebe.diagnose → phoebe.decide_action — so the training targets match
+what the bot actually decides. The gold message uses phoebe's deterministic
+canned line (no LLM/network needed), which keeps this reproducible.
 
-Because message distillation calls the model per row, keep --n modest at first
-(200-500) and use --skip-messages for a dry preview.
+  python -m training.gen_dataset            # writes training/dataset/train.jsonl
 
-  python -m training.gen_dataset --n 800 --eval-frac 0.15
+TODO(subagent): replace this with the full scenario generator —
+  * diversity: every blocker kind × group size × budget spread
+  * a decontaminated train/eval split (hash on scenario id; disjoint)
+  * optionally distill the gold message via phoebe.compose_message (LLM) for
+    phrasing variety instead of the canned line.
+See training/scenario_gen.py for the diversity-generator seam.
 """
 from __future__ import annotations
-import argparse
-import hashlib
+
+import dataclasses
 import json
 import sys
-from dataclasses import asdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from training.scenario_gen import generate, ARCHETYPES  # noqa: E402
-import phoebe  # noqa: E402
+# Make the bot package importable so we reuse the production agent logic.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_REPO_ROOT))
+
+from app.agents import phoebe  # noqa: E402
+
+OUT_PATH = Path(__file__).parent / "dataset" / "train.jsonl"
 
 
-def _fmt_input(state: dict) -> str:
-    """The exact string the trained model will see as input.
-    Kept in sync with `environment.PhoebeEnv.build_prompt_messages`."""
+def _fmt_input(name: str, state: dict) -> str:
+    """The exact string the trained model sees. MUST stay in parity with
+    environment.PhoebeEnv.build_prompt_messages."""
     return (
-        "You are Sushi-kun (Phoebe agent). Read this reconciled trip state "
-        "and return the ONE binding blocker, the resolution action, and the "
-        "outreach message. Return ONLY JSON matching the schema.\n\n"
+        "You are Sushi-kun, the trip-planning pet agent. Read this reconciled "
+        "trip state (constraints + blocker flags) and return the ONE binding "
+        "blocker, the resolution action, and a short outreach message. "
+        "Return ONLY JSON: {\"blocker\":{\"kind\",\"subject\",\"detail\"},"
+        "\"action\":{\"kind\",\"target\",\"parameters\"},\"message\":\"...\"}.\n\n"
+        f"SCENARIO: {name}\n"
         f"STATE:\n{json.dumps(state, default=str, indent=2)}"
     )
 
 
-def _fmt_output(labels: dict, message: str) -> dict:
-    """The gold answer the model must learn to produce."""
+def _gold_output(state: dict) -> dict:
+    """Ground-truth labels from the real Phoebe pipeline (deterministic)."""
+    blocker = phoebe.diagnose(state)              # → Blocker
+    action = phoebe.decide_action(blocker, state)  # → Action
+    message = phoebe._canned(action)              # deterministic gold message
     return {
-        "blocker": labels["blocker"],
-        "action":  labels["action"],
+        "blocker": {"kind": blocker.kind, "subject": blocker.subject, "detail": blocker.detail},
+        "action": {"kind": action.kind, "target": action.target,
+                   "parameters": action.parameters or {}},
         "message": message,
     }
 
 
-def _row(scenario: dict, message: str) -> dict:
-    return {
-        "id": scenario["id"],
-        "archetype": scenario["archetype"],
-        "input":  _fmt_input(scenario["state"]),
-        "output": _fmt_output(scenario["labels"], message),
-    }
-
-
-def _split(rows: list[dict], eval_frac: float) -> tuple[list[dict], list[dict]]:
-    """Deterministic decontaminated split: hash-based, so the SAME `id` never
-    lands on both sides (this hashes on the same key the generator used)."""
-    train, eval_ = [], []
-    for r in rows:
-        bucket = int(r["id"], 16) % 1000
-        if bucket < eval_frac * 1000:
-            eval_.append(r)
-        else:
-            train.append(r)
-    # sanity: disjoint by id
-    train_ids = {r["id"] for r in train}
-    eval_ids = {r["id"] for r in eval_}
-    assert train_ids.isdisjoint(eval_ids), "contamination! id overlap between splits"
-    return train, eval_
+def build_rows() -> list[dict]:
+    rows: list[dict] = []
+    for name, state in phoebe._SAMPLES.items():
+        # phoebe.diagnose reads state["blockers"]; _SAMPLES already carries them.
+        out = _gold_output(state)
+        rows.append({
+            "input": _fmt_input(name, state),
+            # output is a JSON string so a row is {"input": str, "output": str},
+            # matching the flash starter row shape; the env json-parses it.
+            "output": json.dumps(out, ensure_ascii=False),
+        })
+    return rows
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=500)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--eval-frac", type=float, default=0.15)
-    ap.add_argument("--out-dir", type=Path, default=Path("training/dataset"))
-    ap.add_argument("--skip-messages", action="store_true",
-                    help="stub gold messages (no LLM calls) — for pipeline testing")
-    args = ap.parse_args()
-
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-
-    rows: list[dict] = []
-    print(f"[gen_dataset] generating {args.n} scenarios...")
-    scenarios = list(generate(args.n, args.seed))
-
-    for i, sc in enumerate(scenarios, 1):
-        if args.skip_messages:
-            gold_msg = "[stub — run without --skip-messages to distill via Phoebe]"
-        else:
-            try:
-                action = phoebe.Action(**sc["labels"]["action"])
-                gold_msg = phoebe.compose_message(action, sc["state"])
-            except Exception as e:
-                print(f"  ! [{sc['id']}] compose_message failed ({e}); skipping row")
-                continue
-        rows.append(_row(sc, gold_msg))
-        if i % 25 == 0:
-            print(f"  ...{i}/{len(scenarios)}")
-
-    train, eval_ = _split(rows, args.eval_frac)
-    (args.out_dir / "train.jsonl").write_text("\n".join(json.dumps(r) for r in train) + "\n")
-    (args.out_dir / "eval.jsonl").write_text("\n".join(json.dumps(r) for r in eval_) + "\n")
-
-    print(f"[gen_dataset] wrote {len(train)} train + {len(eval_)} eval rows to {args.out_dir}/")
-    print(f"[gen_dataset] contamination check: disjoint by id ✓")
+    rows = build_rows()
+    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OUT_PATH.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n")
+    print(f"[gen_dataset] wrote {len(rows)} starter rows → {OUT_PATH}")
+    for r in rows:
+        out = json.loads(r["output"])
+        print(f"  · blocker={out['blocker']['kind']:7} action={out['action']['kind']}")
 
 
 if __name__ == "__main__":

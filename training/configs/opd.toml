@@ -1,35 +1,16 @@
-# OPD — on-policy distillation from a frontier teacher.
-# Reverse KL / mode-seeking. Ceiling = the teacher model.
-# Teacher grades every token of the student's own attempt, so credit lands
-# on the mistakes it actually makes — a 4B learns to reason like frontier.
-#
-#   flash train --config training/configs/opd.toml
-#
-# Warm-start from the SFT adapter so the format contract is already learned.
-
 model = "Qwen/Qwen3.5-4B"
-algorithm = "opd"
-seed = 42
+algorithm = "opd"                 # on-policy distillation from a managed teacher (default GLM 5.2)
 thinking = false
 
 [environment]
-id = "<your-org>/phoebe-agent"
+id = "thesix/phoebe-agent"
 
 [train]
-teacher_model = "glm-5.2"                 # default; also: deepseek-v4-pro, kimi-k2.6
-init_from_adapter = "<PASTE-SFT-RUN-ID>"  # DO NOT set lora_rank/alpha here — inherited
-epochs = 2
-max_examples = 800
-max_context_tokens = 4096
-max_completion_tokens = 512
-temperature = 0.7
-learning_rate = 5e-5
-batch_size = 8
-kl_penalty_coef = 0.05
-save_at_steps = [50, 100, 200]
-
-structured_outputs = '{"type":"object","additionalProperties":false,"required":["blocker","action","message"],"properties":{"blocker":{"type":"object","additionalProperties":false,"required":["kind","subject","detail"],"properties":{"kind":{"type":"string","enum":["person","timing","issue","none"]},"subject":{"type":"string","maxLength":80},"detail":{"type":"string","maxLength":300}}},"action":{"type":"object","additionalProperties":false,"required":["kind","target","parameters"],"properties":{"kind":{"type":"string","enum":["dm_holdout","propose_cheaper_neighborhood","hold_rooms_48h","ask_group","no_action"]},"target":{"type":"string","maxLength":80},"parameters":{"type":"object"}}},"message":{"type":"string","minLength":5,"maxLength":240}}}'
-
-[gpu]
-provider = ""
-max_retries = 5
+epochs = 1
+max_examples = 3
+lora_rank = 16                    # OPD over-sharpens on small models — prefer a modest rank
+# teacher_model = "glm-5.2"       # managed: glm-5.2 (default) | deepseek-v4-pro | kimi-k2.6
+# Vet the teacher on THIS task before distilling (TRAINING.md): OPD can't
+# exceed a teacher that can't diagnose the blocker itself. Warm-start from the
+# SFT adapter first so the JSON format is already learned:
+# init_from_adapter = "<sft-run-id>"
