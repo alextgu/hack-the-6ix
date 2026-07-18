@@ -13,7 +13,7 @@ TODO seams:
 """
 from __future__ import annotations
 
-from state import GroupState, MarketSnapshot
+from app.core.state import GroupState, MarketSnapshot
 
 
 # ─── Tune the feel here ──────────────────────────────────────────────────────

@@ -25,11 +25,11 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
-import stay22
+from app.integrations import stay22
 
 log = logging.getLogger("trippet.hotels")
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[2]   # app/integrations/hotels.py -> repo root
 CACHE_FILE = ROOT / "data" / "japan_hotels.json"
 LEGACY_SAMPLE = ROOT / "sample_response.json"
 

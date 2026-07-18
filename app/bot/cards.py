@@ -23,8 +23,8 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-import db
-import hotels
+from app.integrations import db
+from app.integrations import hotels
 
 log = logging.getLogger("trippet.cards")
 

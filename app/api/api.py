@@ -19,13 +19,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-import state
-import health
-import cards
-import db
+from app.core import state
+from app.core import health
+from app.bot import cards
+from app.integrations import db
 
 
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parents[2]   # app/api/api.py -> repo root
 WEBAPP_DIR = ROOT / "webapp"
 
 
