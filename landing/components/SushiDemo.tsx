@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   MAX_WEEK,
   MOOD_COLOR,
@@ -10,17 +10,33 @@ import {
   stateAtWeek,
 } from "@/lib/petModel";
 
+const HEALTH_INFO = {
+  Physical: {
+    icon: "heroicons:heart",
+    body: "Tied to real hotel pricing and availability — it withers as rooms sell out and the budget gets tighter.",
+  },
+  Mental: {
+    icon: "heroicons:chat-bubble-left-right",
+    body: "Tied to the group itself — it tracks how engaged the chat is. Deciding keeps it happy; silence makes it depressed.",
+  },
+} as const;
+
+const MOOD_NOTE = "Every update, it posts its current mood back into the chat.";
+
 function HealthCard({
   label,
   value,
   icon,
 }: {
-  label: string;
+  label: keyof typeof HEALTH_INFO;
   value: number;
   icon: string;
 }) {
   // Same hex thresholds as webapp/app.js healthColor (≥70 / ≥40 / else).
   const color = healthColor(value);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const info = HEALTH_INFO[label];
+
   return (
     <div className="ds-health-card" style={{ padding: "14px 16px", gap: 12 }}>
       <div className="bar-top">
@@ -29,6 +45,14 @@ function HealthCard({
         </div>
         <div className="bar-name" style={{ fontSize: 14 }}>
           {label}
+          <button
+            type="button"
+            className="ds-info-btn"
+            aria-label={`About ${label} health`}
+            onClick={() => dialogRef.current?.showModal()}
+          >
+            <iconify-icon icon="heroicons:information-circle" width="16" height="16" />
+          </button>
         </div>
         <div className="bar-val" style={{ fontSize: 24, color }}>
           {Math.round(value)}
@@ -40,6 +64,28 @@ function HealthCard({
           style={{ width: `${value}%`, background: color }}
         />
       </div>
+
+      <dialog
+        ref={dialogRef}
+        className="ds-info-dialog"
+        onClick={(e) => {
+          if (e.target === dialogRef.current) dialogRef.current.close();
+        }}
+      >
+        <h3>
+          <iconify-icon icon={info.icon} width="20" height="20" />
+          {label}
+        </h3>
+        <p>{info.body}</p>
+        <p className="note">{MOOD_NOTE}</p>
+        <button
+          type="button"
+          className="ds-cta"
+          onClick={() => dialogRef.current?.close()}
+        >
+          Got it
+        </button>
+      </dialog>
     </div>
   );
 }

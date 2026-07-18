@@ -28,6 +28,23 @@
   var physRow = document.getElementById("bar-physical");
   var mentRow = document.getElementById("bar-mental");
 
+  // Health-bar info popups (work even when preview / no group id).
+  document.querySelectorAll("[data-open-info]").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var dlg = document.getElementById(btn.getAttribute("data-open-info"));
+      if (dlg && typeof dlg.showModal === "function") dlg.showModal();
+    });
+  });
+  document.querySelectorAll("dialog.ds-info-dialog").forEach(function (dlg) {
+    dlg.addEventListener("click", function (e) {
+      if (e.target === dlg) dlg.close();
+    });
+    dlg.querySelectorAll("[data-close-dialog]").forEach(function (btn) {
+      btn.addEventListener("click", function () { dlg.close(); });
+    });
+  });
+
   if (!groupId && !previewMood) {
     captionEl.textContent = "no group id in url — open me from telegram, or add ?group=12345";
     return;

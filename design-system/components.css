@@ -206,6 +206,87 @@
   letter-spacing: -0.01em;
   color: var(--fg);
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Info affordance on health cards (Mini App + landing) */
+.ds-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: color 120ms ease, background 120ms ease;
+}
+.ds-info-btn:hover,
+.ds-info-btn:focus-visible {
+  color: var(--fg);
+  background: rgba(42, 36, 28, 0.08);
+  outline: none;
+}
+.ds-info-btn:active { transform: scale(0.92); }
+
+.ds-info-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 22px 22px 18px;
+  max-width: min(360px, calc(100vw - 40px));
+  width: 100%;
+  height: fit-content;
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-body);
+  box-shadow: 0 18px 48px rgba(42, 36, 28, 0.18);
+}
+.ds-info-dialog::backdrop {
+  background: rgba(42, 36, 28, 0.38);
+}
+.ds-info-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ds-info-dialog h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ds-info-dialog p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg);
+}
+.ds-info-dialog .note {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.ds-info-dialog .ds-cta {
+  margin-top: 6px;
+  width: 100%;
+  max-width: none;
+  font-size: 14px;
+  padding: 12px 18px;
 }
 .ds-health-card .bar-val {
   font-family: var(--font-display);
