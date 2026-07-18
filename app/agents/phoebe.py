@@ -89,7 +89,7 @@ def _phoebe_model(provider: str) -> str:
 
 def _call_freesolo(prompt: str, base_url: str, api_key: str) -> str:
     from openai import OpenAI
-    client = OpenAI(base_url=base_url.rstrip("/"), api_key=api_key)
+    client = OpenAI(base_url=base_url.rstrip("/"), api_key=api_key, timeout=20)
     resp = client.chat.completions.create(
         model=os.environ.get("FREESOLO_AGENT_MODEL", "phoebe-agent-v1"),
         messages=[{"role": "user", "content": prompt}],
@@ -108,7 +108,7 @@ def _call_gemini(prompt: str) -> str:
     import google.generativeai as genai
     genai.configure(api_key=key)
     model = genai.GenerativeModel(_phoebe_model("gemini"))
-    resp = model.generate_content(prompt)
+    resp = model.generate_content(prompt, request_options={"timeout": 20})
     return (resp.text or "").strip()
 
 
@@ -119,7 +119,7 @@ def _call_anthropic(prompt: str) -> str:
             "ANTHROPIC_API_KEY not set. Get one: https://console.anthropic.com/settings/keys"
         )
     from anthropic import Anthropic
-    client = Anthropic(api_key=key)
+    client = Anthropic(api_key=key, timeout=20)
     resp = client.messages.create(
         model=_phoebe_model("anthropic"),
         max_tokens=512,

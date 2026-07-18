@@ -153,7 +153,11 @@ async def _maybe_query_stay22(chat_id: int, r: dict) -> None:
     _last_stay22_at[chat_id] = now
 
     guests = int(r.get("group_size") or 2)
-    snap = await asyncio.to_thread(stay22.get_stay, city, start, end, guests)
+    try:
+        snap = await asyncio.to_thread(stay22.get_stay, city, start, end, guests)
+    except Exception as e:
+        log.warning("stay22.get_stay raised (chat=%s): %s — keeping last-known market", chat_id, e)
+        return
     if not snap:
         log.warning("stay22 returned None (chat=%s)", chat_id)
         return

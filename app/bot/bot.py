@@ -300,6 +300,20 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await execute_decision(chat_id, decision, ctx)
 
 
+# ─── Global error handler ────────────────────────────────────────────────────
+async def on_error(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Catch-all so one bad update (a raised handler, a Telegram/API hiccup)
+    can never kill polling. Logs what failed; the updater keeps running.
+    A user-visible reply is best-effort and itself swallowed on failure."""
+    chat_id = getattr(getattr(update, "effective_chat", None), "id", None)
+    log.error("handler error (chat_id=%s): %s", chat_id, ctx.error, exc_info=ctx.error)
+    if chat_id is not None:
+        try:
+            await ctx.bot.send_message(chat_id=chat_id, text="hiccup on my end — try that again in a sec")
+        except Exception:
+            pass  # never let the error handler itself raise
+
+
 # ─── App factory (shared by standalone `main()` and `run.py`) ────────────────
 def build_app() -> Application:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
@@ -313,6 +327,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("commit", cmd_commit))
     app.add_handler(CommandHandler("open", cmd_open))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))
+    app.add_error_handler(on_error)
     return app
 
 
