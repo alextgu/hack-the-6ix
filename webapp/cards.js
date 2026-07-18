@@ -120,7 +120,7 @@
     hidePanel("loading");
 
     $("basecamp").textContent = v.basecamp;
-    $("dates").textContent = v.checkin + " → " + v.checkout;
+    $("dates").textContent = formatDateRange(v.checkin, v.checkout);
     $("round-label").textContent = v.status === "decided" ? "decided" :
       "round " + v.round + " · " + v.active_count + " left";
     renderPeople(v.participants);
@@ -390,7 +390,7 @@
           '<span class="ds-stat"><iconify-icon icon="heroicons:currency-dollar" width="14" height="14"></iconify-icon>' +
             w.price_total + " total</span>" +
           '<span class="ds-stat"><iconify-icon icon="heroicons:calendar-days" width="14" height="14"></iconify-icon>' +
-            esc(v.checkin + " → " + v.checkout) + "</span>" +
+            esc(formatDateRange(v.checkin, v.checkout)) + "</span>" +
         "</div>" +
         (w.address
           ? '<div class="ds-stat"><iconify-icon icon="heroicons:map-pin" width="14" height="14"></iconify-icon>' +
@@ -439,4 +439,43 @@
     });
   }
   function escAttr(s) { return esc(s); }
+
+  /** "2026-07-18" → "July 18, 2026" (matches Mini App app.js). */
+  function formatDate(iso) {
+    if (!iso) return "";
+    var d = new Date(String(iso).slice(0, 10) + "T12:00:00");
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  function formatDateRange(start, end) {
+    if (!start && !end) return "";
+    var a = start ? new Date(String(start).slice(0, 10) + "T12:00:00") : null;
+    var b = end ? new Date(String(end).slice(0, 10) + "T12:00:00") : null;
+    if (a && isNaN(a.getTime())) a = null;
+    if (b && isNaN(b.getTime())) b = null;
+    if (!a && !b) return "";
+    if (a && !b) return formatDate(start);
+    if (!a && b) return formatDate(end);
+
+    var sameYear = a.getFullYear() === b.getFullYear();
+    var sameMonth = sameYear && a.getMonth() === b.getMonth();
+    var months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
+    ];
+
+    if (sameMonth) {
+      return months[a.getMonth()] + " " + a.getDate() + "–" + b.getDate() + ", " + a.getFullYear();
+    }
+    if (sameYear) {
+      return months[a.getMonth()] + " " + a.getDate() + " → " +
+        months[b.getMonth()] + " " + b.getDate() + ", " + a.getFullYear();
+    }
+    return formatDate(start) + " → " + formatDate(end);
+  }
 })();

@@ -36,6 +36,7 @@ import asyncio
 import logging
 import os
 import re
+from datetime import date
 from io import BytesIO
 
 from dotenv import load_dotenv
@@ -64,6 +65,25 @@ def _encode_start_param(chat_id: int) -> str:
     """Telegram's start_param only allows [A-Za-z0-9_-]; group chat_ids are
     negative, so stash the sign in a prefix letter instead of a leading '-'."""
     return f"n{-chat_id}" if chat_id < 0 else f"p{chat_id}"
+
+
+def _fmt_date(d: date | str | None) -> str:
+    """User-facing dates: 'July 18, 2026' (API/Stay22 stay ISO)."""
+    if d is None or d == "":
+        return ""
+    if isinstance(d, str):
+        try:
+            d = date.fromisoformat(d[:10])
+        except ValueError:
+            return str(d)
+    return f"{d.strftime('%B')} {d.day}, {d.year}"
+
+
+def _fmt_date_range(start: date | str | None, end: date | str | None) -> str:
+    a, b = _fmt_date(start), _fmt_date(end)
+    if a and b:
+        return f"{a} → {b}"
+    return a or b
 
 
 def _miniapp_url_for(chat_id: int, bot_username: str) -> str:
@@ -105,7 +125,7 @@ async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None
     kb = _cards_keyboard(chat_id, ctx.bot.username)
     text = (
         f"🏨 basecamp locked: {session['basecamp']} "
-        f"({session['checkin']} → {session['checkout']})\n"
+        f"({_fmt_date_range(session['checkin'], session['checkout'])})\n"
         f"i found {n} real places. everyone swipe — "
         "i'll keep cutting until we all land on one."
     )
@@ -257,7 +277,8 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not opts or not opts.get("book_url"):
         budget_note = f" under ${trip.budget_per_person}/person" if trip.budget_per_person else ""
         await update.effective_chat.send_message(
-            f"no rooms{budget_note} for {trip.city} on {checkin} → {checkout}. "
+            f"no rooms{budget_note} for {trip.city} on "
+            f"{_fmt_date_range(checkin, checkout)}. "
             "try raising budget or shifting dates, then /commit again."
         )
         return
