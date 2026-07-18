@@ -10,6 +10,13 @@ BotFather setup (do this once, otherwise the bot only sees /commands in groups):
   /mybots → pick your bot → Bot Settings → Group Privacy → **Turn off**
   Add the bot to a test group, then /start in the group.
 
+Mini App button (also one-time, in BotFather):
+  /mybots → pick your bot → Bot Settings → Configure Mini App → set it to
+  your PUBLIC_WEBAPP_URL. Required for the "open live pet" button — web_app=
+  inline buttons only work in private chats, so group buttons use a
+  t.me/<bot>?startapp=... deep link instead (see _miniapp_url_for), which
+  only opens as a real Mini App once BotFather has this registered.
+
 Commands (once running):
   /start           hatch the pet, post its image
   /health          post the current pet image + numbers
@@ -31,7 +38,7 @@ from io import BytesIO
 
 from dotenv import load_dotenv
 from telegram import (
-    Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
+    Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup,
 )
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler,
@@ -48,21 +55,28 @@ import stay22
 import booking
 
 
-def _webapp_url_for(chat_id: int) -> str | None:
-    """Public HTTPS URL for the Mini App, with ?group=<chat_id> appended.
-    Returns None if PUBLIC_WEBAPP_URL isn't set (Mini App button then skipped)."""
-    base = os.environ.get("PUBLIC_WEBAPP_URL", "").strip()
-    if not base:
-        return None
-    sep = "&" if "?" in base else "?"
-    return f"{base}{sep}group={chat_id}"
+def _encode_start_param(chat_id: int) -> str:
+    """Telegram's start_param only allows [A-Za-z0-9_-]; group chat_ids are
+    negative, so stash the sign in a prefix letter instead of a leading '-'."""
+    return f"n{-chat_id}" if chat_id < 0 else f"p{chat_id}"
 
 
-def _webapp_keyboard(chat_id: int, label: str = "🐾 open pet") -> InlineKeyboardMarkup | None:
-    url = _webapp_url_for(chat_id)
-    if not url:
-        return None
-    return InlineKeyboardMarkup([[InlineKeyboardButton(label, web_app=WebAppInfo(url=url))]])
+def _miniapp_url_for(chat_id: int, bot_username: str) -> str:
+    """t.me deep link that opens the bot's BotFather-registered Mini App,
+    passing chat_id via start_param.
+
+    NOT a web_app= inline button: those are only valid in private chats with
+    the bot (Telegram rejects them with Button_type_invalid in groups). A
+    plain url= button pointing at a t.me Mini App deep link works from
+    anywhere, including groups, and Telegram still opens it as a full Mini
+    App (SDK/initData/theme) rather than a browser tab — but only once the
+    Mini App is registered via BotFather (Bot Settings → Configure Mini App)."""
+    return f"https://t.me/{bot_username}?startapp={_encode_start_param(chat_id)}"
+
+
+def _webapp_keyboard(chat_id: int, bot_username: str, label: str = "🐾 open pet") -> InlineKeyboardMarkup:
+    url = _miniapp_url_for(chat_id, bot_username)
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, url=url)]])
 
 
 load_dotenv()
@@ -96,7 +110,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "start talking about the japan trip. every real decision heals me. "
         "silence and rising prices kill me. try /health any time. "
         "dev: /scrub 0..6 to fast-forward, /commit to book.",
-        reply_markup=_webapp_keyboard(g.chat_id, label="🐾 open live pet"),
+        reply_markup=_webapp_keyboard(g.chat_id, ctx.bot.username, label="🐾 open live pet"),
     )
     await _send_pet(update, ctx)
 
@@ -104,13 +118,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Launch the animated Mini App (the Face layer)."""
     chat_id = update.effective_chat.id
-    kb = _webapp_keyboard(chat_id, label="🐾 open live pet")
-    if not kb:
-        await update.effective_chat.send_message(
-            "PUBLIC_WEBAPP_URL isn't set — start a cloudflared/ngrok tunnel and "
-            "put the HTTPS URL in .env, then restart."
-        )
-        return
+    kb = _webapp_keyboard(chat_id, ctx.bot.username, label="🐾 open live pet")
     await update.effective_chat.send_message("tap to open the live pet:", reply_markup=kb)
 
 
