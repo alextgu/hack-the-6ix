@@ -25,6 +25,17 @@ _MIN_INTERVAL_S = 12.0
 _last_call_at: float = 0.0
 
 
+def request_headers() -> dict[str, str]:
+    """Shared headers for every Stay22 call (hotels.py uses this too).
+    STAY22_API_KEY set → authenticated tier via Bearer; blank → keyless demo.
+    The 12s throttle stays on either way as a safety net."""
+    h = {"Accept": "application/json", "User-Agent": "trippet/1.0"}
+    key = os.environ.get("STAY22_API_KEY", "").strip()
+    if key:
+        h["Authorization"] = f"Bearer {key}"
+    return h
+
+
 def _throttle() -> None:
     """Sleep until we're allowed to make another call. Safe to call from a
     thread (via asyncio.to_thread) — blocking sleep won't stall the event loop."""
@@ -80,9 +91,7 @@ def get_stay(
 
     _throttle()
     url = f"{ENDPOINT}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(
-        url, headers={"Accept": "application/json", "User-Agent": "trippet/1.0"}
-    )
+    req = urllib.request.Request(url, headers=request_headers())
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
@@ -139,9 +148,7 @@ def search_raw(
 
     _throttle()
     url = f"{ENDPOINT}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(
-        url, headers={"Accept": "application/json", "User-Agent": "trippet/1.0"}
-    )
+    req = urllib.request.Request(url, headers=request_headers())
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())

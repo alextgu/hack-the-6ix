@@ -17,9 +17,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 import state
 import health
+import cards
+import db
 
 
 ROOT = Path(__file__).parent
@@ -32,7 +35,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],           # Telegram webview loads over any origin
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -56,6 +59,70 @@ async def root() -> FileResponse:
 @app.get("/api/health")
 async def api_ping() -> dict:
     return {"ok": True, "service": "trippet-face"}
+
+
+# ─── Hotel cards (Tinder-style basecamp decision) ────────────────────────────
+# NOTE: card endpoints are sync `def` on purpose — FastAPI runs them in a
+# threadpool, so blocking Stay22/Mongo calls never stall the shared event loop
+# that also drives the Telegram bot.
+
+def _chat_id(group_id: str) -> int:
+    try:
+        return int(group_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="group_id must be an int chat id")
+
+
+class SwipeBody(BaseModel):
+    user_id: str = Field(min_length=1, max_length=64)
+    name: str = Field(default="guest", max_length=64)
+    hotel_id: str = Field(min_length=1, max_length=80)
+    direction: str = Field(pattern="^(left|right)$")
+    analytics: dict = Field(default_factory=dict)
+
+
+class EventBody(BaseModel):
+    user_id: str = Field(min_length=1, max_length=64)
+    type: str = Field(min_length=1, max_length=40)
+    hotel_id: str | None = Field(default=None, max_length=80)
+    meta: dict = Field(default_factory=dict)
+
+
+@app.get("/cards")
+def cards_page() -> FileResponse:
+    page = WEBAPP_DIR / "cards.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="webapp/cards.html missing")
+    return FileResponse(str(page))
+
+
+@app.get("/api/cards/{group_id}")
+def api_cards_view(group_id: str, user_id: str, name: str = "guest") -> JSONResponse:
+    """Deck for one user. Creates the session on first call (so the page works
+    in a plain browser for testing), registers the caller as a participant."""
+    return JSONResponse(cards.view_for(_chat_id(group_id), user_id, name))
+
+
+@app.post("/api/cards/{group_id}/swipe")
+def api_cards_swipe(group_id: str, body: SwipeBody) -> JSONResponse:
+    """One swipe + its interaction analytics. Returns the fresh view (round
+    may have resolved — the UI re-renders straight from this response)."""
+    view = cards.record_swipe(_chat_id(group_id), body.user_id, body.name,
+                              body.hotel_id, body.direction, body.analytics)
+    return JSONResponse(view)
+
+
+@app.post("/api/cards/{group_id}/event")
+def api_cards_event(group_id: str, body: EventBody) -> JSONResponse:
+    """Fire-and-forget UI analytics: deck_open, card_view, detail_open, link_out."""
+    db.log_event(_chat_id(group_id), body.user_id, body.type, body.hotel_id, body.meta)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/cards/{group_id}/results")
+def api_cards_results(group_id: str) -> JSONResponse:
+    """Tally, winner, per-round history + Mongo analytics rollup."""
+    return JSONResponse(cards.results(_chat_id(group_id)))
 
 
 @app.get("/api/state/{group_id}")

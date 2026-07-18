@@ -32,8 +32,10 @@ TODO seams (later lanes plug in here without changing the shape):
   - ElevenLabs voice: send_voice on `mood` → 'dying' with cooldown.
 """
 from __future__ import annotations
+import asyncio
 import logging
 import os
+import re
 from io import BytesIO
 
 from dotenv import load_dotenv
@@ -45,12 +47,11 @@ from telegram.ext import (
     ContextTypes, MessageHandler, filters,
 )
 
-import asyncio
-
 import state
 import health
 import pet
 import wire
+import cards
 import stay22
 import booking
 
@@ -77,6 +78,34 @@ def _miniapp_url_for(chat_id: int, bot_username: str) -> str:
 def _webapp_keyboard(chat_id: int, bot_username: str, label: str = "🐾 open pet") -> InlineKeyboardMarkup:
     url = _miniapp_url_for(chat_id, bot_username)
     return InlineKeyboardMarkup([[InlineKeyboardButton(label, url=url)]])
+
+
+def _cards_keyboard(chat_id: int, bot_username: str) -> InlineKeyboardMarkup:
+    """Deep-link button for the hotel swipe deck. Same t.me?startapp trick as
+    _miniapp_url_for (web_app= buttons are invalid in groups) with a '-cards'
+    suffix on the start_param; webapp/app.js sees the suffix and forwards the
+    webview to /cards."""
+    url = (f"https://t.me/{bot_username}"
+           f"?startapp={_encode_start_param(chat_id)}-cards")
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🏨 swipe on hotels", url=url)]])
+
+
+async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Basecamp is confirmed → deal the hotel deck to the group.
+
+    This is THE seam the agent flow will call once the pet has walked the
+    group to a confirmed basecamp (gather → propose → react → resolve).
+    For now the temporary "map" chat trigger below invokes it directly."""
+    session = await asyncio.to_thread(cards.ensure_session, chat_id)
+    n = len(session["active"])
+    kb = _cards_keyboard(chat_id, ctx.bot.username)
+    text = (
+        f"🏨 basecamp locked: {session['basecamp']} "
+        f"({session['checkin']} → {session['checkout']})\n"
+        f"i found {n} real places. everyone swipe — "
+        "i'll keep cutting until we all land on one."
+    )
+    await ctx.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
 
 
 load_dotenv()
@@ -212,6 +241,13 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     speaker = (update.effective_user.first_name if update.effective_user else "someone") or "someone"
     log.info("msg chat_id=%s from=%s: %s", chat_id, speaker, update.message.text[:200])
+
+    # TEMPORARY: "map" anywhere in a message deals the hotel deck so people
+    # can play with the swipe flow before the agent loop lands. Remove once
+    # the judge/talker/reader pipeline confirms the basecamp itself.
+    if re.search(r"\bmap\b", update.message.text, re.IGNORECASE):
+        await open_hotel_cards(chat_id, ctx)
+        return
 
     wire.note_message(chat_id, speaker, update.message.text)
     reconciled = await wire.maybe_process(chat_id)

@@ -11,9 +11,14 @@
   }
 
   var params = new URLSearchParams(window.location.search);
-  var groupId = params.get("group") || decodeStartParam(
-    tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param
-  );
+  var startParam = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+  if (startParam && /-cards$/.test(startParam)) {
+    // hotel-deck deep link (bot.py _cards_keyboard) — hand the webview to /cards
+    location.replace("/cards?group=" +
+      encodeURIComponent(decodeStartParam(startParam.replace(/-cards$/, "")) || ""));
+    return;
+  }
+  var groupId = params.get("group") || decodeStartParam(startParam);
   var captionEl = document.getElementById("caption");
   var weekEl = document.getElementById("week");
   var badgeEl = document.getElementById("status-badge");
