@@ -79,9 +79,9 @@
     var label = row.querySelector(".bar-val");
     inner.style.width = val + "%";
     label.textContent = Math.round(val);
-    if (val < 25) inner.style.background = "#ff6b6b";
-    else if (val < 50) inner.style.background = "#f0d47a";
-    else inner.style.background = ""; // fall back to CSS default
+    if (val < 25) inner.style.background = "#8b0000";      // deep blood red — critical
+    else if (val < 50) inner.style.background = "#c8102e"; // shu-iro vermillion — warning
+    else inner.style.background = ""; // fall back to CSS default (red physical / ink black mental)
   }
 
   function loadMood(mood) {

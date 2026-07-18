@@ -3,20 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>trippet</title>
+  <title>Tabi</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
   <style>
     :root {
-      --bg: #0f1116;
-      --bg2: #171a22;
-      --fg: #e8ecf3;
-      --muted: #8a93a6;
-      --bar-bg: #232735;
-      --bar-fg: #7cd992;
-      --bar-fg-2: #6aa8ff;
-      --accent: #f5c518;
-      --danger: #ff6b6b;
+      /* Japanese palette: washi paper white, sumi-ink black, shu-iro vermillion red */
+      --bg: #f7f4ee;
+      --bg2: #ece2d0;
+      --fg: #1a1a1a;
+      --muted: #7a7266;
+      --bar-bg: #e3dccb;
+      --bar-fg: #c8102e;
+      --bar-fg-2: #1a1a1a;
+      --accent: #c8102e;
+      --danger: #8b0000;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -39,7 +40,7 @@
       width: 100%; max-width: 420px;
     }
     #title {
-      font-size: 18px; font-weight: 600; letter-spacing: 0.3px;
+      font-size: 18px; font-weight: 600; letter-spacing: 0.3px; color: var(--fg);
     }
     #week {
       font-size: 12px; color: var(--muted);
@@ -48,7 +49,7 @@
       display: none;
       font-size: 11px;
       color: var(--danger);
-      background: rgba(255,107,107,0.12);
+      background: rgba(139,0,0,0.1);
       padding: 3px 8px; border-radius: 999px;
     }
     #status-badge.on { display: inline-block; }
@@ -56,9 +57,9 @@
       width: 320px; height: 320px;
       max-width: 90vw; max-height: 90vw;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(255,255,255,0.02);
+      background: rgba(0,0,0,0.02);
       border-radius: 24px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12), inset 0 1px 0 rgba(0,0,0,0.04);
     }
     #lottie { width: 100%; height: 100%; }
     #bars {
@@ -104,7 +105,7 @@
 <body>
   <div id="app">
     <div id="header">
-      <div id="title">trippet</div>
+      <div id="title">Tabi</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span id="status-badge">reconnecting…</span>
         <span id="week">week 0</span>
