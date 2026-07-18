@@ -107,6 +107,51 @@ def get_stay(
     }
 
 
+def search_raw(
+    city_or_latlng: str,
+    checkin: str,
+    checkout: str,
+    guests: int = 2,
+) -> Optional[list[dict]]:
+    """Same call semantics as get_stay(), but returns the raw `results[]`
+    array so callers (booking.py) can pick a specific hotel by rating/price.
+
+    Not a rewrite of get_stay — additive. Small duplication of the request
+    block is intentional: keep get_stay's behavior 100% stable.
+    """
+    if not (city_or_latlng and checkin and checkout):
+        return None
+
+    params: dict[str, object] = {
+        **_location_params(city_or_latlng),
+        "checkin": checkin,
+        "checkout": checkout,
+        "adults": max(1, int(guests)),
+        "rooms": max(1, int(guests) // 2 or 1),
+        "currency": "USD",
+        "pageSize": 30,
+        "page": 1,
+    }
+    aid = os.environ.get("STAY22_AID", "").strip()
+    if aid:
+        params["aid"] = aid
+        params["campaign"] = "trippet_live"
+
+    _throttle()
+    url = f"{ENDPOINT}?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/json", "User-Agent": "trippet/1.0"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as e:
+        print(f"[stay22] search_raw failed: {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+    return data.get("results") or []
+
+
 if __name__ == "__main__":
     from datetime import date, timedelta
     ci = (date.today() + timedelta(weeks=6)).isoformat()

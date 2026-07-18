@@ -14,7 +14,6 @@ fixture extractions so you can see the aggregation rules work.
 from __future__ import annotations
 import json
 import os
-import sys
 from collections import Counter
 from datetime import date
 from typing import Optional
@@ -26,21 +25,23 @@ except ImportError:
     pass
 
 
-# ─── ONE place the model is called ──────────────────────────────────────────
+# ─── ONE place the model is called — Gemini only, permanently ───────────────
+# Per PIPELINE.md: Read seam = Gemini. Freesolo lives on the Agent seam in
+# phoebe.py. Do NOT re-add Freesolo here. Cross-wiring is exactly the
+# foot-gun PIPELINE.md exists to prevent.
 MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-exp")
 
 
 def call_model(prompt: str) -> str:
-    """The only place we hit the model. Returns raw JSON string.
-
-    Later: swap the body for a Freesolo call. Keep the signature identical."""
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not key:
+    """The only place we hit a model for the Read layer. Returns raw JSON string."""
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
         raise RuntimeError(
-            "GEMINI_API_KEY not set. Get a free key at https://aistudio.google.com/apikey"
+            "GEMINI_API_KEY not set. Get a free key at https://aistudio.google.com/apikey. "
+            "The Read seam is Gemini only — see PIPELINE.md."
         )
     import google.generativeai as genai
-    genai.configure(api_key=key)
+    genai.configure(api_key=api_key)
     model = genai.GenerativeModel(MODEL_NAME)
     resp = model.generate_content(
         prompt,
