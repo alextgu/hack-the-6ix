@@ -37,11 +37,17 @@ from app.bot import cards
 
 log = logging.getLogger("trippet.supervisor")
 
-SEND_COOLDOWN_S = 45          # pet never speaks twice within this window
+SEND_COOLDOWN_S = 30          # pet never speaks twice within this window
 HEARTBEAT_SILENCE_S = 45 * 60  # heartbeat nudges only after this much quiet
 
 _last_sent_at: dict[int, float] = {}
 _last_profiled_n: dict[int, int] = {}
+
+
+def can_speak(chat_id: int) -> bool:
+    """Cheap pre-check so the bot skips the whole LLM turn while the send
+    cooldown is active — this, not a message-count debounce, paces Tabi."""
+    return (time.time() - _last_sent_at.get(chat_id, 0)) >= SEND_COOLDOWN_S
 
 
 # ─── LLM (lazy; one client per process) ──────────────────────────────────────

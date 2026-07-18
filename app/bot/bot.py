@@ -287,17 +287,18 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_chat.send_message(lock_msg)
 
     wire.note_message(chat_id, speaker, update.message.text)
-    reconciled = await wire.maybe_process(chat_id)
-    if reconciled is None:
-        return
+    reconciled = await wire.maybe_process(chat_id)  # brain keeps its own debounce
+    if reconciled is not None:
+        g = state.get_or_create(chat_id)
+        g.pet.refresh_mood()
+        await asyncio.to_thread(state.persist_pet, g)
 
-    g = state.get_or_create(chat_id)
-    g.pet.refresh_mood()
-    await asyncio.to_thread(state.persist_pet, g)
-
-    # The supervisor decides whether Tabi speaks — the pet, not a digest.
-    decision = await asyncio.to_thread(supervisor.run_turn, chat_id, "message")
-    await execute_decision(chat_id, decision, ctx)
+    # The supervisor gets a chance on EVERY message — its send-cooldown is
+    # the pacing, not the reader's 3-message debounce. Skip the LLM turn
+    # entirely while the cooldown is hot.
+    if supervisor.can_speak(chat_id):
+        decision = await asyncio.to_thread(supervisor.run_turn, chat_id, "message")
+        await execute_decision(chat_id, decision, ctx)
 
 
 # ─── Global error handler ────────────────────────────────────────────────────
