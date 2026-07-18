@@ -66,26 +66,45 @@ export interface PetSnapshot {
   caption: string;
 }
 
-// health.py::scrub_to_week — physical replays the market series 0 → week,
-// mental decays linearly with silence. Idempotent recompute per week.
-export function stateAtWeek(week: number): PetSnapshot {
-  const w = Math.max(0, Math.min(MAX_WEEK, week));
-
+// health.py only defines physical at whole weeks. Precompute those 7 points
+// once so stateAtWeek can lerp between them for fractional weeks — lets the
+// landing-page slider scrub continuously instead of jumping between 7 fixed
+// stops (several of which land in the same sushi/face bucket back to back).
+const PHYSICAL_AT_WEEK: number[] = (() => {
+  const out = [100];
   let physical = 100;
   let prev = MARKET[0];
-  for (let i = 1; i <= w; i++) {
+  for (let i = 1; i <= MAX_WEEK; i++) {
     physical = applyMarketDelta(physical, prev, MARKET[i]);
     prev = MARKET[i];
+    out.push(physical);
   }
-  const mental = Math.max(0, 100 - w * MENTAL_DECAY_PER_WEEK);
+  return out;
+})();
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+// health.py::scrub_to_week — physical replays the market series 0 → week,
+// mental decays linearly with silence. `week` may be fractional; it's
+// interpolated between the two neighboring whole-week snapshots.
+export function stateAtWeek(week: number): PetSnapshot {
+  const w = Math.max(0, Math.min(MAX_WEEK, week));
+  const lo = Math.floor(w);
+  const hi = Math.min(MAX_WEEK, lo + 1);
+  const t = w - lo;
+
+  const physical = Math.round(lerp(PHYSICAL_AT_WEEK[lo], PHYSICAL_AT_WEEK[hi], t));
+  const mental = Math.max(0, Math.round(100 - w * MENTAL_DECAY_PER_WEEK));
   const mood = deriveMood(physical, mental);
 
   return {
     week: w,
     physical,
     mental,
-    price: MARKET[w].price,
-    rooms: MARKET[w].rooms,
+    price: Math.round(lerp(MARKET[lo].price, MARKET[hi].price, t)),
+    rooms: Math.round(lerp(MARKET[lo].rooms, MARKET[hi].rooms, t)),
     mood,
     caption: caption(physical, mental, mood),
   };
@@ -141,12 +160,43 @@ export function healthLevel(val: number): "good" | "warn" | "bad" {
   return "bad";
 }
 
-// How spoiled the 🍣 looks per mood — CSS filter + transform on the placeholder.
-// (Replace the emoji with a Lottie animation later; these map cleanly to mood.)
-export const MOOD_SUSHI_STYLE: Record<Mood, { filter: string; transform: string; opacity: number }> = {
-  happy: { filter: "none", transform: "translateY(0) rotate(0deg) scale(1)", opacity: 1 },
-  worried: { filter: "grayscale(0.25) saturate(0.9)", transform: "translateY(4px) rotate(-4deg) scale(0.98)", opacity: 1 },
-  sick: { filter: "grayscale(0.5) sepia(0.35) saturate(0.8)", transform: "translateY(10px) rotate(-8deg) scale(0.94)", opacity: 0.9 },
-  dying: { filter: "grayscale(0.85) brightness(0.8) blur(0.4px)", transform: "translateY(18px) rotate(-12deg) scale(0.9)", opacity: 0.55 },
-  graduated: { filter: "saturate(1.35) brightness(1.1) drop-shadow(0 0 14px #3d9a5f)", transform: "translateY(-6px) rotate(0deg) scale(1.1)", opacity: 1 },
-};
+// Real art (public/pet/…) replacing the 🍣 emoji placeholder — two layers,
+// face on top of the sushi body.
+//
+// - amount (Full/Half/Low) comes from `physical` ALONE, and is shared by
+//   both layers — the face's amount always matches the sushi body's, so
+//   e.g. "full happy" only ever pairs with a full sushi.
+// - condition (Health/Rotten) comes from `mental` alone.
+// - expression (Happy/Mid/Sad) comes from the AVERAGE of physical + mental.
+function amountBucket(physical: number): "Full" | "Half" | "Low" {
+  if (physical > 70) return "Full";
+  if (physical < 30) return "Low";
+  return "Half";
+}
+
+function expressionBucket(avg: number): "Happy" | "Mid" | "Sad" {
+  if (avg > 70) return "Happy";
+  if (avg < 40) return "Sad";
+  return "Mid";
+}
+
+function conditionBucket(mental: number): "Health" | "Rotten" {
+  return mental < 50 ? "Rotten" : "Health";
+}
+
+export interface PetArt {
+  sushiSrc: string; // bottom layer — public/pet/sushi/{Amount}_{Health|Rotten}_Sushi.png
+  faceSrc: string;  // top layer — public/pet/faces/{Amount}_Sushi_{Expression}_Face.png
+  faceKey: string;  // "{Amount}_{Expression}" — look up per-face position tuning by this
+}
+
+export function petArt(physical: number, mental: number): PetArt {
+  const amount = amountBucket(physical);
+  const avg = (physical + mental) / 2;
+  const expression = expressionBucket(avg);
+  return {
+    sushiSrc: `/pet/sushi/${amount}_${conditionBucket(mental)}_Sushi.png`,
+    faceSrc: `/pet/faces/${amount}_Sushi_${expression}_Face.png`,
+    faceKey: `${amount}_${expression}`,
+  };
+}

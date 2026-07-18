@@ -4,11 +4,28 @@ import { useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   MAX_WEEK,
   MOOD_COLOR,
-  MOOD_SUSHI_STYLE,
   committedState,
   healthColor,
+  petArt,
   stateAtWeek,
 } from "@/lib/petModel";
+
+// Manual per-face position/size tuning — percentages of the 160/192px art
+// box. Key = art.faceKey ("{Amount}_{Expression}", e.g. "Full_Happy"),
+// matching the 9 face images 1:1. Edit any row to nudge/resize that one
+// face independently of the others.
+const DEFAULT_FACE_OFFSET = { width: 55, height: 55, top: 10, left: 50 };
+const FACE_OFFSETS: Record<string, typeof DEFAULT_FACE_OFFSET> = {
+  Full_Happy: { width: 55, height: 55, top: 40, left: 40 },
+  Full_Mid: { width: 55, height: 55, top: 40, left: 45 },
+  Full_Sad: { width: 55, height: 55, top: 10, left: 50 },
+  Half_Happy: { width: 55, height: 55, top: 10, left: 50 },
+  Half_Mid: { width: 55, height: 55, top: 40, left: 45 },
+  Half_Sad: { width: 55, height: 55, top: 40, left: 50 },
+  Low_Happy: { width: 55, height: 55, top: 10, left: 50 },
+  Low_Mid: { width: 55, height: 55, top: 10, left: 50 },
+  Low_Sad: { width: 28, height: 28, top: 53, left: 48 },
+};
 
 const HEALTH_INFO = {
   Physical: {
@@ -105,8 +122,9 @@ export default function SushiDemo() {
   const [booked, setBooked] = useState(false);
 
   const pet = useMemo(() => (booked ? committedState() : stateAtWeek(week)), [week, booked]);
-  const sushi = MOOD_SUSHI_STYLE[pet.mood];
   const glow = MOOD_COLOR[pet.mood];
+  const art = useMemo(() => petArt(pet.physical, pet.mental), [pet]);
+  const faceOffset = FACE_OFFSETS[art.faceKey] ?? DEFAULT_FACE_OFFSET;
 
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-5 lg:grid-cols-2">
@@ -128,22 +146,35 @@ export default function SushiDemo() {
             style={{ background: glow, opacity: 0.22, filter: "blur(22px)" }}
           />
 
-          <span
+          <div
             key={booked ? "booked" : "alive"}
-            className={`select-none text-8xl transition-all duration-500 ${
+            className={`relative h-40 w-40 select-none transition-all duration-500 sm:h-48 sm:w-48 ${
               booked ? "animate-pop" : pet.mood === "dying" ? "" : "animate-floaty"
             }`}
-            style={{
-              filter: sushi.filter,
-              transform: sushi.transform,
-              opacity: sushi.opacity,
-              transitionTimingFunction: "cubic-bezier(0.22, 1.2, 0.36, 1)",
-            }}
             role="img"
             aria-label={`Sushi-kun looking ${pet.mood}`}
           >
-            🍣
-          </span>
+            {/* sushi body underneath, face on top — both track the slider via `art` */}
+            <img
+              src={art.sushiSrc}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+            <img
+              src={art.faceSrc}
+              alt=""
+              aria-hidden
+              className="absolute z-10 object-contain"
+              style={{
+                width: `${faceOffset.width}%`,
+                height: `${faceOffset.height}%`,
+                top: `${faceOffset.top}%`,
+                left: `${faceOffset.left}%`,
+                transform: "translateX(-50%)",
+              }}
+            />
+          </div>
 
           {booked && (
             <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -189,7 +220,7 @@ export default function SushiDemo() {
             </span>
             <span className="ds-stat">
               <iconify-icon icon="heroicons:calendar-days" width="14" height="14" />
-              week {booked ? "—" : pet.week}
+              week {booked ? "—" : pet.week.toFixed(1)}
             </span>
           </div>
 
@@ -206,14 +237,14 @@ export default function SushiDemo() {
             <div className="mb-2 flex items-center justify-between text-xs" style={{ color: "var(--muted)" }}>
               <span>drag to procrastinate →</span>
               <span className="tabular-nums" style={{ color: "var(--fg)" }}>
-                week {booked ? "—" : pet.week}
+                week {booked ? "—" : pet.week.toFixed(1)}
               </span>
             </div>
             <input
               type="range"
               min={0}
               max={MAX_WEEK}
-              step={1}
+              step={0.1}
               value={week}
               onChange={(e) => {
                 setBooked(false);
