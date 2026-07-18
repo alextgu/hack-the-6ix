@@ -58,6 +58,8 @@ from app.integrations import stay22
 from app.integrations import booking
 from app.integrations import db
 from app.integrations import flights
+from app.integrations import elevenlabs
+from app.integrations import telegram_avatar
 from app.agents import supervisor
 
 
@@ -132,26 +134,98 @@ async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ctx.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
 
 
-async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
+               reply_to: int | None = None) -> None:
     """Send with Markdown so [name](tg://user?id=...) mentions ping people;
-    fall back to plain text if Tabi's prose breaks Markdown parsing."""
+    fall back to plain text if Tabi's prose breaks Markdown parsing, and drop
+    the reply threading if the target message is gone."""
+    for parse_mode in (ParseMode.MARKDOWN, None):
+        for rt in (reply_to, None) if reply_to else (None,):
+            try:
+                await ctx.bot.send_message(chat_id=chat_id, text=text,
+                                           parse_mode=parse_mode,
+                                           reply_to_message_id=rt)
+                return
+            except Exception:
+                continue
+
+
+async def _sync_avatar(mood: str, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Best-effort: swap the bot's own profile photo to match `mood`. Deduped
+    inside telegram_avatar (no-ops if this mood is already set), so it's safe
+    to call on every mood refresh. Never raises — a Telegram hiccup here must
+    not break the chat flow. NOTE: this is the bot ACCOUNT's avatar, shared
+    across every chat it's in (see telegram_avatar.py)."""
     try:
-        await ctx.bot.send_message(chat_id=chat_id, text=text,
-                                   parse_mode=ParseMode.MARKDOWN)
-    except Exception:
-        await ctx.bot.send_message(chat_id=chat_id, text=text)
+        await asyncio.to_thread(telegram_avatar.set_avatar_for_mood, ctx.bot.token, mood)
+    except Exception as e:
+        log.warning("avatar sync failed (mood=%s): %s", mood, e)
 
 
 async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Post the pet health PNG to a chat (guilt-trip visual)."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
+    asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
         chat_id=chat_id,
         photo=InputFile(BytesIO(png_bytes), filename="trippet.png"),
         caption=caption,
+    )
+
+
+# ─── Voice (ElevenLabs) — gated: deathbed + graduation only ─────────────────
+# The pet speaks aloud only at the two moments that earn it: crossing into
+# critical health (the deathbed plea) and graduating. Never on a normal
+# message. Deduped per chat so each fires at most once; re-armed on /start.
+_spoke_deathbed: set[int] = set()
+_spoke_graduated: set[int] = set()
+_DEATHBED_PHYSICAL = 20  # physical at/below this counts as the deathbed moment
+
+
+async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
+                    mood: str | None = None, physical: int | None = None) -> None:
+    """Post a mood-aware ElevenLabs voice note with `text` as the caption.
+    Falls back to a plain-text message if synthesis, conversion, or the voice
+    send fails. Never raises — a voice failure must not break the chat."""
+    ogg = None
+    try:
+        ogg = await asyncio.to_thread(elevenlabs.synthesize_voice_note, text, mood, physical)
+    except Exception as e:
+        log.warning("voice synth raised (chat=%s): %s", chat_id, e)
+    if ogg:
+        try:
+            await ctx.bot.send_voice(
+                chat_id=chat_id,
+                voice=InputFile(BytesIO(ogg), filename="pet.ogg"),
+                caption=text,
+            )
+            return
+        except Exception as e:
+            log.warning("send_voice failed (chat=%s): %s — falling back to text", chat_id, e)
+    # Fallback: plain text, best-effort.
+    try:
+        await ctx.bot.send_message(chat_id=chat_id, text=text)
+    except Exception:
+        pass
+
+
+async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Speak the deathbed plea the first time the pet crosses into critical
+    health for this chat. Gated + deduped — reads state only, changes nothing."""
+    g = state.get_or_create(chat_id)
+    g.pet.refresh_mood()
+    critical = g.pet.mood == "dying" or g.pet.physical <= _DEATHBED_PHYSICAL
+    if not critical or chat_id in _spoke_deathbed:
+        return
+    _spoke_deathbed.add(chat_id)
+    await speak_pet(
+        chat_id,
+        "i'm fading here... the prices keep climbing and nobody's deciding. "
+        "please — just book something.",
+        ctx, mood="dying", physical=g.pet.physical,
     )
 
 
@@ -175,7 +249,7 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         supervisor.note_flights_posted(chat_id)
         return
     if d.message:
-        await _say(chat_id, d.message, ctx)
+        await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
     if d.show_health:
         await send_pet_card(chat_id, ctx)
 
@@ -194,6 +268,7 @@ async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
     await asyncio.to_thread(state.persist_pet, g)
+    asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
@@ -206,6 +281,8 @@ async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─── Handlers ────────────────────────────────────────────────────────────────
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
+    _spoke_deathbed.discard(g.chat_id)   # re-arm voice moments for the fresh pet
+    _spoke_graduated.discard(g.chat_id)
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
         "hi. i'm the pet. i live here now.\n"
@@ -219,6 +296,22 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # conversation (kickoff bypasses the cooldown, always sends).
     decision = await asyncio.to_thread(supervisor.run_turn, g.chat_id, "kickoff")
     await execute_decision(g.chat_id, decision, ctx)
+
+
+async def cmd_reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Nuke EVERYTHING for this group — Mongo docs, in-memory buffers, deck
+    sessions, pacing caches — then hatch completely fresh."""
+    chat_id = update.effective_chat.id
+    removed = await asyncio.to_thread(db.nuke_chat, chat_id)
+    wire.reset_chat(chat_id)
+    cards.forget(chat_id)
+    supervisor.reset_chat(chat_id)
+    state.reset(chat_id)
+    log.info("RESET chat=%s (%d docs wiped)", chat_id, removed)
+    await update.effective_chat.send_message(
+        f"🧹 wiped everything ({removed} records). fresh egg incoming…"
+    )
+    await cmd_start(update, ctx)
 
 
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -249,6 +342,7 @@ async def cmd_scrub(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     log.info("scrub chat_id=%s week=%d → phys=%d ment=%d mood=%s",
              g.chat_id, week, g.pet.physical, g.pet.mental, g.pet.mood)
     await _send_pet(update, ctx)
+    await maybe_speak_deathbed(update.effective_chat.id, ctx)
 
 
 async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -308,6 +402,12 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         caption, reply_markup=InlineKeyboardMarkup(buttons)
     )
     await _send_pet(update, ctx)
+    # Graduation moment — the pet speaks its send-off (once per chat).
+    if g.chat_id not in _spoke_graduated:
+        _spoke_graduated.add(g.chat_id)
+        await speak_pet(g.chat_id,
+                        "we did it — i'm free! pack your bags, we're going to japan.",
+                        ctx, mood="graduated", physical=g.pet.physical)
 
 
 async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -322,7 +422,7 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     user_id = str(update.effective_user.id) if update.effective_user else "unknown"
     await asyncio.to_thread(db.log_chat_message, chat_id, user_id, speaker,
-                            update.message.text)
+                            update.message.text, update.message.message_id)
 
     # TEMPORARY: "map" stays as a manual override for demos. The supervisor
     # now deals the deck itself when the stage reaches HOTELS.
@@ -343,6 +443,9 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         g = state.get_or_create(chat_id)
         g.pet.refresh_mood()
         await asyncio.to_thread(state.persist_pet, g)
+        asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
+        # If live prices just pushed the pet to death's door, let it speak once.
+        await maybe_speak_deathbed(chat_id, ctx)
 
     # The supervisor gets a chance on EVERY message — its send-cooldown is
     # the pacing, not the reader's 3-message debounce. Skip the LLM turn
@@ -381,6 +484,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("scrub", cmd_scrub))
     app.add_handler(CommandHandler("commit", cmd_commit))
     app.add_handler(CommandHandler("open", cmd_open))
+    app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))
     app.add_error_handler(on_error)
     return app

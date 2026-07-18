@@ -178,15 +178,34 @@ def load_pet(chat_id: int) -> Optional[dict]:
 
 
 # ─── Chat log (the pet's long-term memory) ──────────────────────────────────
-def log_chat_message(chat_id: int, user_id: str, name: str, text: str) -> None:
+def log_chat_message(chat_id: int, user_id: str, name: str, text: str,
+                     message_id: int | None = None) -> None:
     d = _db()
     if d is None:
         return
     try:
         d.chat_log.insert_one({"chat_id": chat_id, "user_id": str(user_id),
-                               "name": name, "text": text, "ts": _utcnow()})
+                               "name": name, "text": text,
+                               "message_id": message_id, "ts": _utcnow()})
     except Exception as e:
         log.warning("log_chat_message failed: %s", e)
+
+
+def nuke_chat(chat_id: int) -> int:
+    """/reset: erase EVERYTHING this bot knows about a group. Returns the
+    number of documents removed across all collections."""
+    d = _db()
+    if d is None:
+        return 0
+    removed = 0
+    for coll in ("chat_log", "user_profiles", "trip_plans", "pets",
+                 "card_sessions", "analytics"):
+        try:
+            removed += d[coll].delete_many({"chat_id": chat_id}).deleted_count
+        except Exception as e:
+            log.warning("nuke_chat %s failed: %s", coll, e)
+    log.info("nuke_chat chat=%s removed=%d docs", chat_id, removed)
+    return removed
 
 
 def recent_chat(chat_id: int, limit: int = 40) -> list[dict]:

@@ -1,38 +1,67 @@
-"""ElevenLabs text-to-speech client.
+"""ElevenLabs text-to-speech — mood-aware voice selection + OGG/Opus
+conversion for Telegram voice notes.
 
-Not wired into the bot yet — bot.py's TODO seams call this once the
-mood → voice cooldown lane is built.
+The voice is chosen by the pet's mood/health so a dying pet sounds different
+from a healthy one (emotional inflection):
+  - sick / dying (low physical health) → ELEVENLABS_VOICE_DYING
+  - happy / worried / graduated        → ELEVENLABS_VOICE_ALIVE
+  - if a mood-specific voice is unset, fall back to ELEVENLABS_VOICE_ID
+    (legacy single voice), then to whichever voice IS set.
+
+Never raises to callers — returns None on any failure so the bot degrades to
+plain text.
 """
 from __future__ import annotations
 import json
+import logging
 import os
-import sys
-import urllib.request
+import subprocess
 import urllib.error
+import urllib.request
 from typing import Optional
 
 
+log = logging.getLogger("trippet.voice")
+
 ENDPOINT = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+
+# Moods (or a low physical bar) that mean the pet is in trouble → dying voice.
+_DYING_MOODS = {"sick", "dying"}
+_DYING_PHYSICAL = 40
+
+
+def _voice_for(mood: Optional[str], physical: Optional[int]) -> str:
+    """Pick a voice id from mood/health. Guarantees a non-empty id as long as
+    ANY of the three env voices is set — this is what fixes the /api/speak 502
+    (the old code only read ELEVENLABS_VOICE_ID, which .env never defined)."""
+    alive = os.environ.get("ELEVENLABS_VOICE_ALIVE", "").strip()
+    dying = os.environ.get("ELEVENLABS_VOICE_DYING", "").strip()
+    legacy = os.environ.get("ELEVENLABS_VOICE_ID", "").strip()  # single-voice fallback
+
+    is_dying = mood in _DYING_MOODS or (physical is not None and physical < _DYING_PHYSICAL)
+    if is_dying:
+        return dying or legacy or alive
+    return alive or legacy or dying
 
 
 def text_to_speech(
     text: str,
     voice_id: Optional[str] = None,
+    mood: Optional[str] = None,
+    physical: Optional[int] = None,
     model_id: str = "eleven_multilingual_v2",
 ) -> Optional[bytes]:
-    """Synthesize `text` and return raw MP3 bytes, or None on failure.
+    """Synthesize `text` → raw MP3 bytes, or None on failure.
 
-    voice_id defaults to ELEVENLABS_VOICE_ID; ELEVENLABS_API_KEY must be set."""
+    Voice resolution: an explicit `voice_id` wins; otherwise it's picked from
+    `mood`/`physical`. ELEVENLABS_API_KEY must be set."""
     api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
-    voice = (voice_id or os.environ.get("ELEVENLABS_VOICE_ID", "")).strip()
+    voice = (voice_id or _voice_for(mood, physical)).strip()
     if not (api_key and voice and text):
         return None
 
     url = ENDPOINT.format(voice_id=voice)
-    body = json.dumps({
-        "text": text,
-        "model_id": model_id,
-    }).encode("utf-8")
+    body = json.dumps({"text": text, "model_id": model_id}).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=body,
@@ -46,16 +75,84 @@ def text_to_speech(
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.read()
-    except (urllib.error.HTTPError, urllib.error.URLError) as e:
-        print(f"[elevenlabs] text_to_speech failed: {type(e).__name__}: {e}", file=sys.stderr)
+    except Exception as e:
+        log.warning("text_to_speech failed: %s: %s", type(e).__name__, e)
         return None
 
 
+def to_ogg_opus(mp3_bytes: bytes) -> Optional[bytes]:
+    """Convert MP3 → OGG/Opus (the format Telegram send_voice wants) via
+    ffmpeg. Returns None if ffmpeg is missing or the conversion fails, so the
+    caller can fall back to a plain-text message."""
+    if not mp3_bytes:
+        return None
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error",
+             "-i", "pipe:0", "-c:a", "libopus", "-b:a", "48k", "-f", "ogg", "pipe:1"],
+            input=mp3_bytes,
+            capture_output=True,
+            timeout=30,
+        )
+    except FileNotFoundError:
+        log.warning("ffmpeg not found — cannot build a Telegram voice note; caller falls back to text")
+        return None
+    except Exception as e:
+        log.warning("ogg conversion failed: %s: %s", type(e).__name__, e)
+        return None
+    if proc.returncode != 0 or not proc.stdout:
+        log.warning("ffmpeg exit=%s: %s", proc.returncode, proc.stderr[:200].decode("utf-8", "replace"))
+        return None
+    return proc.stdout
+
+
+def synthesize_voice_note(
+    text: str, mood: Optional[str] = None, physical: Optional[int] = None
+) -> Optional[bytes]:
+    """text → mood-appropriate OGG/Opus voice-note bytes, or None on any
+    failure (missing key/voice, ElevenLabs error, ffmpeg missing). The bot
+    posts plain text when this returns None."""
+    mp3 = text_to_speech(text, mood=mood, physical=physical)
+    if not mp3:
+        return None
+    return to_ogg_opus(mp3)
+
+
 if __name__ == "__main__":
-    audio = text_to_speech("The group chat has gone quiet. Someone say something.")
-    if audio:
-        with open("elevenlabs_test.mp3", "wb") as f:
-            f.write(audio)
-        print(f"wrote elevenlabs_test.mp3 ({len(audio)} bytes)")
-    else:
-        print("failed — check ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID")
+    # Standalone check: generate one clip in each voice so you can play them
+    # and confirm the dying vs alive voices sound different. Saves local files;
+    # prints the result. No doc files written.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+    cases = [
+        ("dying", "i'm fading... the prices are eating me alive. please, just book something."),
+        ("happy", "we did it — i'm free! pack your bags, we're going to japan."),
+    ]
+    for mood, line in cases:
+        vid = _voice_for(mood, None)
+        mp3 = text_to_speech(line, mood=mood)
+        if mp3:
+            with open(f"voice_{mood}.mp3", "wb") as f:
+                f.write(mp3)
+            line_out = f"[{mood:5}] voice_id={vid or 'UNSET'} → voice_{mood}.mp3 ({len(mp3)} bytes)"
+            ogg = to_ogg_opus(mp3)
+            if ogg:
+                with open(f"voice_{mood}.ogg", "wb") as f:
+                    f.write(ogg)
+                line_out += f"  |  ogg ok ({len(ogg)} bytes)"
+            else:
+                line_out += "  |  ogg conversion unavailable (ffmpeg?)"
+            print(line_out)
+        else:
+            print(f"[{mood:5}] FAILED voice_id={vid or 'UNSET'} — check ELEVENLABS_API_KEY / "
+                  "ELEVENLABS_VOICE_ALIVE / ELEVENLABS_VOICE_DYING")
+
+    a, d = _voice_for("happy", None), _voice_for("dying", None)
+    if a and d and a == d:
+        print("⚠  ALIVE and DYING resolve to the SAME voice id — they will sound identical. "
+              "Set ELEVENLABS_VOICE_ALIVE and ELEVENLABS_VOICE_DYING to different voices.")
+    elif a and d:
+        print(f"✓ two distinct voices — alive={a}  dying={d}")

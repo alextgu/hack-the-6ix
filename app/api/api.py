@@ -148,13 +148,13 @@ def api_cards_results(group_id: str) -> JSONResponse:
 # NOTE: sync `def` on purpose — see cards endpoints above, same reasoning
 # (blocking ElevenLabs call runs in FastAPI's threadpool, not the event loop).
 @app.get("/api/speak")
-def api_speak(text: str) -> Response:
-    """One-shot TTS for the pet's mood caption. Client fires this at most
-    once per page load (webapp/app.js), so no extra throttling here."""
+def api_speak(text: str, mood: str = "", physical: Optional[int] = None) -> Response:
+    """One-shot TTS for the pet's mood caption. `mood`/`physical` pick the
+    voice (dying vs alive) so tap-to-speak carries the right inflection."""
     text = text.strip()[:200]
     if not text:
         raise HTTPException(status_code=400, detail="text required")
-    audio = elevenlabs.text_to_speech(text)
+    audio = elevenlabs.text_to_speech(text, mood=mood or None, physical=physical)
     if audio is None:
         raise HTTPException(status_code=502, detail="tts failed")
     return Response(content=audio, media_type="audio/mpeg")

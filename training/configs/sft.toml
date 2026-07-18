@@ -1,35 +1,15 @@
-# SFT — teach the output contract + Sushi-kun register.
-# Forward KL / mode-covering. Ceiling = the training data.
-# This is the FLOOR — everything downstream warm-starts from this adapter.
-#
-#   flash train --config training/configs/sft.toml
-#
-# After the run: copy the run id, paste into opd.toml's init_from_adapter.
-
 model = "Qwen/Qwen3.5-4B"
-algorithm = "sft"
-seed = 42
-thinking = false     # structured output — thinking tokens break the schema
+algorithm = "sft"                 # supervised: imitate the gold {blocker, action, message}
+thinking = false                  # structured JSON output — no reasoning tokens
 
+# Environment: publish this folder first —
+#   flash env push --name phoebe-agent .
+# then paste the returned id below (dry-run FAILS while this is blank).
 [environment]
-# Publish the env first:
-#   flash env publish training/environment.py --id <your-org>/phoebe-agent
-id = "<your-org>/phoebe-agent"
+id = "thesix/phoebe-agent"
 
 [train]
-epochs = 3
-max_examples = 800
-max_context_tokens = 4096
-learning_rate = 1e-4
-batch_size = 8
+epochs = 1
+max_examples = 3                  # starter dataset has 3 rows; raise as the generator grows
 lora_rank = 32
-lora_alpha = 64      # α = 2r on Qwen3.5-4B (cap 64) — RL headroom
-save_at_steps = [100, 200, 300]
-
-# Guided decoding — pin the JSON schema from token 0 so no rollout escapes it.
-# Value is training.environment.schema_json_string() rendered inline.
-structured_outputs = '{"type":"object","additionalProperties":false,"required":["blocker","action","message"],"properties":{"blocker":{"type":"object","additionalProperties":false,"required":["kind","subject","detail"],"properties":{"kind":{"type":"string","enum":["person","timing","issue","none"]},"subject":{"type":"string","maxLength":80},"detail":{"type":"string","maxLength":300}}},"action":{"type":"object","additionalProperties":false,"required":["kind","target","parameters"],"properties":{"kind":{"type":"string","enum":["dm_holdout","propose_cheaper_neighborhood","hold_rooms_48h","ask_group","no_action"]},"target":{"type":"string","maxLength":80},"parameters":{"type":"object"}}},"message":{"type":"string","minLength":5,"maxLength":240}}}'
-
-[gpu]
-provider = ""        # let Freesolo pick
-max_retries = 5
+lora_alpha = 64

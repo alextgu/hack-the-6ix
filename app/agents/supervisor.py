@@ -106,6 +106,8 @@ class AgentState(TypedDict, total=False):
     message: Optional[str]
     action: str           # none | deal_cards | post_flights
     show_health: bool     # attach the pet health card (guilt trip)
+    reply_to: Optional[int]  # telegram message_id to thread the reply onto
+    pending: list         # unacknowledged contributions (from trip_plans)
 
 
 @dataclass
@@ -114,6 +116,11 @@ class Decision:
     message: Optional[str] = None
     action: str = "none"
     show_health: bool = False
+    reply_to: Optional[int] = None
+
+# minimum motivation (1-5) a candidate thought needs before Tabi speaks on a
+# normal message turn; kickoff/heartbeat/urgent turns take the best regardless
+MOTIVATION_THRESHOLD = 3.5
 
 
 # ─── Workers ─────────────────────────────────────────────────────────────────
@@ -144,43 +151,58 @@ def stage_tracker(s: AgentState) -> AgentState:
 
 
 def profile_tracker(s: AgentState) -> AgentState:
-    """Gemini: extract per-user facts from messages we haven't profiled yet."""
+    """Gemini: extract per-user facts from fresh messages, AND flag concrete
+    contributions (a proposed city/date/budget/activity) that deserve a
+    response — those become pending obligations Tabi must clear."""
     chat_id = s["chat_id"]
     transcript = s["transcript"]
     seen = _last_profiled_n.get(chat_id, 0)
     fresh = transcript[seen:]
     _last_profiled_n[chat_id] = len(transcript)
+    pending = list(s["plan"].get("pending", []))
     if fresh:
-        convo = "\n".join(f"{m['name']}: {m['text']}" for m in fresh)
+        convo = "\n".join(f"[id={m.get('message_id')}] {m['name']}: {m['text']}"
+                          for m in fresh)
         out = _llm_json(
-            "Extract per-person trip facts from this group chat snippet. "
+            "From this group-chat snippet extract per-person trip facts AND "
+            "concrete contributions (someone proposing a city, dates, budget, "
+            "activity, or asking the group a question) that deserve a response. "
             'Return ONLY JSON: {"people": [{"name": str, "budget": int|null, '
             '"dates": str|null, "cities": [str], "vibe": str|null, '
-            '"objection": str|null}]}. Omit people who said nothing factual.\n\n'
-            + convo
+            '"objection": str|null}], '
+            '"contributions": [{"name": str, "summary": str, "message_id": int|null}]}. '
+            "Omit people who said nothing factual.\n\n" + convo
         )
         for p in (out or {}).get("people", []):
             if p.get("name"):
                 db.upsert_profile(chat_id, p["name"], {k: v for k, v in p.items() if k != "name"})
-    return {**s, "profiles": db.get_profiles(chat_id), "done": s["done"] + ["profiles"]}
+        for c in (out or {}).get("contributions", []):
+            if c.get("summary"):
+                pending.append(c)
+        pending = pending[-10:]  # cap
+        db.update_plan(chat_id, {"pending": pending})
+    return {**s, "profiles": db.get_profiles(chat_id), "pending": pending,
+            "done": s["done"] + ["profiles"]}
 
 
 def messenger(s: AgentState) -> AgentState:
-    """Gemini-as-Tabi decides whether to speak, what to say, what to do."""
+    """Gemini-as-Tabi, Inner-Thoughts style: generate candidate contributions,
+    self-score each for motivation (1-5), then code picks the best one above
+    threshold — or silence. Every send is explainable by its winning thought."""
     g = state.get_or_create(s["chat_id"])
-    convo = "\n".join(f"{m['name']}: {m['text']}" for m in s["transcript"][-25:])
+    convo = "\n".join(f"[id={m.get('message_id')}] {m['name']}: {m['text']}"
+                      for m in s["transcript"][-25:])
     profiles = json.dumps(s["profiles"], default=str)[:1500]
     members = json.dumps(db.known_members(s["chat_id"]))[:600]
+    pending = json.dumps(s.get("pending", []))[:800]
     already_flights = bool(s["plan"].get("flights_posted"))
     trigger_line = {
         "kickoff": "you JUST hatched — introduce yourself in one line, then "
                    "immediately start the plan: ask everyone for their dates, "
-                   "budget and city. mention people by name. you always send "
-                   "on kickoff.",
+                   "budget and city. mention people by name.",
         "heartbeat": "the chat has gone quiet and the plan is NOT done — push. "
                      "pick the most-missing field, @ the person who owes an "
-                     "answer (or everyone), and guilt-trip with your health. "
-                     "show_health=true when you reference it.",
+                     "answer (or everyone), and guilt-trip with your health.",
     }.get(s["trigger"], "new messages arrived")
 
     out = _llm_json(f"""You are Tabi, a tamagotchi trip-pet living in a Telegram group chat.
@@ -196,46 +218,55 @@ Trigger: {trigger_line}
 Group members (for mentions): {members}
 To @ someone use a Telegram mention: [their name](tg://user?id=<user_id>).
 Known per-person facts: {profiles}
-Recent chat:
+UNACKNOWLEDGED contributions you still owe a response to: {pending}
+Recent chat (each line has its telegram message id):
 {convo}
 
-Decide. Rules:
-- Speak when you can push the plan forward: a missing field to chase, a
-  specific person who hasn't answered (mention them!), a conflict to call
-  out, a stage to advance, or a nudge after silence. Stay silent only when
-  the humans are actively mid-flow and need nothing from you.
-- KEEP PERSUADING: until the current stage's needs are met you do not give
-  up — vary your angle each time (ask a person, show your health, summarize
-  what's agreed vs missing) instead of repeating yourself.
-- SERIOUS OVERRIDE: if anyone sounds like they're backing out, bailing, or
-  losing interest in the trip, you MUST respond immediately — mention them,
-  use what you know about what they wanted (profiles), remind them the group
-  needs them, and be a little heartbroken about it. Retention is your top
-  priority; your life literally depends on this trip happening.
-- Stage FLIGHTS and flights not posted yet → action "post_flights".
-- Stage HOTELS and no deck dealt this stage → action "deal_cards".
-- set show_health=true whenever you reference your health bars — the group
-  then sees your health card. don't overuse it (max ~1 in 3 sends).
-- Never repeat what you said in the recent chat. Never use hashtags.
+Think like a group member deciding whether to jump in. Generate up to 4
+candidate contributions (0 is fine if the humans are mid-flow and need
+nothing). Score each candidate's motivation 1-5 against: relevance,
+information gap (something missing you can chase), urgency, BALANCE (someone
+contributed and nobody responded — acknowledging them scores high; pull in
+people who haven't spoken), coherence, originality (never repeat what you
+already said in the recent chat), and retention (someone backing out = 5,
+always). Candidate kinds: acknowledge | ask | summarize | nudge | retention.
+If a candidate responds to one specific message, set reply_to to that
+message id. List any pending contribution ids/summaries the candidate
+answers in "acknowledges".
 
-Return ONLY JSON: {{"send": bool, "message": str|null, "action": "none"|"post_flights"|"deal_cards", "show_health": bool, "why": str}}""")
+Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
+"kind": str, "reply_to": int|null, "acknowledges": [str]}}],
+"action": "none"|"post_flights"|"deal_cards", "show_health": bool, "why": str}}""")
 
-    out = out or {"send": False, "message": None, "action": "none"}
-    if s["trigger"] == "kickoff":
-        out["send"] = True  # hatch always opens the conversation
+    out = out or {"candidates": [], "action": "none"}
+    cands = sorted((c for c in out.get("candidates", []) if c.get("text")),
+                   key=lambda c: -(c.get("motivation") or 0))
+    best = cands[0] if cands else None
+    always = s["trigger"] in ("kickoff", "heartbeat") or s.get("urgent")
+    send = bool(best) and (always or (best.get("motivation") or 0) >= MOTIVATION_THRESHOLD)
+
+    message = best.get("text") if (best and send) else None
+    reply_to = best.get("reply_to") if (best and send) else None
+    if send and best.get("acknowledges"):
+        acked = {str(a) for a in best["acknowledges"]}
+        remaining = [p for p in s.get("pending", [])
+                     if str(p.get("message_id")) not in acked
+                     and p.get("summary") not in acked]
+        db.update_plan(s["chat_id"], {"pending": remaining})
+
+    action = out.get("action") or "none"
     # deterministic overrides so stage actions can't be forgotten by the model
     if s["stage"] == "FLIGHTS" and not already_flights:
-        out["action"] = "post_flights"
-        out["send"] = True
+        action, send = "post_flights", True
     if s["stage"] == "HOTELS" and s["plan"].get("cards_dealt_stage") != "HOTELS":
-        out["action"] = "deal_cards"
-        out["send"] = True
-    log.info("messenger chat=%s stage=%s send=%s action=%s why=%s",
-             s["chat_id"], s["stage"], out.get("send"), out.get("action"),
-             str(out.get("why", ""))[:120])
-    return {**s, "send": bool(out.get("send")), "message": out.get("message"),
-            "action": out.get("action") or "none",
-            "show_health": bool(out.get("show_health")),
+        action, send = "deal_cards", True
+
+    log.info("messenger chat=%s stage=%s send=%s action=%s best=%s(%.1f) why=%s",
+             s["chat_id"], s["stage"], send, action,
+             (best or {}).get("kind"), float((best or {}).get("motivation") or 0),
+             str(out.get("why", ""))[:100])
+    return {**s, "send": send, "message": message, "action": action,
+            "reply_to": reply_to, "show_health": bool(out.get("show_health")),
             "done": s["done"] + ["messenger"]}
 
 
@@ -297,13 +328,16 @@ def s_trigger_hurts(trigger: str, out: dict) -> bool:
 # ─── Entry points (blocking; wrap in asyncio.to_thread) ─────────────────────
 def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> Decision:
     try:
+        plan = db.get_plan(chat_id)
         init: AgentState = {
             "chat_id": chat_id,
             "trigger": trigger,
+            "urgent": urgent,
             "transcript": db.recent_chat(chat_id, 40),
             "profiles": [],
             "trip": {},
-            "plan": db.get_plan(chat_id),
+            "plan": plan,
+            "pending": list(plan.get("pending", [])),
             "stage": "GATHER",
             "missing": [],
             "done": [],
@@ -311,6 +345,7 @@ def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> De
             "message": None,
             "action": "none",
             "show_health": False,
+            "reply_to": None,
         }
         out = _get_graph().invoke(init)
         # heartbeat nudges wound the pet — silence has a visible cost, and the
@@ -323,11 +358,18 @@ def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> De
         return _gate(chat_id, Decision(send=out.get("send", False),
                                        message=out.get("message"),
                                        action=out.get("action", "none"),
-                                       show_health=bool(out.get("show_health"))),
+                                       show_health=bool(out.get("show_health")),
+                                       reply_to=out.get("reply_to")),
                      urgent=urgent or trigger == "kickoff")
     except Exception as e:
         log.warning("run_turn failed (chat=%s): %s", chat_id, e)
         return Decision()
+
+
+def reset_chat(chat_id: int) -> None:
+    """/reset: drop this module's per-chat pacing/profiling caches."""
+    _last_sent_at.pop(chat_id, None)
+    _last_profiled_n.pop(chat_id, None)
 
 
 def try_lock_flight(chat_id: int, text: str) -> Optional[str]:
