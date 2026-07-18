@@ -179,3 +179,4 @@ async def _maybe_query_stay22(chat_id: int, r: dict) -> None:
                  city, price, availability_pct)
     g.last_market = curr
     g.pet.refresh_mood()
+    await asyncio.to_thread(state.persist_pet, g)

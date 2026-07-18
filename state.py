@@ -96,10 +96,30 @@ _GROUPS: dict[int, GroupState] = {}
 
 def get_or_create(chat_id: int) -> GroupState:
     if chat_id not in _GROUPS:
-        _GROUPS[chat_id] = GroupState(chat_id=chat_id)
+        g = GroupState(chat_id=chat_id)
+        _hydrate_pet(g)  # pet survives deploys via Mongo
+        _GROUPS[chat_id] = g
     return _GROUPS[chat_id]
 
 
 def reset(chat_id: int) -> GroupState:
     _GROUPS[chat_id] = GroupState(chat_id=chat_id)
+    persist_pet(_GROUPS[chat_id])
     return _GROUPS[chat_id]
+
+
+def _hydrate_pet(g: GroupState) -> None:
+    import db  # late import: db has no state dependency, avoids cycles
+    doc = db.load_pet(g.chat_id)
+    if doc:
+        g.pet.physical = int(doc.get("physical", 100))
+        g.pet.mental = int(doc.get("mental", 100))
+        g.sim_week = int(doc.get("sim_week", 0))
+        g.pet.refresh_mood()
+
+
+def persist_pet(g: GroupState) -> None:
+    """Call after any health mutation. Blocking Mongo write — callers on the
+    event loop should wrap in asyncio.to_thread."""
+    import db
+    db.save_pet(g.chat_id, g.pet.physical, g.pet.mental, g.pet.mood, g.sim_week)

@@ -54,6 +54,9 @@ import wire
 import cards
 import stay22
 import booking
+import db
+import flights
+import supervisor
 
 
 def _encode_start_param(chat_id: int) -> str:
@@ -108,6 +111,29 @@ async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ctx.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
 
 
+async def execute_decision(chat_id: int, d: "supervisor.Decision",
+                           ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Carry out what the supervisor decided. The supervisor is the only
+    place that decides; this just has hands."""
+    if not d.send:
+        return
+    if d.action == "deal_cards":
+        if d.message:
+            await ctx.bot.send_message(chat_id=chat_id, text=d.message)
+        await open_hotel_cards(chat_id, ctx)
+        supervisor.note_cards_dealt(chat_id)
+        return
+    if d.action == "post_flights":
+        g = state.get_or_create(chat_id)
+        opts = flights.mock_options(chat_id, g.trip.city, g.trip.budget_per_person)
+        text = (d.message + "\n\n" if d.message else "") + flights.render_options(opts)
+        await ctx.bot.send_message(chat_id=chat_id, text=text)
+        supervisor.note_flights_posted(chat_id)
+        return
+    if d.message:
+        await ctx.bot.send_message(chat_id=chat_id, text=d.message)
+
+
 load_dotenv()
 logging.basicConfig(
     level=logging.INFO,
@@ -121,6 +147,7 @@ async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
+    await asyncio.to_thread(state.persist_pet, g)
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
@@ -242,33 +269,35 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     speaker = (update.effective_user.first_name if update.effective_user else "someone") or "someone"
     log.info("msg chat_id=%s from=%s: %s", chat_id, speaker, update.message.text[:200])
 
-    # TEMPORARY: "map" anywhere in a message deals the hotel deck so people
-    # can play with the swipe flow before the agent loop lands. Remove once
-    # the judge/talker/reader pipeline confirms the basecamp itself.
+    user_id = str(update.effective_user.id) if update.effective_user else "unknown"
+    await asyncio.to_thread(db.log_chat_message, chat_id, user_id, speaker,
+                            update.message.text)
+
+    # TEMPORARY: "map" stays as a manual override for demos. The supervisor
+    # now deals the deck itself when the stage reaches HOTELS.
     if re.search(r"\bmap\b", update.message.text, re.IGNORECASE):
         await open_hotel_cards(chat_id, ctx)
+        supervisor.note_cards_dealt(chat_id)
         return
+
+    # "flight 2" locks the mock flight stage
+    lock_msg = await asyncio.to_thread(supervisor.try_lock_flight, chat_id,
+                                       update.message.text)
+    if lock_msg:
+        await update.effective_chat.send_message(lock_msg)
 
     wire.note_message(chat_id, speaker, update.message.text)
     reconciled = await wire.maybe_process(chat_id)
     if reconciled is None:
         return
 
-    # Announce meaningful changes in-chat. Cheap: no re-render unless the
-    # pet visibly changed.
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
-    blockers = wire.get_blockers(chat_id)
-    parts = []
-    if reconciled.get("city"):     parts.append(f"city: {reconciled['city']}")
-    dw = reconciled.get("dates") or {}
-    if dw.get("start") and dw.get("end"): parts.append(f"dates: {dw['start']} → {dw['end']}")
-    if reconciled.get("budget_per_person") is not None:
-        parts.append(f"budget: ${reconciled['budget_per_person']}")
-    if blockers:
-        parts.append("blockers: " + " | ".join(blockers))
-    if parts:
-        await update.effective_chat.send_message("🧠 " + " · ".join(parts))
+    await asyncio.to_thread(state.persist_pet, g)
+
+    # The supervisor decides whether Tabi speaks — the pet, not a digest.
+    decision = await asyncio.to_thread(supervisor.run_turn, chat_id, "message")
+    await execute_decision(chat_id, decision, ctx)
 
 
 # ─── App factory (shared by standalone `main()` and `run.py`) ────────────────

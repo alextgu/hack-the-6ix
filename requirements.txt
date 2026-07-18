@@ -8,6 +8,9 @@ openai>=1.50
 anthropic>=0.40
 pymongo>=4.9
 certifi>=2024.7.4
+langgraph>=0.2
+langchain-google-genai>=2.0
+langchain-core>=0.3
 # Freesolo Flash CLI (only for training runs) — Python 3.11-3.12 only.
 # Install in a separate venv when you're ready to train:
 #   python3.12 -m venv .venv-flash && ./.venv-flash/bin/pip install freesolo-flash

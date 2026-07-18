@@ -149,6 +149,139 @@ def _buffer(doc: dict) -> None:
         _pending_events.append(doc)
 
 
+# ─── Pet persistence (pet survives deploys) ─────────────────────────────────
+def save_pet(chat_id: int, physical: int, mental: int, mood: str, sim_week: int) -> None:
+    d = _db()
+    if d is None:
+        return
+    try:
+        d.pets.replace_one({"chat_id": chat_id}, {
+            "chat_id": chat_id, "physical": physical, "mental": mental,
+            "mood": mood, "sim_week": sim_week, "updated_at": _utcnow(),
+        }, upsert=True)
+    except Exception as e:
+        log.warning("save_pet failed: %s", e)
+
+
+def load_pet(chat_id: int) -> Optional[dict]:
+    d = _db()
+    if d is None:
+        return None
+    try:
+        doc = d.pets.find_one({"chat_id": chat_id})
+        if doc:
+            doc.pop("_id", None)
+        return doc
+    except Exception as e:
+        log.warning("load_pet failed: %s", e)
+        return None
+
+
+# ─── Chat log (the pet's long-term memory) ──────────────────────────────────
+def log_chat_message(chat_id: int, user_id: str, name: str, text: str) -> None:
+    d = _db()
+    if d is None:
+        return
+    try:
+        d.chat_log.insert_one({"chat_id": chat_id, "user_id": str(user_id),
+                               "name": name, "text": text, "ts": _utcnow()})
+    except Exception as e:
+        log.warning("log_chat_message failed: %s", e)
+
+
+def recent_chat(chat_id: int, limit: int = 40) -> list[dict]:
+    d = _db()
+    if d is None:
+        return []
+    try:
+        rows = list(d.chat_log.find({"chat_id": chat_id}, {"_id": 0})
+                    .sort("ts", -1).limit(limit))
+        return list(reversed(rows))
+    except Exception as e:
+        log.warning("recent_chat failed: %s", e)
+        return []
+
+
+# ─── Per-user profiles ("understand and track each user's request") ─────────
+def upsert_profile(chat_id: int, name: str, updates: dict) -> None:
+    """Merge extracted facts for one user. Keyed by display name (Telegram
+    user_id isn't in the group transcript the reader sees — TODO in plan)."""
+    d = _db()
+    if d is None:
+        return
+    try:
+        sets = {f"facts.{k}": v for k, v in updates.items() if v not in (None, "", [])}
+        if not sets:
+            return
+        sets["name"] = name
+        sets["updated_at"] = _utcnow()
+        d.user_profiles.update_one({"chat_id": chat_id, "name": name},
+                                   {"$set": sets}, upsert=True)
+    except Exception as e:
+        log.warning("upsert_profile failed: %s", e)
+
+
+def get_profiles(chat_id: int) -> list[dict]:
+    d = _db()
+    if d is None:
+        return []
+    try:
+        return list(d.user_profiles.find({"chat_id": chat_id}, {"_id": 0}))
+    except Exception as e:
+        log.warning("get_profiles failed: %s", e)
+        return []
+
+
+def active_chats(hours: int = 72) -> list[int]:
+    """Chats with any message in the window — the heartbeat's audience."""
+    d = _db()
+    if d is None:
+        return []
+    try:
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        return [c for c in d.chat_log.distinct("chat_id", {"ts": {"$gte": cutoff}})]
+    except Exception as e:
+        log.warning("active_chats failed: %s", e)
+        return []
+
+
+def last_message_at(chat_id: int) -> Optional[str]:
+    d = _db()
+    if d is None:
+        return None
+    try:
+        row = d.chat_log.find_one({"chat_id": chat_id}, sort=[("ts", -1)])
+        return row["ts"] if row else None
+    except Exception as e:
+        log.warning("last_message_at failed: %s", e)
+        return None
+
+
+# ─── Trip plan doc (stage, flight lock, decision log) ───────────────────────
+def get_plan(chat_id: int) -> dict:
+    d = _db()
+    if d is None:
+        return {}
+    try:
+        return d.trip_plans.find_one({"chat_id": chat_id}, {"_id": 0}) or {}
+    except Exception as e:
+        log.warning("get_plan failed: %s", e)
+        return {}
+
+
+def update_plan(chat_id: int, updates: dict) -> None:
+    d = _db()
+    if d is None:
+        return
+    try:
+        d.trip_plans.update_one({"chat_id": chat_id},
+                                {"$set": {**updates, "updated_at": _utcnow()}},
+                                upsert=True)
+    except Exception as e:
+        log.warning("update_plan failed: %s", e)
+
+
 def analytics_summary(chat_id: int) -> dict:
     """Cheap rollup for the results endpoint / judges demo."""
     d = _db()
