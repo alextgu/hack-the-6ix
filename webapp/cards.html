@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>trippet · pick the hotel</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #0f1116;
+      --bg2: #171a22;
+      --card: #1c2029;
+      --fg: #e8ecf3;
+      --muted: #8a93a6;
+      --line: rgba(255,255,255,0.08);
+      --like: #34d17b;
+      --nope: #ff6b6b;
+      --accent: #6aa8ff;
+      --gold: #f5c518;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background: radial-gradient(1200px 800px at 50% 0%, var(--bg2), var(--bg) 65%);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: pan-y;
+    }
+    #app {
+      height: 100%; height: 100dvh;
+      display: flex; flex-direction: column;
+      align-items: center;
+      padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+      gap: 8px;
+      max-width: 480px; margin: 0 auto;
+    }
+
+    /* ── header ── */
+    #header { width: 100%; display: flex; align-items: baseline; justify-content: space-between; }
+    #title { font-size: 16px; font-weight: 700; letter-spacing: 0.2px; }
+    #round-badge {
+      font-size: 11px; color: var(--muted);
+      background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+      padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+    }
+    #subtitle {
+      width: 100%; font-size: 12px; color: var(--muted);
+      display: flex; justify-content: space-between; gap: 8px;
+    }
+    #subtitle .basecamp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── participants strip ── */
+    #people {
+      width: 100%; display: flex; gap: 6px; flex-wrap: wrap; min-height: 22px;
+    }
+    .chip {
+      font-size: 11px; padding: 2px 9px; border-radius: 999px;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--line); color: var(--muted);
+      max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chip.done { color: var(--like); border-color: rgba(52,209,123,0.4); }
+
+    /* ── card stack ── */
+    #stack {
+      position: relative; width: 100%; flex: 1 1 auto; min-height: 0;
+    }
+    .card {
+      position: absolute; inset: 0;
+      margin: auto;
+      width: 100%; max-width: 420px;
+      height: 100%; max-height: 560px;
+      border-radius: 20px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      touch-action: none;
+      user-select: none; -webkit-user-select: none;
+      will-change: transform;
+    }
+    .card.behind { pointer-events: none; }
+    .card .photo {
+      flex: 1 1 60%; min-height: 0; position: relative; background: #232735;
+    }
+    .card .photo img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      pointer-events: none;
+    }
+    .card .photo .noimg {
+      position: absolute; inset: 0; display: none;
+      align-items: center; justify-content: center; font-size: 56px;
+      background: linear-gradient(140deg, #232b3d, #1a1e2a);
+    }
+    .card .photo .fade {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 90px;
+      background: linear-gradient(transparent, rgba(28,32,41,0.95));
+      pointer-events: none;
+    }
+    .stamp {
+      position: absolute; top: 22px;
+      font-size: 28px; font-weight: 800; letter-spacing: 2px;
+      padding: 4px 14px; border-radius: 8px; border: 3px solid;
+      opacity: 0; transform: rotate(-14deg); pointer-events: none;
+    }
+    .stamp.like { left: 18px; color: var(--like); border-color: var(--like); }
+    .stamp.nope { right: 18px; color: var(--nope); border-color: var(--nope); transform: rotate(14deg); }
+
+    .card .info { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .card .name-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .card .name {
+      font-size: 17px; font-weight: 700; line-height: 1.25;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .card .price { text-align: right; white-space: nowrap; }
+    .card .price .total { font-size: 19px; font-weight: 800; }
+    .card .price .per { font-size: 11px; color: var(--muted); }
+    .card .meta { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag {
+      font-size: 11px; padding: 3px 9px; border-radius: 999px;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--line); color: var(--muted);
+    }
+    .tag.rating { color: var(--gold); border-color: rgba(245,197,24,0.35); }
+    .tag.cancel { color: var(--like); border-color: rgba(52,209,123,0.35); }
+    .card .addr {
+      font-size: 11px; color: var(--muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ── action buttons ── */
+    #actions {
+      display: flex; gap: 34px; align-items: center; justify-content: center;
+      padding: 4px 0 2px; flex: 0 0 auto;
+    }
+    .act {
+      width: 60px; height: 60px; border-radius: 50%;
+      border: 1px solid var(--line); background: var(--card);
+      color: var(--fg); font-size: 26px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+      transition: transform 120ms ease;
+    }
+    .act:active { transform: scale(0.9); }
+    .act.nope { color: var(--nope); }
+    .act.like { color: var(--like); }
+    .act:disabled { opacity: 0.35; pointer-events: none; }
+
+    #progress { font-size: 12px; color: var(--muted); min-height: 16px; }
+
+    /* ── overlay panels (waiting / winner / message) ── */
+    .panel {
+      position: absolute; inset: 0; z-index: 30;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; padding: 24px 20px;
+      background: radial-gradient(1200px 800px at 50% 0%, var(--bg2), var(--bg) 65%);
+      text-align: center;
+    }
+    .panel.on { display: flex; }
+    .panel h2 { margin: 0; font-size: 20px; }
+    .panel p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; max-width: 320px; }
+    .pulse { font-size: 40px; animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(1); opacity: .8 } 50% { transform: scale(1.15); opacity: 1 } }
+
+    #tally { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 8px; }
+    .tally-row { display: flex; flex-direction: column; gap: 3px; text-align: left; }
+    .tally-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tally-bar-outer { height: 8px; background: rgba(255,255,255,0.07); border-radius: 999px; overflow: hidden; }
+    .tally-bar { height: 100%; width: 0%; background: var(--like); border-radius: 999px; transition: width 400ms ease; }
+
+    #winner-card {
+      width: 100%; max-width: 340px; border-radius: 18px; overflow: hidden;
+      background: var(--card); border: 1px solid var(--line);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45); text-align: left;
+    }
+    #winner-card img { width: 100%; height: 180px; object-fit: cover; display: block; }
+    #winner-card .wbody { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+    #winner-card .wname { font-weight: 700; font-size: 16px; }
+    #winner-card .wmeta { font-size: 12px; color: var(--muted); }
+    .cta {
+      display: block; width: 100%; max-width: 340px; text-align: center;
+      background: var(--accent); color: #0b0e14; font-weight: 700;
+      padding: 13px 16px; border-radius: 14px; text-decoration: none; font-size: 15px;
+    }
+    .round-toast {
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      z-index: 40; background: rgba(23,26,34,0.95); border: 1px solid var(--line);
+      color: var(--fg); font-size: 13px; padding: 9px 16px; border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      opacity: 0; transition: opacity 300ms ease; pointer-events: none; white-space: nowrap;
+    }
+    .round-toast.on { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <div id="title">🏨 pick the basecamp hotel</div>
+      <div id="round-badge">round –</div>
+    </div>
+    <div id="subtitle">
+      <span class="basecamp" id="basecamp">…</span>
+      <span id="dates"></span>
+    </div>
+    <div id="people"></div>
+    <div id="stack"></div>
+    <div id="actions">
+      <button class="act nope" id="btn-nope" aria-label="pass">✕</button>
+      <button class="act like" id="btn-like" aria-label="like">♥</button>
+    </div>
+    <div id="progress"></div>
+  </div>
+
+  <div class="panel" id="panel-loading">
+    <div class="pulse">🃏</div>
+    <h2>dealing the deck…</h2>
+    <p>pulling real hotels near the basecamp</p>
+  </div>
+
+  <div class="panel" id="panel-waiting">
+    <div class="pulse">⏳</div>
+    <h2>you're done — waiting on the others</h2>
+    <p id="waiting-line"></p>
+    <div id="tally"></div>
+  </div>
+
+  <div class="panel" id="panel-winner">
+    <div style="font-size:40px">🎉</div>
+    <h2>the group picked it</h2>
+    <div id="winner-card"></div>
+    <a class="cta" id="winner-link" href="#" target="_blank" rel="noopener">book it on Stay22 →</a>
+    <p id="winner-reason"></p>
+  </div>
+
+  <div class="panel" id="panel-error">
+    <div style="font-size:40px">😵</div>
+    <h2 id="error-title">can't reach the pet</h2>
+    <p id="error-line">retrying…</p>
+  </div>
+
+  <div class="round-toast" id="round-toast"></div>
+
+  <script src="/webapp/cards.js"></script>
+</body>
+</html>
