@@ -22,6 +22,8 @@ Commands (once running):
   /health          post the current pet image + numbers
   /scrub <0..6>    dev: jump the simulated timeline; watch the bars move
   /commit          both bars full — celebrated 'graduated' pet
+  /stop            pause the bot on this chat (no reads, no Gemini calls)
+  /resume          un-pause; /start also clears it
 
 TODO seams (later lanes plug in here without changing the shape):
   - Read layer: parse `update.message.text` into TripState via LLM/Freesolo.
@@ -184,6 +186,11 @@ _spoke_deathbed: set[int] = set()
 _spoke_graduated: set[int] = set()
 _DEATHBED_PHYSICAL = 20  # physical at/below this counts as the deathbed moment
 
+# /stop: kill switch for the automatic message pipeline (buffering, brain
+# extraction, Stay22 polling, supervisor/Gemini turns). Explicit commands
+# (/health, /scrub, /commit, /resume) still work while paused.
+_paused: set[int] = set()
+
 
 async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
                     mood: str | None = None, physical: int | None = None) -> None:
@@ -283,6 +290,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
     _spoke_deathbed.discard(g.chat_id)   # re-arm voice moments for the fresh pet
     _spoke_graduated.discard(g.chat_id)
+    _paused.discard(g.chat_id)
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
         "hi. i'm the pet. i live here now.\n"
@@ -312,6 +320,28 @@ async def cmd_reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         f"🧹 wiped everything ({removed} records). fresh egg incoming…"
     )
     await cmd_start(update, ctx)
+
+
+async def cmd_stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kill switch: the bot goes silent on this chat — no more message
+    logging, brain extraction, Stay22 polling, or supervisor/Gemini turns.
+    Nothing is deleted (unlike /reset); /resume or /start un-pauses."""
+    chat_id = update.effective_chat.id
+    _paused.add(chat_id)
+    log.info("STOP chat=%s — automatic pipeline paused", chat_id)
+    await update.effective_chat.send_message(
+        "🛑 stopped. i'll stay quiet and stop reading messages until /resume or /start."
+    )
+
+
+async def cmd_resume(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    if chat_id not in _paused:
+        await update.effective_chat.send_message("i wasn't stopped.")
+        return
+    _paused.discard(chat_id)
+    log.info("RESUME chat=%s", chat_id)
+    await update.effective_chat.send_message("back. talk to me.")
 
 
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -417,6 +447,8 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
     chat_id = update.effective_chat.id
+    if chat_id in _paused:
+        return
     speaker = (update.effective_user.first_name if update.effective_user else "someone") or "someone"
     log.info("msg chat_id=%s from=%s: %s", chat_id, speaker, update.message.text[:200])
 
@@ -485,6 +517,8 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("commit", cmd_commit))
     app.add_handler(CommandHandler("open", cmd_open))
     app.add_handler(CommandHandler("reset", cmd_reset))
+    app.add_handler(CommandHandler("stop", cmd_stop))
+    app.add_handler(CommandHandler("resume", cmd_resume))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))
     app.add_error_handler(on_error)
     return app

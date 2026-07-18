@@ -38,17 +38,25 @@ from app.bot import cards
 log = logging.getLogger("trippet.supervisor")
 
 SEND_COOLDOWN_S = 30          # pet never speaks twice within this window
+ATTEMPT_COOLDOWN_S = 10        # min gap between LLM turns even when Tabi stays quiet
 HEARTBEAT_SILENCE_S = 5 * 60   # quiet this long + plan incomplete → Tabi pushes
 NUDGE_MENTAL_DECAY = 7         # each ignored nudge hurts the pet (guilt fuel)
 
 _last_sent_at: dict[int, float] = {}
+_last_attempt_at: dict[int, float] = {}
 _last_profiled_n: dict[int, int] = {}
 
 
 def can_speak(chat_id: int) -> bool:
     """Cheap pre-check so the bot skips the whole LLM turn while the send
-    cooldown is active — this, not a message-count debounce, paces Tabi."""
-    return (time.time() - _last_sent_at.get(chat_id, 0)) >= SEND_COOLDOWN_S
+    cooldown is active. Also enforces a shorter attempt cooldown so a burst
+    of messages that Tabi keeps declining to answer (motivation never clears
+    threshold, so _last_sent_at never updates) can't re-trigger a fresh
+    run_turn — and its 2 Gemini calls — on every single message."""
+    now = time.time()
+    if (now - _last_sent_at.get(chat_id, 0)) < SEND_COOLDOWN_S:
+        return False
+    return (now - _last_attempt_at.get(chat_id, 0)) >= ATTEMPT_COOLDOWN_S
 
 
 _URGENT_RE = re.compile(
@@ -327,6 +335,7 @@ def s_trigger_hurts(trigger: str, out: dict) -> bool:
 
 # ─── Entry points (blocking; wrap in asyncio.to_thread) ─────────────────────
 def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> Decision:
+    _last_attempt_at[chat_id] = time.time()
     try:
         plan = db.get_plan(chat_id)
         init: AgentState = {
@@ -369,6 +378,7 @@ def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> De
 def reset_chat(chat_id: int) -> None:
     """/reset: drop this module's per-chat pacing/profiling caches."""
     _last_sent_at.pop(chat_id, None)
+    _last_attempt_at.pop(chat_id, None)
     _last_profiled_n.pop(chat_id, None)
 
 
