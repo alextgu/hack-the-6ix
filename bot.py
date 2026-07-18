@@ -30,7 +30,9 @@ import os
 from io import BytesIO
 
 from dotenv import load_dotenv
-from telegram import Update, InputFile
+from telegram import (
+    Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
+)
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler,
@@ -40,6 +42,23 @@ from telegram.ext import (
 import state
 import health
 import pet
+
+
+def _webapp_url_for(chat_id: int) -> str | None:
+    """Public HTTPS URL for the Mini App, with ?group=<chat_id> appended.
+    Returns None if PUBLIC_WEBAPP_URL isn't set (Mini App button then skipped)."""
+    base = os.environ.get("PUBLIC_WEBAPP_URL", "").strip()
+    if not base:
+        return None
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}group={chat_id}"
+
+
+def _webapp_keyboard(chat_id: int, label: str = "🐾 open pet") -> InlineKeyboardMarkup | None:
+    url = _webapp_url_for(chat_id)
+    if not url:
+        return None
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, web_app=WebAppInfo(url=url))]])
 
 
 load_dotenv()
@@ -72,9 +91,23 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "hi. i'm the pet. i live here now.\n"
         "start talking about the japan trip. every real decision heals me. "
         "silence and rising prices kill me. try /health any time. "
-        "dev: /scrub 0..6 to fast-forward, /commit to book."
+        "dev: /scrub 0..6 to fast-forward, /commit to book.",
+        reply_markup=_webapp_keyboard(g.chat_id, label="🐾 open live pet"),
     )
     await _send_pet(update, ctx)
+
+
+async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Launch the animated Mini App (the Face layer)."""
+    chat_id = update.effective_chat.id
+    kb = _webapp_keyboard(chat_id, label="🐾 open live pet")
+    if not kb:
+        await update.effective_chat.send_message(
+            "PUBLIC_WEBAPP_URL isn't set — start a cloudflared/ngrok tunnel and "
+            "put the HTTPS URL in .env, then restart."
+        )
+        return
+    await update.effective_chat.send_message("tap to open the live pet:", reply_markup=kb)
 
 
 async def cmd_health(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -120,8 +153,8 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO(Nudge): bump an engagement counter used by health.apply_mental_delta.
 
 
-# ─── Entrypoint ──────────────────────────────────────────────────────────────
-def main() -> None:
+# ─── App factory (shared by standalone `main()` and `run.py`) ────────────────
+def build_app() -> Application:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
         raise SystemExit("TELEGRAM_BOT_TOKEN not set. Put it in .env or export it.")
@@ -131,10 +164,14 @@ def main() -> None:
     app.add_handler(CommandHandler("health", cmd_health))
     app.add_handler(CommandHandler("scrub", cmd_scrub))
     app.add_handler(CommandHandler("commit", cmd_commit))
+    app.add_handler(CommandHandler("open", cmd_open))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))
+    return app
 
+
+def main() -> None:
     log.info("trippet online — polling. remember to disable BotFather group privacy.")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    build_app().run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
