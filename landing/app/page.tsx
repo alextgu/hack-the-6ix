@@ -1,4 +1,6 @@
 import SushiDemo from "@/components/SushiDemo";
+import Reveal from "@/components/Reveal";
+import Petals from "@/components/Petals";
 
 // PLACEHOLDER — swap for the real bot handle.
 const BOT_HANDLE = "@YourBotHandle";
@@ -8,137 +10,283 @@ const SPONSORS = ["Stay22", "Phoebe", "Freesolo", "MongoDB Atlas", "ElevenLabs",
 
 const STEPS = [
   {
-    n: "01",
+    kanji: "一",
     title: "It hatches",
     body: "Add the bot to your group chat. Sushi-kun hatches and starts reading the Japan trip taking shape — city, dates, budget, group size.",
   },
   {
-    n: "02",
+    kanji: "二",
     title: "It reacts",
     body: "Live Stay22 hotel prices drive its physical health; group engagement drives its mental health. Every real decision heals it; silence and rising prices make it sick.",
   },
   {
-    n: "03",
+    kanji: "三",
     title: "It finds the holdup",
     body: "Phoebe, the coordination agent, diagnoses the one blocker — a person, a date clash, a budget gap — and works to remove it instead of nagging everyone.",
   },
   {
-    n: "04",
+    kanji: "四",
     title: "You commit",
     body: "When the group commits, Stay22 returns the real booking and Sushi-kun graduates. The sentence in the group chat finally becomes a booked trip.",
   },
 ];
 
-function CTAButton({ className = "" }: { className?: string }) {
+function CTAButton() {
   return (
     <a
       href={BOT_URL}
-      className={`inline-flex items-center gap-2 rounded-xl bg-amber-400 px-6 py-3 text-sm font-semibold text-neutral-950 transition hover:bg-amber-300 ${className}`}
+      className="cta-glow inline-flex items-center gap-2.5 rounded-2xl px-7 py-3.5 text-sm font-semibold"
+      style={{
+        background: "linear-gradient(90deg, var(--amber), var(--amber-deep))",
+        color: "var(--night)",
+      }}
     >
       Add to Telegram
-      <span className="text-neutral-600">{BOT_HANDLE}</span>
+      <span style={{ color: "rgba(18,19,31,0.55)" }}>{BOT_HANDLE}</span>
     </a>
   );
 }
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100">
-      {/* ─── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 pb-16 pt-24 text-center">
-        <p className="mb-4 text-sm font-medium uppercase tracking-widest text-amber-400">
-          Plan That Trip to Japan
-        </p>
-        <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-6xl">
-          Everyone wants to go to Japan. Nobody books it.
-        </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-neutral-400">
-          A Telegram bot turns your stalled group chat into a pet whose health is
-          live hotel data. It gets sick as you procrastinate. The only way to save
-          it is to actually book the trip.
-        </p>
-        <div className="mt-8">
-          <CTAButton />
-        </div>
-      </section>
+    <main className="min-h-screen" style={{ background: "var(--night)", color: "var(--ink)" }}>
+      {/* ─── Hero — indigo night, lanterns, falling petals ────────────────── */}
+      <section className="relative overflow-hidden">
+        {/* breathing sky */}
+        <div
+          aria-hidden
+          className="animate-breathe absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(60% 55% at 50% 0%, rgba(246,198,208,0.14), transparent 70%)," +
+              "radial-gradient(45% 40% at 82% 28%, rgba(245,165,36,0.10), transparent 70%)," +
+              "radial-gradient(50% 45% at 12% 34%, rgba(178,140,255,0.08), transparent 70%)",
+          }}
+        />
+        {/* lantern glows */}
+        <div
+          aria-hidden
+          className="animate-lantern absolute left-[8%] top-40 h-24 w-24 rounded-full"
+          style={{ background: "var(--amber)", opacity: 0.5 }}
+        />
+        <div
+          aria-hidden
+          className="animate-lantern absolute right-[10%] top-64 h-16 w-16 rounded-full"
+          style={{ background: "var(--sakura-deep)", opacity: 0.4, animationDelay: "2.5s" }}
+        />
+        <Petals />
 
-      {/* ─── Interactive demo ─────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-12">
-        <div className="mb-8 text-center">
-          <h2 className="text-2xl font-semibold sm:text-3xl">Meet Sushi-kun</h2>
-          <p className="mx-auto mt-2 max-w-xl text-neutral-400">
-            Drag the slider to fast-forward the weeks. Watch the 時価 climb, the
-            rooms sell off, and Sushi-kun spoil. Then book it.
-          </p>
-        </div>
-        <SushiDemo />
-      </section>
-
-      {/* ─── How it works ─────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <h2 className="mb-10 text-center text-2xl font-semibold sm:text-3xl">How it works</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {STEPS.map((s) => (
-            <div
-              key={s.n}
-              className="rounded-2xl border border-neutral-800 bg-neutral-900 p-6"
+        <div className="relative mx-auto max-w-5xl px-6 pb-24 pt-28 text-center sm:pt-36">
+          <Reveal>
+            <p
+              className="font-display mb-5 text-sm font-semibold uppercase tracking-[0.35em]"
+              style={{ color: "var(--sakura)" }}
             >
-              <div className="mb-3 text-sm font-semibold text-amber-400">{s.n}</div>
-              <h3 className="mb-2 text-lg font-semibold">{s.title}</h3>
-              <p className="text-sm leading-relaxed text-neutral-400">{s.body}</p>
+              ⛩ Plan That Trip to Japan
+            </p>
+          </Reveal>
+          <Reveal delay={120}>
+            <h1
+              className="font-display mx-auto max-w-3xl text-4xl font-bold leading-[1.15] tracking-tight sm:text-6xl sm:leading-[1.1]"
+              style={{ color: "var(--paper)" }}
+            >
+              Everyone wants to go to Japan.
+              <br />
+              <span
+                style={{
+                  background: "linear-gradient(90deg, var(--sakura-deep), var(--amber))",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                }}
+              >
+                Nobody books it.
+              </span>
+            </h1>
+          </Reveal>
+          <Reveal delay={240}>
+            <p className="mx-auto mt-7 max-w-2xl text-lg leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+              A Telegram bot turns your stalled group chat into a pet whose health is live
+              hotel data. It gets sick as you procrastinate. The only way to save it is to
+              actually book the trip.
+            </p>
+          </Reveal>
+          <Reveal delay={360}>
+            <div className="mt-10">
+              <CTAButton />
             </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── Interactive demo — feel it rot ───────────────────────────────── */}
+      <section className="relative mx-auto max-w-5xl px-6 py-16">
+        <Reveal>
+          <div className="mb-10 text-center">
+            <div className="font-display mb-2 text-3xl" style={{ color: "var(--sakura-deep)" }} aria-hidden>
+              寿司くん
+            </div>
+            <h2 className="font-display text-3xl font-bold sm:text-4xl" style={{ color: "var(--paper)" }}>
+              Meet Sushi-kun
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+              Drag the slider to fast-forward the weeks. Watch the 時価 climb, the rooms
+              sell off, and Sushi-kun spoil. Then book it.
+            </p>
+          </div>
+        </Reveal>
+        <Reveal delay={150}>
+          <SushiDemo />
+        </Reveal>
+      </section>
+
+      {/* ─── How it works — four kanji steps ──────────────────────────────── */}
+      <section className="mx-auto max-w-5xl px-6 py-20">
+        <Reveal>
+          <h2
+            className="font-display mb-12 text-center text-3xl font-bold sm:text-4xl"
+            style={{ color: "var(--paper)" }}
+          >
+            How it works
+          </h2>
+        </Reveal>
+        <div className="grid gap-5 sm:grid-cols-2">
+          {STEPS.map((s, i) => (
+            <Reveal key={s.kanji} delay={i * 110}>
+              <div
+                className="card-lift h-full rounded-3xl border p-7"
+                style={{
+                  borderColor: "rgba(246,198,208,0.12)",
+                  background: "linear-gradient(180deg, rgba(35,36,65,0.6), rgba(26,27,46,0.9))",
+                }}
+              >
+                <div
+                  className="font-display mb-4 text-4xl font-semibold"
+                  style={{ color: "var(--amber)" }}
+                  aria-hidden
+                >
+                  {s.kanji}
+                </div>
+                <h3 className="font-display mb-2.5 text-xl font-bold" style={{ color: "var(--paper)" }}>
+                  {s.title}
+                </h3>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+                  {s.body}
+                </p>
+              </div>
+            </Reveal>
           ))}
         </div>
       </section>
 
-      {/* ─── 時価 market price ────────────────────────────────────────────── */}
+      {/* ─── 時価 market price — the sushi-counter metaphor ───────────────── */}
       <section className="mx-auto max-w-5xl px-6 py-16">
-        <div className="rounded-2xl border border-neutral-800 bg-gradient-to-b from-neutral-900 to-neutral-950 p-8 sm:p-12">
-          <div className="grid items-center gap-8 sm:grid-cols-[auto_1fr]">
-            <div className="text-center sm:text-left">
-              <div className="text-6xl font-bold text-amber-400">時価</div>
-              <div className="mt-1 text-sm text-neutral-500">jika — &ldquo;market price&rdquo;</div>
-            </div>
-            <div>
-              <h2 className="text-2xl font-semibold">Priced like the sushi counter</h2>
-              <p className="mt-3 text-neutral-400">
-                At a sushi bar, 時価 means &ldquo;market price&rdquo; — no number on the
-                menu, it&apos;s whatever the market says today. Sushi-kun&apos;s physical
-                health is exactly that: live Stay22 prices and availability across
-                Expedia, Booking, Hotels.com and Vrbo. As the group waits, prices
-                rise and rooms sell off — procrastination literally makes him sick.
-                The hotel never shows up as a list; it only surfaces the moment you
-                commit.
-              </p>
+        <Reveal>
+          <div
+            className="relative overflow-hidden rounded-3xl border p-9 sm:p-14"
+            style={{
+              borderColor: "rgba(245,165,36,0.22)",
+              background:
+                "radial-gradient(70% 90% at 15% 20%, rgba(245,165,36,0.10), transparent 60%)," +
+                "linear-gradient(160deg, var(--night-mist), var(--night-soft) 60%, var(--night))",
+            }}
+          >
+            <div
+              aria-hidden
+              className="animate-lantern absolute -right-8 -top-8 h-32 w-32 rounded-full"
+              style={{ background: "var(--amber)", opacity: 0.25 }}
+            />
+            <div className="grid items-center gap-10 sm:grid-cols-[auto_1fr]">
+              <div className="text-center sm:text-left">
+                <div
+                  className="font-display text-7xl font-bold leading-none sm:text-8xl"
+                  style={{
+                    background: "linear-gradient(180deg, var(--paper), var(--amber))",
+                    WebkitBackgroundClip: "text",
+                    backgroundClip: "text",
+                    color: "transparent",
+                  }}
+                >
+                  時価
+                </div>
+                <div className="mt-3 text-sm tracking-wide" style={{ color: "var(--ink-dim)" }}>
+                  jika — &ldquo;market price&rdquo;
+                </div>
+              </div>
+              <div>
+                <h2 className="font-display text-2xl font-bold sm:text-3xl" style={{ color: "var(--paper)" }}>
+                  Priced like the sushi counter
+                </h2>
+                <p className="mt-4 leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+                  At a sushi bar, 時価 means &ldquo;market price&rdquo; — no number on the menu,
+                  it&apos;s whatever the market says today. Sushi-kun&apos;s physical health is
+                  exactly that: live Stay22 prices and availability across Expedia, Booking,
+                  Hotels.com and Vrbo. As the group waits, prices rise and rooms sell off —
+                  procrastination literally makes him sick. The hotel never shows up as a
+                  list; it only surfaces the moment you commit.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
-      {/* ─── Final CTA ────────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-20 text-center">
-        <h2 className="mx-auto max-w-2xl text-3xl font-bold sm:text-4xl">
-          Stop letting the trip die in the group chat.
-        </h2>
-        <p className="mx-auto mt-4 max-w-xl text-neutral-400">
-          Add Sushi-kun. Give your friends something that gets sad when you don&apos;t book.
-        </p>
-        <div className="mt-8">
-          <CTAButton />
+      {/* ─── Final CTA — dawn breaks, go to Japan ─────────────────────────── */}
+      <section className="relative overflow-hidden">
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(80% 100% at 50% 100%, rgba(245,165,36,0.16), transparent 60%)," +
+              "radial-gradient(60% 70% at 50% 85%, rgba(246,198,208,0.12), transparent 70%)",
+          }}
+        />
+        <Petals />
+        <div className="relative mx-auto max-w-5xl px-6 py-28 text-center">
+          <Reveal>
+            <div className="font-display mb-4 text-2xl" style={{ color: "var(--sakura)" }} aria-hidden>
+              🏮
+            </div>
+            <h2
+              className="font-display mx-auto max-w-2xl text-3xl font-bold leading-snug sm:text-5xl"
+              style={{ color: "var(--paper)" }}
+            >
+              Stop letting the trip die in the group chat.
+            </h2>
+          </Reveal>
+          <Reveal delay={150}>
+            <p className="mx-auto mt-5 max-w-xl leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+              Add Sushi-kun. Give your friends something that gets sad when you don&apos;t
+              book — and a spring morning in Kyoto when you do.
+            </p>
+          </Reveal>
+          <Reveal delay={300}>
+            <div className="mt-10">
+              <CTAButton />
+            </div>
+          </Reveal>
         </div>
       </section>
 
       {/* ─── Footer ───────────────────────────────────────────────────────── */}
-      <footer className="border-t border-neutral-900 px-6 py-10">
+      <footer className="border-t px-6 py-12" style={{ borderColor: "rgba(246,198,208,0.08)" }}>
         <div className="mx-auto max-w-5xl text-center">
-          <div className="text-xs uppercase tracking-widest text-neutral-600">Powered by</div>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-neutral-400">
+          <div className="text-xs uppercase tracking-[0.3em]" style={{ color: "var(--ink-dim)" }}>
+            Powered by
+          </div>
+          <div
+            className="mt-4 flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-sm"
+            style={{ color: "var(--ink-dim)" }}
+          >
             {SPONSORS.map((s) => (
-              <span key={s}>{s}</span>
+              <span key={s} className="transition-colors duration-200 hover:text-[var(--sakura)]">
+                {s}
+              </span>
             ))}
           </div>
-          <div className="mt-6 text-xs text-neutral-600">
-            Built at Hack the 6ix · Plan That Trip to Japan
+          <div className="font-display mt-8 text-xs" style={{ color: "rgba(169,165,184,0.55)" }}>
+            Built at Hack the 6ix · Plan That Trip to Japan · いってらっしゃい
           </div>
         </div>
       </footer>
