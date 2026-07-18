@@ -1,0 +1,13 @@
+.env
+.env.*
+.git/
+.claude/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+mock.html
+kamagachi/
