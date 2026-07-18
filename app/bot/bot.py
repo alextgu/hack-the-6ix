@@ -295,9 +295,12 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # The supervisor gets a chance on EVERY message — its send-cooldown is
     # the pacing, not the reader's 3-message debounce. Skip the LLM turn
-    # entirely while the cooldown is hot.
-    if supervisor.can_speak(chat_id):
-        decision = await asyncio.to_thread(supervisor.run_turn, chat_id, "message")
+    # while the cooldown is hot, UNLESS someone sounds like they're backing
+    # out — that's serious enough to always wake Tabi.
+    urgent = supervisor.is_urgent(update.message.text)
+    if supervisor.can_speak(chat_id) or urgent:
+        decision = await asyncio.to_thread(supervisor.run_turn, chat_id,
+                                           "message", urgent)
         await execute_decision(chat_id, decision, ctx)
 
 

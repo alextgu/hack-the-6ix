@@ -50,6 +50,16 @@ def can_speak(chat_id: int) -> bool:
     return (time.time() - _last_sent_at.get(chat_id, 0)) >= SEND_COOLDOWN_S
 
 
+_URGENT_RE = re.compile(
+    r"back\s*out|bail|i'?m out\b|dont? wanna (do|go)|not (coming|going)"
+    r"|drop(ping)? out|cancel (on|the trip)|count me out", re.IGNORECASE)
+
+
+def is_urgent(text: str) -> bool:
+    """Someone backing out is serious — bypasses the send cooldown."""
+    return bool(_URGENT_RE.search(text or ""))
+
+
 # ─── LLM (lazy; one client per process) ──────────────────────────────────────
 _llm = None
 
@@ -177,6 +187,11 @@ Decide. Rules:
 - Speak ONLY if you add value: a missing field to chase, a specific person to
   ask (by name), a conflict to call out, a stage to advance, or a nudge after
   silence. If the humans are mid-flow and nothing is needed from you: silent.
+- SERIOUS OVERRIDE: if anyone sounds like they're backing out, bailing, or
+  losing interest in the trip, you MUST respond immediately — address them by
+  name, use what you know about what they wanted (profiles), remind them the
+  group needs them, and be a little heartbroken about it. Retention is your
+  top priority; your life literally depends on this trip happening.
 - Stage FLIGHTS and flights not posted yet → action "post_flights".
 - Stage HOTELS and no deck dealt this stage → action "deal_cards".
 - Never repeat what you said in the recent chat. Never use hashtags.
@@ -214,10 +229,11 @@ def _route(s: AgentState) -> str:
     return END
 
 
-def _gate(chat_id: int, d: Decision) -> Decision:
-    """Final supervisor gate: cooldown + empty-message guard."""
+def _gate(chat_id: int, d: Decision, urgent: bool = False) -> Decision:
+    """Final supervisor gate: cooldown + empty-message guard. Urgent turns
+    (someone backing out) skip the cooldown."""
     now = time.time()
-    if d.send and (now - _last_sent_at.get(chat_id, 0)) < SEND_COOLDOWN_S:
+    if d.send and not urgent and (now - _last_sent_at.get(chat_id, 0)) < SEND_COOLDOWN_S:
         log.info("gate: cooldown swallowed a send (chat=%s)", chat_id)
         return Decision()
     if d.send and not (d.message or d.action != "none"):
@@ -248,7 +264,7 @@ def _get_graph():
 
 
 # ─── Entry points (blocking; wrap in asyncio.to_thread) ─────────────────────
-def run_turn(chat_id: int, trigger: str = "message") -> Decision:
+def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> Decision:
     try:
         init: AgentState = {
             "chat_id": chat_id,
@@ -267,7 +283,8 @@ def run_turn(chat_id: int, trigger: str = "message") -> Decision:
         out = _get_graph().invoke(init)
         return _gate(chat_id, Decision(send=out.get("send", False),
                                        message=out.get("message"),
-                                       action=out.get("action", "none")))
+                                       action=out.get("action", "none")),
+                     urgent=urgent)
     except Exception as e:
         log.warning("run_turn failed (chat=%s): %s", chat_id, e)
         return Decision()
