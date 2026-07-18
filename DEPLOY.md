@@ -1,5 +1,14 @@
 # Deploying trippet to Google Cloud Run
 
+> **Current deployment (2026-07-18):** project `hackthe6ix-502813`, region
+> `us-central1`, service `trippet` →
+> **https://trippet-69987838202.us-central1.run.app**
+> Gemini key + Mongo URI are set as env vars on the service.
+> `TELEGRAM_BOT_TOKEN` is NOT set yet — the service runs API-only (Mini App +
+> cards work) until someone runs:
+> `gcloud run services update trippet --region us-central1 --update-env-vars TELEGRAM_BOT_TOKEN=<token>`
+> then registers the Mini App URL in @BotFather (see below).
+
 One container runs both the polling Telegram bot and the FastAPI Mini App
 server (`run.py`). They share in-memory state, and Telegram allows only one
 poller per bot token — so the service MUST run as **exactly one always-on
@@ -66,3 +75,6 @@ gcloud run services update trippet --region us-central1 --update-env-vars "PUBLI
   (`db.load_session`), pet state currently doesn't (in-memory only).
 - If the bot runs on Cloud Run, don't also run `python run.py` locally with
   the same token — same 409 Conflict. Use a second dev bot token locally.
+- Newer GCP projects: if `--source` deploy fails with a storage 403, grant
+  the default compute SA the builder role:
+  `gcloud projects add-iam-policy-binding <project> --member=serviceAccount:<num>-compute@developer.gserviceaccount.com --role=roles/cloudbuild.builds.builder`

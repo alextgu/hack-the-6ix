@@ -36,7 +36,13 @@ async def _run_bot() -> None:
 
     Wrapped in a retry loop so a transient Telegram TimedOut on startup doesn't
     take the whole process down. Once started, the updater's internal loop
-    handles its own retries."""
+    handles its own retries.
+
+    No TELEGRAM_BOT_TOKEN → API-only mode: the Mini App + cards still serve,
+    and the bot joins on the next deploy once the env var is set."""
+    if not os.environ.get("TELEGRAM_BOT_TOKEN", "").strip():
+        log.warning("TELEGRAM_BOT_TOKEN not set — running API-only (no Telegram polling)")
+        await asyncio.Event().wait()
     while True:
         app = bot.build_app()
         try:
