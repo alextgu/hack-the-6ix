@@ -65,8 +65,7 @@ def _fetch_raw(query: str, checkin: str, checkout: str, guests: int) -> Optional
 
     stay22._throttle()  # shared 12s keyless-tier budget
     url = f"{stay22.ENDPOINT}?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(url, headers={"Accept": "application/json",
-                                               "User-Agent": "trippet/1.0"})
+    req = urllib.request.Request(url, headers=stay22.request_headers())
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())
