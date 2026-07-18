@@ -15,7 +15,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,7 @@ from app.core import state
 from app.core import health
 from app.bot import cards
 from app.integrations import db
+from app.integrations import elevenlabs
 
 
 ROOT = Path(__file__).resolve().parents[2]   # app/api/api.py -> repo root
@@ -133,6 +134,21 @@ def api_cards_event(group_id: str, body: EventBody) -> JSONResponse:
 def api_cards_results(group_id: str) -> JSONResponse:
     """Tally, winner, per-round history + Mongo analytics rollup."""
     return JSONResponse(cards.results(_chat_id(group_id)))
+
+
+# NOTE: sync `def` on purpose — see cards endpoints above, same reasoning
+# (blocking ElevenLabs call runs in FastAPI's threadpool, not the event loop).
+@app.get("/api/speak")
+def api_speak(text: str) -> Response:
+    """One-shot TTS for the pet's mood caption. Client fires this at most
+    once per page load (webapp/app.js), so no extra throttling here."""
+    text = text.strip()[:200]
+    if not text:
+        raise HTTPException(status_code=400, detail="text required")
+    audio = elevenlabs.text_to_speech(text)
+    if audio is None:
+        raise HTTPException(status_code=502, detail="tts failed")
+    return Response(content=audio, media_type="audio/mpeg")
 
 
 @app.get("/api/state/{group_id}")

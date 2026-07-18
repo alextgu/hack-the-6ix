@@ -34,9 +34,17 @@
   }
 
   var lottieContainer = document.getElementById("lottie");
+  var stageEl = document.getElementById("stage");
   var currentMood = null;
   var currentAnim = null;
   var reconnecting = false;
+  var currentCaption = "";
+  var isSpeaking = false; // guards against overlapping playback on rapid clicks
+
+  stageEl.addEventListener("click", function () {
+    if (isSpeaking || !currentCaption) return;
+    speak(currentCaption);
+  });
 
   loadMood("happy");
 
@@ -83,7 +91,8 @@
 
     setBar(physRow, phys);
     setBar(mentRow, ment);
-    captionEl.textContent = deriveCaption(phys, ment, mood);
+    currentCaption = deriveCaption(phys, ment, mood);
+    captionEl.textContent = currentCaption;
     if (weekLabelEl) weekLabelEl.textContent = "week " + num(state.sim_week, 0);
     renderTripStats(state.trip);
 
@@ -210,6 +219,14 @@
     if (ment > 75) return "the group is locked in";
     if (phys > 75) return "wallet is happy today";
     return "just hanging out. keep talking, keep booking.";
+  }
+
+  function speak(text) {
+    isSpeaking = true;
+    var audio = new Audio("/api/speak?text=" + encodeURIComponent(text));
+    audio.addEventListener("ended", function () { isSpeaking = false; });
+    audio.addEventListener("error", function () { isSpeaking = false; });
+    audio.play().catch(function () { isSpeaking = false; /* autoplay/network failure */ });
   }
 
   function setReconnecting(on) {

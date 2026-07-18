@@ -1,4 +1,4 @@
-# REPO_MAP — one line per module, who calls what
+﻿# REPO_MAP — one line per module, who calls what
 
 ## Layout
 
@@ -37,7 +37,9 @@ repo root so `app` is importable: `python run.py`, or standalone entry points vi
 | `app/integrations/booking.py` | Commit → booking picker. `pick_hotel` picks the highest-rated within `budget × guests × nights` (fallback: cheapest). `booking_options` extracts Allez URLs verbatim from Stay22 — never constructs them. | `app/bot/bot.py::cmd_commit` |
 | `app/bot/cards.py`         | Group decision engine for the deck. Round resolves when every participant swiped every active card; unanimous like wins (2+ people), else bottom half eliminated 5→3→2→1. In-memory truth, mirrored to Mongo. TEMP trigger: the word "map" in chat; real seam: `bot.open_hotel_cards`. | `bot`, `api` |
 | `app/integrations/hotels.py` | Stay22 → swipeable hotel deck: ≤5 real cards near the fixed basecamp (Shinjuku/Shibuya) with live prices/photos/ratings/Allez links. Fallback chain live → `data/japan_hotels.json` → `sample_response.json` (paths resolve to repo root). | `cards` |
-| `app/integrations/db.py`   | MongoDB Atlas layer: `card_sessions` mirror + append-only `analytics` (swipe dwell/drag/velocity, card views, link-outs). Never raises; retry cooldown + event buffering when Atlas flakes. `pymongo` imported lazily. | `cards`, `api` |
+| `app/integrations/db.py`   | MongoDB Atlas layer: `card_sessions` mirror + append-only `analytics` (swipe dwell/drag/velocity, card views, link-outs), plus `pets` (health survives deploys), `chat_log` (full message memory), `user_profiles` (per-person facts), `trip_plans` (stage + flight lock). Never raises; retry cooldown + event buffering when Atlas flakes. | `cards`, `api`, `supervisor`, `state`, `bot` |
+| `app/agents/supervisor.py` | **LangGraph supervisor — the active pet** (SUPERVISOR_PLAN.md). Deterministic supervisor routes stage_tracker (code) + profile_tracker (Gemini) + messenger (Gemini-as-Tabi); sole send-gate (45s cooldown). Stages GATHER → FLIGHTS → HOTELS → BOOK. Heartbeat in run.py lets the pet initiate after silence. | `bot`, `run.py` |
+| `app/integrations/flights.py` | Mock flight stage: 3 stable fake options priced off budget; saying "flight N" in chat locks one (regex in bot). Deliberately fake per plan. | `bot`, `supervisor` |
 | `webapp/`                  | Telegram Mini App face — vanilla HTML/CSS/JS, Lottie animations per mood, polls `/api/state/{group_id}` every 3s. Served by `app/api/api.py` at `/` and `/webapp/*`. | Telegram (via WebApp button set by `bot`) |
 
 **Scaffolded — not yet wired to the bot** (agent seam, PIPELINE.md):
