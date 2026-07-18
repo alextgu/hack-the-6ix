@@ -74,8 +74,8 @@
     var label = row.querySelector(".bar-val");
     inner.style.width = val + "%";
     label.textContent = Math.round(val);
-    if (val < 25) inner.style.background = "#ff6b6b";
-    else if (val < 50) inner.style.background = "#f0d47a";
+    if (val < 25) inner.style.background = "#d7003a";      // beni crimson
+    else if (val < 50) inner.style.background = "#e0a458"; // warm amber
     else inner.style.background = ""; // fall back to CSS default
   }
 

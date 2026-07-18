@@ -3,20 +3,21 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>trippet</title>
+  <title>Tabi</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
   <style>
     :root {
-      --bg: #0f1116;
-      --bg2: #171a22;
-      --fg: #e8ecf3;
-      --muted: #8a93a6;
-      --bar-bg: #232735;
-      --bar-fg: #7cd992;
-      --bar-fg-2: #6aa8ff;
-      --accent: #f5c518;
-      --danger: #ff6b6b;
+      /* Japanese palette: sumi-ink navy, shu-iro vermillion, sakura pink, kin-iro gold */
+      --bg: #ffffff;
+      --bg2: #ffffff;
+      --fg: #e1e1e1;
+      --muted: #8fa0c0;
+      --bar-bg: #1f2c47;
+      --bar-fg: #e2543a;
+      --bar-fg-2: #f2a6c0;
+      --accent: #d4af37;
+      --danger: #d7003a;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -39,7 +40,7 @@
       width: 100%; max-width: 420px;
     }
     #title {
-      font-size: 18px; font-weight: 600; letter-spacing: 0.3px;
+      font-size: 18px; font-weight: 600; letter-spacing: 0.3px; color: black;
     }
     #week {
       font-size: 12px; color: var(--muted);
@@ -91,6 +92,7 @@
       opacity: 0.9;
       min-height: 40px;
       padding: 4px 8px;
+      color: black;
     }
     #trip-line {
       width: 100%; max-width: 420px;
@@ -104,7 +106,7 @@
 <body>
   <div id="app">
     <div id="header">
-      <div id="title">trippet</div>
+      <div id="title">Tabi</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span id="status-badge">reconnecting…</span>
         <span id="week">week 0</span>
