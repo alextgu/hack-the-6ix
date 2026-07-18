@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Kamagachi — Hotel Swipe</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="header">
+      <div class="header-row">
+        <div class="city">
+          <span class="pet">🐾</span>
+          <span id="city-name">—</span>
+        </div>
+        <div class="progress">
+          <span id="swipe-count">0 / 0 swiped</span>
+        </div>
+      </div>
+      <div class="header-row sub">
+        <span id="waiting">Waiting on: —</span>
+        <span id="user-badge"></span>
+      </div>
+    </header>
+
+    <!-- Banner (errors / demo mode) -->
+    <div id="banner" class="banner hidden"></div>
+
+    <!-- Card deck -->
+    <main id="deck-wrap">
+      <div id="deck"></div>
+      <div id="empty" class="empty hidden">
+        <div class="empty-emoji">🐾</div>
+        <div class="empty-title" id="empty-title">Waiting on the group to catch up</div>
+        <div class="empty-sub" id="empty-sub">Come back when your friends have swiped.</div>
+      </div>
+    </main>
+
+    <!-- Action buttons -->
+    <footer id="actions">
+      <button id="btn-nope" class="action nope" aria-label="Nope">✕</button>
+      <button id="btn-like" class="action like" aria-label="Like">♥</button>
+    </footer>
+  </div>
+
+  <!-- Match takeover -->
+  <div id="match" class="match hidden">
+    <div class="confetti" aria-hidden="true">
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <div class="match-card">
+      <div class="match-title">It's a match! 🎉</div>
+      <div class="match-sub">Your group agreed on</div>
+      <img id="match-img" alt="" />
+      <div class="match-name" id="match-name">—</div>
+      <div class="match-actions">
+        <button id="match-book" class="primary">Open booking</button>
+        <button id="match-close" class="ghost">Keep swiping</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    // ---- Telegram bootstrap ----
+    const tg = window.Telegram && window.Telegram.WebApp;
+    let initData = '';
+    let tgUser = null;
+    if (tg) {
+      try { tg.ready(); tg.expand(); } catch (_) {}
+      initData = tg.initData || '';
+      tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
+      applyTheme(tg);
+      tg.onEvent && tg.onEvent('themeChanged', () => applyTheme(tg));
+    }
+
+    function applyTheme(tg) {
+      const p = tg.themeParams || {};
+      const root = document.documentElement;
+      const setVar = (k, v) => v && root.style.setProperty(k, v);
+      setVar('--bg', p.bg_color);
+      setVar('--fg', p.text_color);
+      setVar('--muted', p.hint_color);
+      setVar('--surface', p.secondary_bg_color);
+      setVar('--accent', p.button_color);
+      setVar('--accent-fg', p.button_text_color);
+      root.dataset.scheme = tg.colorScheme || 'light';
+    }
+
+    // ---- URL params ----
+    const qs = new URLSearchParams(location.search);
+    const CHAT_ID = qs.get('chat_id') || '';
+    let CURRENT_CITY = qs.get('city') || '';
+
+    // ---- API layer ----
+    const API_BASE = ''; // same origin; adjust if hosted elsewhere
+    async function api(path, opts = {}) {
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+      if (initData) headers['X-Telegram-Init-Data'] = initData;
+      const res = await fetch(API_BASE + path, Object.assign({}, opts, { headers }));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    // ---- Demo fallback ----
+    const DEMO_HOTELS = [
+      { hotel_id: 'demo-1', name: 'Park Hyatt Tokyo', city: 'Tokyo', image_url: 'https://picsum.photos/seed/demo1/800/600', price_per_night: 480, rating: 4.7, tags: ['Shinjuku', 'Skyline', 'Iconic'] },
+      { hotel_id: 'demo-2', name: 'Hoshinoya Kyoto', city: 'Kyoto', image_url: 'https://picsum.photos/seed/demo2/800/600', price_per_night: 620, rating: 4.9, tags: ['Ryokan', 'Riverside', 'Onsen'] },
+      { hotel_id: 'demo-3', name: 'Aman Tokyo', city: 'Tokyo', image_url: 'https://picsum.photos/seed/demo3/800/600', price_per_night: 950, rating: 4.8, tags: ['Otemachi', 'Luxury', 'Spa'] },
+      { hotel_id: 'demo-4', name: 'The Ritz-Carlton Osaka', city: 'Osaka', image_url: 'https://picsum.photos/seed/demo4/800/600', price_per_night: 410, rating: 4.6, tags: ['Umeda', 'Views', 'Classic'] },
+      { hotel_id: 'demo-5', name: 'Hotel Gracery Shinjuku', city: 'Tokyo', image_url: 'https://picsum.photos/seed/demo5/800/600', price_per_night: 180, rating: 4.2, tags: ['Godzilla', 'Central', 'Budget'] }
+    ];
+
+    // ---- State ----
+    const state = {
+      city: CURRENT_CITY || 'Tokyo',
+      deck: [],
+      swiped: new Set(),
+      total: 0,
+      waitingOn: 0,
+      demoMode: false,
+      busy: false
+    };
+
+    // ---- DOM refs ----
+    const $ = (id) => document.getElementById(id);
+    const deckEl = $('deck');
+    const emptyEl = $('empty');
+    const banner = $('banner');
+
+    // ---- Load deck ----
+    async function loadDeck() {
+      showBanner('');
+      try {
+        const url = `/api/deck?chat_id=${encodeURIComponent(CHAT_ID)}&city=${encodeURIComponent(state.city || '')}`;
+        const data = await api(url);
+        state.demoMode = false;
+        state.city = data.city || state.city;
+        const swipedIds = new Set((data.user_progress && data.user_progress.swiped_hotel_ids) || []);
+        state.swiped = swipedIds;
+        state.deck = (data.deck || []).filter(h => !swipedIds.has(h.hotel_id));
+        state.total = (data.deck || []).length;
+        const gp = data.group_progress || {};
+        state.waitingOn = Math.max(0, (gp.total_active_users || 0) - 1);
+        if (gp.unanimous_hotel_id_if_any) {
+          const hit = (data.deck || []).find(h => h.hotel_id === gp.unanimous_hotel_id_if_any);
+          if (hit) showMatch(hit);
+        }
+      } catch (e) {
+        state.demoMode = true;
+        state.city = state.city || 'Tokyo';
+        state.deck = DEMO_HOTELS.slice();
+        state.total = DEMO_HOTELS.length;
+        state.swiped = new Set();
+        state.waitingOn = 2;
+        showBanner('Backend not ready — showing demo cards');
+      }
+      render();
+    }
+
+    // ---- Render ----
+    function render() {
+      // header
+      $('city-name').textContent = state.city || '—';
+      $('swipe-count').textContent = `${state.swiped.size} / ${state.total} swiped`;
+      $('waiting').textContent = `Waiting on: ${state.waitingOn} friend${state.waitingOn === 1 ? '' : 's'}`;
+      $('user-badge').textContent = tgUser ? (tgUser.first_name || tgUser.username || '') : '';
+
+      deckEl.innerHTML = '';
+      const topN = state.deck.slice(0, 3); // render top 3 for depth
+      topN.forEach((h, i) => {
+        const card = buildCard(h, i);
+        deckEl.appendChild(card);
+      });
+
+      if (state.deck.length === 0) {
+        emptyEl.classList.remove('hidden');
+      } else {
+        emptyEl.classList.add('hidden');
+      }
+    }
+
+    function imgFor(h) {
+      return h.image_url || `https://picsum.photos/seed/${encodeURIComponent(h.hotel_id)}/800/600`;
+    }
+
+    function buildCard(h, i) {
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.style.zIndex = String(100 - i);
+      el.style.transform = `translateY(${i * 8}px) scale(${1 - i * 0.04})`;
+      el.style.opacity = i > 2 ? '0' : '1';
+      el.dataset.hotelId = h.hotel_id;
+
+      const stars = '★'.repeat(Math.round(h.rating || 0)) + '☆'.repeat(5 - Math.round(h.rating || 0));
+      const tags = (h.tags || []).slice(0, 3).map(t => `<span class="chip">${escapeHtml(t)}</span>`).join('');
+
+      el.innerHTML = `
+        <div class="stamp like-stamp">LIKE</div>
+        <div class="stamp nope-stamp">NOPE</div>
+        <div class="card-img" style="background-image:url('${escapeAttr(imgFor(h))}')"></div>
+        <div class="card-body">
+          <div class="row">
+            <div class="name">${escapeHtml(h.name || 'Unnamed')}</div>
+            <div class="price">$${Math.round(h.price_per_night || 0)}<span class="per">/nt</span></div>
+          </div>
+          <div class="row sub">
+            <div class="city-line">📍 ${escapeHtml(h.city || '')}</div>
+            <div class="stars" title="${h.rating || 0}">${stars}</div>
+          </div>
+          <div class="chips">${tags}</div>
+        </div>
+      `;
+
+      if (i === 0) attachDrag(el, h);
+      return el;
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    // ---- Drag / swipe ----
+    function attachDrag(card, hotel) {
+      let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false, pid = null;
+      const likeStamp = card.querySelector('.like-stamp');
+      const nopeStamp = card.querySelector('.nope-stamp');
+
+      const onDown = (e) => {
+        if (state.busy) return;
+        dragging = true;
+        pid = e.pointerId;
+        startX = e.clientX; startY = e.clientY; dx = 0; dy = 0;
+        card.setPointerCapture && card.setPointerCapture(pid);
+        card.style.transition = 'none';
+      };
+      const onMove = (e) => {
+        if (!dragging) return;
+        dx = e.clientX - startX;
+        dy = e.clientY - startY;
+        const rot = dx / 20;
+        card.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+        const prog = Math.min(1, Math.abs(dx) / 120);
+        if (dx > 0) { likeStamp.style.opacity = prog; nopeStamp.style.opacity = 0; }
+        else { nopeStamp.style.opacity = prog; likeStamp.style.opacity = 0; }
+      };
+      const onUp = () => {
+        if (!dragging) return;
+        dragging = false;
+        card.releasePointerCapture && pid != null && card.releasePointerCapture(pid);
+        const threshold = 110;
+        if (Math.abs(dx) > threshold) {
+          fling(card, dx > 0 ? 'RIGHT' : 'LEFT', hotel);
+        } else {
+          card.style.transition = 'transform 220ms cubic-bezier(.2,.9,.3,1.2)';
+          card.style.transform = '';
+          likeStamp.style.opacity = 0;
+          nopeStamp.style.opacity = 0;
+        }
+      };
+
+      card.addEventListener('pointerdown', onDown);
+      card.addEventListener('pointermove', onMove);
+      card.addEventListener('pointerup', onUp);
+      card.addEventListener('pointercancel', onUp);
+    }
+
+    function fling(card, dir, hotel) {
+      state.busy = true;
+      const off = dir === 'RIGHT' ? window.innerWidth + 200 : -window.innerWidth - 200;
+      card.style.transition = 'transform 320ms ease-out, opacity 320ms ease-out';
+      card.style.transform = `translate(${off}px, -60px) rotate(${dir === 'RIGHT' ? 35 : -35}deg)`;
+      card.style.opacity = '0';
+      // animate remaining cards forward
+      const rest = deckEl.querySelectorAll('.card');
+      rest.forEach((c, i) => {
+        if (c === card) return;
+        c.style.transition = 'transform 260ms ease';
+        const idx = i - 1;
+        c.style.transform = `translateY(${idx * 8}px) scale(${1 - idx * 0.04})`;
+      });
+      submitSwipe(hotel, dir);
+      setTimeout(() => {
+        state.swiped.add(hotel.hotel_id);
+        state.deck = state.deck.filter(h => h.hotel_id !== hotel.hotel_id);
+        state.busy = false;
+        render();
+      }, 320);
+    }
+
+    async function submitSwipe(hotel, vote) {
+      if (state.demoMode) {
+        // Demo: 20% chance of match on RIGHT to test celebration screen
+        if (vote === 'RIGHT' && Math.random() < 0.2) {
+          setTimeout(() => showMatch(hotel), 400);
+        }
+        return;
+      }
+      try {
+        const res = await api('/api/swipe', {
+          method: 'POST',
+          body: JSON.stringify({ chat_id: CHAT_ID, hotel_id: hotel.hotel_id, vote })
+        });
+        if (res && res.unanimous_match) {
+          const merged = Object.assign({}, hotel, res.unanimous_match);
+          showMatch(merged);
+        }
+        if (res && res.next_city && state.deck.length === 0) {
+          state.city = res.next_city;
+          $('empty-title').textContent = `Next stop: ${res.next_city} →`;
+          $('empty-sub').textContent = 'Loading fresh hotels...';
+          loadDeck();
+        }
+      } catch (e) {
+        // silent fail on individual swipes — UI already advanced
+        console.warn('swipe failed', e);
+      }
+    }
+
+    // ---- Buttons ----
+    function triggerSwipe(dir) {
+      if (state.busy) return;
+      const top = deckEl.querySelector('.card');
+      if (!top) return;
+      const hotel = state.deck[0];
+      if (!hotel) return;
+      // brief animate before fling
+      top.style.transition = 'transform 120ms ease-out';
+      top.style.transform = `translate(${dir === 'RIGHT' ? 40 : -40}px, 0) rotate(${dir === 'RIGHT' ? 6 : -6}deg)`;
+      setTimeout(() => fling(top, dir, hotel), 80);
+    }
+    $('btn-nope').addEventListener('click', () => triggerSwipe('LEFT'));
+    $('btn-like').addEventListener('click', () => triggerSwipe('RIGHT'));
+
+    // ---- Match screen ----
+    let currentMatch = null;
+    function showMatch(hotel) {
+      currentMatch = hotel;
+      $('match-img').src = imgFor(hotel);
+      $('match-name').textContent = hotel.name || 'Your hotel';
+      $('match').classList.remove('hidden');
+      try { tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('success'); } catch (_) {}
+    }
+    $('match-close').addEventListener('click', () => {
+      $('match').classList.add('hidden');
+      currentMatch = null;
+    });
+    $('match-book').addEventListener('click', async () => {
+      if (!currentMatch) return;
+      try {
+        if (state.demoMode) {
+          const fake = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(currentMatch.name)}`;
+          openLink(fake);
+          return;
+        }
+        const res = await api(`/api/allez?chat_id=${encodeURIComponent(CHAT_ID)}&hotel_id=${encodeURIComponent(currentMatch.hotel_id)}`);
+        if (res && res.url) openLink(res.url);
+      } catch (e) {
+        showBanner('Could not open booking link');
+      }
+    });
+
+    function openLink(url) {
+      if (tg && tg.openLink) tg.openLink(url);
+      else window.open(url, '_blank');
+    }
+
+    // ---- Banner ----
+    function showBanner(msg) {
+      if (!msg) { banner.classList.add('hidden'); banner.textContent = ''; return; }
+      banner.textContent = msg;
+      banner.classList.remove('hidden');
+    }
+
+    // ---- Keyboard ----
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') triggerSwipe('LEFT');
+      else if (e.key === 'ArrowRight') triggerSwipe('RIGHT');
+    });
+
+    // ---- Go ----
+    loadDeck();
+  })();
+  </script>
+</body>
+</html>

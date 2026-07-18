@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" id="kamagachi-pet">
+  <defs>
+    <radialGradient id="goldShine" cx="0.5" cy="0.3" r="0.7">
+      <stop offset="0%" stop-color="#fff6c2"/>
+      <stop offset="60%" stop-color="#ffd24a"/>
+      <stop offset="100%" stop-color="#c9911a"/>
+    </radialGradient>
+    <radialGradient id="happyShine" cx="0.5" cy="0.35" r="0.7">
+      <stop offset="0%" stop-color="#ffe6a8"/>
+      <stop offset="100%" stop-color="#ffb454"/>
+    </radialGradient>
+    <radialGradient id="sickShine" cx="0.5" cy="0.35" r="0.7">
+      <stop offset="0%" stop-color="#e6f0b8"/>
+      <stop offset="100%" stop-color="#a8b76a"/>
+    </radialGradient>
+    <radialGradient id="stableShine" cx="0.5" cy="0.35" r="0.7">
+      <stop offset="0%" stop-color="#f5e2b8"/>
+      <stop offset="100%" stop-color="#c9a06a"/>
+    </radialGradient>
+    <radialGradient id="dyingShine" cx="0.5" cy="0.35" r="0.7">
+      <stop offset="0%" stop-color="#c8ccd4"/>
+      <stop offset="100%" stop-color="#6b7482"/>
+    </radialGradient>
+  </defs>
+
+  <g id="pet-root">
+
+    <!-- ============ DYING ============ -->
+    <g id="state-dying" style="display:none">
+      <ellipse class="pet-shadow" cx="200" cy="340" rx="90" ry="10" fill="#000" opacity="0.15"/>
+      <g class="pet-body-group">
+        <path class="pet-body" d="M115,215 C115,140 285,140 285,215 C285,300 260,325 200,325 C140,325 115,300 115,215 Z" fill="url(#dyingShine)" stroke="#3d4652" stroke-width="3"/>
+        <ellipse cx="160" cy="322" rx="18" ry="10" fill="#5a6472" stroke="#3d4652" stroke-width="2"/>
+        <ellipse cx="240" cy="322" rx="18" ry="10" fill="#5a6472" stroke="#3d4652" stroke-width="2"/>
+        <!-- X eyes -->
+        <g stroke="#2a2f38" stroke-width="5" stroke-linecap="round">
+          <line x1="150" y1="200" x2="180" y2="230"/>
+          <line x1="180" y1="200" x2="150" y2="230"/>
+          <line x1="220" y1="200" x2="250" y2="230"/>
+          <line x1="250" y1="200" x2="220" y2="230"/>
+        </g>
+        <!-- Drooping mouth + tongue -->
+        <path d="M170,265 Q200,285 230,265" fill="none" stroke="#2a2f38" stroke-width="4" stroke-linecap="round"/>
+        <path d="M195,275 Q200,300 210,295 Q215,285 205,275 Z" fill="#c76a7a" stroke="#2a2f38" stroke-width="2"/>
+        <!-- Tear drops -->
+        <path d="M148,240 Q142,258 148,268 Q156,260 154,242 Z" fill="#7ec4e8" stroke="#3a7ea8" stroke-width="1.5"/>
+        <path d="M252,240 Q246,258 252,268 Q260,260 258,242 Z" fill="#7ec4e8" stroke="#3a7ea8" stroke-width="1.5"/>
+      </g>
+    </g>
+
+    <!-- ============ SICK ============ -->
+    <g id="state-sick" style="display:none">
+      <ellipse class="pet-shadow" cx="200" cy="340" rx="90" ry="10" fill="#000" opacity="0.15"/>
+      <g class="pet-body-group">
+        <path class="pet-body" d="M115,215 C115,140 285,140 285,215 C285,300 260,325 200,325 C140,325 115,300 115,215 Z" fill="url(#sickShine)" stroke="#5a6b2a" stroke-width="3"/>
+        <ellipse cx="160" cy="322" rx="18" ry="10" fill="#8a9a4a" stroke="#5a6b2a" stroke-width="2"/>
+        <ellipse cx="240" cy="322" rx="18" ry="10" fill="#8a9a4a" stroke="#5a6b2a" stroke-width="2"/>
+        <!-- Tired eyes (half closed) -->
+        <g class="pet-eyes">
+          <path d="M145,215 Q165,205 185,215" fill="none" stroke="#3a3a2a" stroke-width="4" stroke-linecap="round"/>
+          <path d="M215,215 Q235,205 255,215" fill="none" stroke="#3a3a2a" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="165" cy="222" r="3" fill="#3a3a2a"/>
+          <circle cx="235" cy="222" r="3" fill="#3a3a2a"/>
+        </g>
+        <!-- Sad mouth -->
+        <path class="pet-mouth" d="M175,270 Q200,258 225,270" fill="none" stroke="#3a3a2a" stroke-width="4" stroke-linecap="round"/>
+        <!-- Mustache stub -->
+        <path d="M185,255 Q195,252 200,254 Q205,252 215,255" fill="none" stroke="#3a3a2a" stroke-width="3" stroke-linecap="round"/>
+        <!-- Sweat drop -->
+        <path d="M275,180 Q270,200 275,210 Q283,202 281,182 Z" fill="#9ed6f0" stroke="#3a7ea8" stroke-width="1.5"/>
+        <!-- Cheek blush (sickly) -->
+        <ellipse cx="145" cy="240" rx="10" ry="6" fill="#c4d47a" opacity="0.6"/>
+        <ellipse cx="255" cy="240" rx="10" ry="6" fill="#c4d47a" opacity="0.6"/>
+      </g>
+    </g>
+
+    <!-- ============ STABLE ============ -->
+    <g id="state-stable" style="display:none">
+      <ellipse class="pet-shadow" cx="200" cy="340" rx="90" ry="10" fill="#000" opacity="0.2"/>
+      <g class="pet-body-group">
+        <path class="pet-body" d="M115,215 C115,140 285,140 285,215 C285,300 260,325 200,325 C140,325 115,300 115,215 Z" fill="url(#stableShine)" stroke="#7a5a2a" stroke-width="3"/>
+        <ellipse cx="160" cy="322" rx="18" ry="10" fill="#b08850" stroke="#7a5a2a" stroke-width="2"/>
+        <ellipse cx="240" cy="322" rx="18" ry="10" fill="#b08850" stroke="#7a5a2a" stroke-width="2"/>
+        <!-- Neutral eyes -->
+        <g class="pet-eyes">
+          <ellipse class="eye-ball" cx="165" cy="215" rx="12" ry="14" fill="#fff" stroke="#3a2a1a" stroke-width="2.5"/>
+          <ellipse class="eye-ball" cx="235" cy="215" rx="12" ry="14" fill="#fff" stroke="#3a2a1a" stroke-width="2.5"/>
+          <circle class="pupil" cx="165" cy="218" r="5" fill="#2a1a0a"/>
+          <circle class="pupil" cx="235" cy="218" r="5" fill="#2a1a0a"/>
+          <circle cx="167" cy="215" r="1.8" fill="#fff"/>
+          <circle cx="237" cy="215" r="1.8" fill="#fff"/>
+          <!-- Eyelids for blink -->
+          <rect class="eyelid eyelid-left" x="152" y="199" width="26" height="0" fill="url(#stableShine)" stroke="#7a5a2a" stroke-width="2"/>
+          <rect class="eyelid eyelid-right" x="222" y="199" width="26" height="0" fill="url(#stableShine)" stroke="#7a5a2a" stroke-width="2"/>
+        </g>
+        <!-- Neutral mouth -->
+        <path class="pet-mouth" d="M180,268 Q200,272 220,268" fill="none" stroke="#3a2a1a" stroke-width="4" stroke-linecap="round"/>
+        <!-- Small mustache -->
+        <path d="M175,258 Q188,252 200,256 Q212,252 225,258" fill="none" stroke="#3a2a1a" stroke-width="4" stroke-linecap="round"/>
+      </g>
+    </g>
+
+    <!-- ============ HAPPY ============ -->
+    <g id="state-happy" style="display:none">
+      <ellipse class="pet-shadow" cx="200" cy="340" rx="95" ry="11" fill="#000" opacity="0.2"/>
+      <g class="pet-body-group">
+        <path class="pet-body" d="M115,215 C115,135 285,135 285,215 C285,305 260,328 200,328 C140,328 115,305 115,215 Z" fill="url(#happyShine)" stroke="#a05a00" stroke-width="3"/>
+        <ellipse cx="160" cy="325" rx="19" ry="11" fill="#e8944a" stroke="#a05a00" stroke-width="2"/>
+        <ellipse cx="240" cy="325" rx="19" ry="11" fill="#e8944a" stroke="#a05a00" stroke-width="2"/>
+        <!-- Sparkly eyes -->
+        <g class="pet-eyes">
+          <ellipse class="eye-ball" cx="165" cy="215" rx="14" ry="16" fill="#fff" stroke="#3a1a00" stroke-width="2.5"/>
+          <ellipse class="eye-ball" cx="235" cy="215" rx="14" ry="16" fill="#fff" stroke="#3a1a00" stroke-width="2.5"/>
+          <circle class="pupil" cx="167" cy="218" r="7" fill="#3a1a00"/>
+          <circle class="pupil" cx="237" cy="218" r="7" fill="#3a1a00"/>
+          <circle cx="170" cy="213" r="3" fill="#fff"/>
+          <circle cx="240" cy="213" r="3" fill="#fff"/>
+          <circle cx="162" cy="221" r="1.5" fill="#fff"/>
+          <circle cx="232" cy="221" r="1.5" fill="#fff"/>
+          <rect class="eyelid eyelid-left" x="150" y="199" width="30" height="0" fill="url(#happyShine)" stroke="#a05a00" stroke-width="2"/>
+          <rect class="eyelid eyelid-right" x="220" y="199" width="30" height="0" fill="url(#happyShine)" stroke="#a05a00" stroke-width="2"/>
+        </g>
+        <!-- Big smile -->
+        <path class="pet-mouth" d="M165,265 Q200,300 235,265" fill="#c94a3a" stroke="#3a1a00" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M170,268 Q200,290 230,268" fill="none" stroke="#c94a3a" stroke-width="1"/>
+        <!-- Groomed mustache -->
+        <path d="M155,255 Q180,240 200,252 Q220,240 245,255 Q235,265 220,260 Q210,258 200,260 Q190,258 180,260 Q165,265 155,255 Z" fill="#3a1a00" stroke="#3a1a00" stroke-width="1.5"/>
+        <!-- Cheek blush -->
+        <ellipse cx="140" cy="245" rx="12" ry="7" fill="#ff8a8a" opacity="0.6"/>
+        <ellipse cx="260" cy="245" rx="12" ry="7" fill="#ff8a8a" opacity="0.6"/>
+      </g>
+    </g>
+
+    <!-- ============ GOLDEN ============ -->
+    <g id="state-golden" style="display:none">
+      <ellipse class="pet-shadow" cx="200" cy="340" rx="95" ry="11" fill="#000" opacity="0.25"/>
+      <!-- Confetti hints -->
+      <g class="confetti">
+        <rect x="60" y="70" width="8" height="4" fill="#ff6ab5" transform="rotate(20 64 72)"/>
+        <rect x="330" y="90" width="8" height="4" fill="#6ac2ff" transform="rotate(-30 334 92)"/>
+        <rect x="80" y="140" width="6" height="6" fill="#a8ff6a" transform="rotate(45 83 143)"/>
+        <rect x="325" y="180" width="6" height="6" fill="#ffcf3a" transform="rotate(15 328 183)"/>
+        <circle cx="55" cy="200" r="3" fill="#ff6ab5"/>
+        <circle cx="345" cy="130" r="3" fill="#6ac2ff"/>
+        <circle cx="70" cy="260" r="3" fill="#a8ff6a"/>
+      </g>
+      <!-- Suitcase -->
+      <g class="suitcase" transform="translate(295,255)">
+        <rect x="0" y="10" width="55" height="40" rx="4" fill="#7a4a1a" stroke="#3a2a0a" stroke-width="2.5"/>
+        <rect x="0" y="18" width="55" height="4" fill="#3a2a0a"/>
+        <rect x="22" y="2" width="12" height="12" fill="none" stroke="#3a2a0a" stroke-width="2.5"/>
+        <rect x="5" y="28" width="8" height="10" fill="#c9911a"/>
+        <rect x="18" y="28" width="8" height="10" fill="#c9911a"/>
+        <circle cx="45" cy="35" r="2.5" fill="#ffd24a" stroke="#3a2a0a" stroke-width="1"/>
+      </g>
+      <g class="pet-body-group">
+        <path class="pet-body" d="M115,215 C115,135 285,135 285,215 C285,305 260,328 200,328 C140,328 115,305 115,215 Z" fill="url(#goldShine)" stroke="#8a5a00" stroke-width="3"/>
+        <ellipse cx="160" cy="325" rx="19" ry="11" fill="#c9911a" stroke="#8a5a00" stroke-width="2"/>
+        <ellipse cx="240" cy="325" rx="19" ry="11" fill="#c9911a" stroke="#8a5a00" stroke-width="2"/>
+        <!-- Sunglasses -->
+        <g class="sunglasses">
+          <rect x="140" y="205" width="50" height="22" rx="6" fill="#1a1a1a" stroke="#3a2a00" stroke-width="2"/>
+          <rect x="210" y="205" width="50" height="22" rx="6" fill="#1a1a1a" stroke="#3a2a00" stroke-width="2"/>
+          <line x1="190" y1="212" x2="210" y2="212" stroke="#3a2a00" stroke-width="3"/>
+          <path d="M148,210 Q155,208 165,212" stroke="#fff" stroke-width="2" fill="none" opacity="0.6"/>
+          <path d="M218,210 Q225,208 235,212" stroke="#fff" stroke-width="2" fill="none" opacity="0.6"/>
+        </g>
+        <!-- Confident smile -->
+        <path class="pet-mouth" d="M170,272 Q200,292 230,272" fill="none" stroke="#3a2a00" stroke-width="4" stroke-linecap="round"/>
+        <!-- MASSIVE golden mustache -->
+        <path d="M120,258 Q150,235 180,250 Q195,260 200,255 Q205,260 220,250 Q250,235 280,258 Q275,275 255,270 Q235,265 215,268 Q205,270 200,268 Q195,270 185,268 Q165,265 145,270 Q125,275 120,258 Z"
+              fill="#ffd24a" stroke="#8a5a00" stroke-width="2.5"/>
+        <path d="M135,255 Q155,248 175,254" stroke="#fff6c2" stroke-width="1.5" fill="none" opacity="0.7"/>
+        <path d="M225,254 Q245,248 265,255" stroke="#fff6c2" stroke-width="1.5" fill="none" opacity="0.7"/>
+        <!-- Sparkles on pet -->
+        <g class="pet-sparkles">
+          <path d="M150,170 l3,-8 l3,8 l8,3 l-8,3 l-3,8 l-3,-8 l-8,-3 z" fill="#fff6c2"/>
+          <path d="M260,180 l2,-6 l2,6 l6,2 l-6,2 l-2,6 l-2,-6 l-6,-2 z" fill="#fff6c2"/>
+          <path d="M200,150 l2,-5 l2,5 l5,2 l-5,2 l-2,5 l-2,-5 l-5,-2 z" fill="#fff6c2"/>
+        </g>
+      </g>
+    </g>
+
+  </g>
+</svg>
