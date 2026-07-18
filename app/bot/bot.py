@@ -42,6 +42,7 @@ from dotenv import load_dotenv
 from telegram import (
     Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup,
 )
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler,
     ContextTypes, MessageHandler, filters,
@@ -111,6 +112,29 @@ async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ctx.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
 
 
+async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send with Markdown so [name](tg://user?id=...) mentions ping people;
+    fall back to plain text if Tabi's prose breaks Markdown parsing."""
+    try:
+        await ctx.bot.send_message(chat_id=chat_id, text=text,
+                                   parse_mode=ParseMode.MARKDOWN)
+    except Exception:
+        await ctx.bot.send_message(chat_id=chat_id, text=text)
+
+
+async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Post the pet health PNG to a chat (guilt-trip visual)."""
+    g = state.get_or_create(chat_id)
+    g.pet.refresh_mood()
+    png_bytes = pet.render_pet_png(g)
+    caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
+    await ctx.bot.send_photo(
+        chat_id=chat_id,
+        photo=InputFile(BytesIO(png_bytes), filename="trippet.png"),
+        caption=caption,
+    )
+
+
 async def execute_decision(chat_id: int, d: "supervisor.Decision",
                            ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Carry out what the supervisor decided. The supervisor is the only
@@ -119,7 +143,7 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         return
     if d.action == "deal_cards":
         if d.message:
-            await ctx.bot.send_message(chat_id=chat_id, text=d.message)
+            await _say(chat_id, d.message, ctx)
         await open_hotel_cards(chat_id, ctx)
         supervisor.note_cards_dealt(chat_id)
         return
@@ -131,7 +155,9 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         supervisor.note_flights_posted(chat_id)
         return
     if d.message:
-        await ctx.bot.send_message(chat_id=chat_id, text=d.message)
+        await _say(chat_id, d.message, ctx)
+    if d.show_health:
+        await send_pet_card(chat_id, ctx)
 
 
 load_dotenv()
@@ -169,6 +195,10 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=_webapp_keyboard(g.chat_id, ctx.bot.username, label="🐾 open live pet"),
     )
     await _send_pet(update, ctx)
+    # The pet is the +1 member: hatching immediately opens the planning
+    # conversation (kickoff bypasses the cooldown, always sends).
+    decision = await asyncio.to_thread(supervisor.run_turn, g.chat_id, "kickoff")
+    await execute_decision(g.chat_id, decision, ctx)
 
 
 async def cmd_open(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

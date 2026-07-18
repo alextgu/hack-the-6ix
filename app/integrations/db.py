@@ -232,6 +232,24 @@ def get_profiles(chat_id: int) -> list[dict]:
         return []
 
 
+def known_members(chat_id: int) -> list[dict]:
+    """Everyone who has ever spoken in this chat: [{user_id, name}]. Used for
+    real @-mentions ([name](tg://user?id=...)) — bots can't list group members,
+    so the chat log IS the member registry."""
+    d = _db()
+    if d is None:
+        return []
+    try:
+        rows = d.chat_log.aggregate([
+            {"$match": {"chat_id": chat_id, "user_id": {"$ne": "unknown"}}},
+            {"$group": {"_id": "$user_id", "name": {"$last": "$name"}}},
+        ])
+        return [{"user_id": r["_id"], "name": r["name"]} for r in rows]
+    except Exception as e:
+        log.warning("known_members failed: %s", e)
+        return []
+
+
 def active_chats(hours: int = 72) -> list[int]:
     """Chats with any message in the window — the heartbeat's audience."""
     d = _db()
