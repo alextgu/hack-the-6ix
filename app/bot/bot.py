@@ -58,6 +58,7 @@ from app.integrations import booking
 from app.integrations import db
 from app.integrations import flights
 from app.integrations import elevenlabs
+from app.integrations import telegram_avatar
 from app.agents import supervisor
 
 
@@ -129,10 +130,23 @@ async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
                 continue
 
 
+async def _sync_avatar(mood: str, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Best-effort: swap the bot's own profile photo to match `mood`. Deduped
+    inside telegram_avatar (no-ops if this mood is already set), so it's safe
+    to call on every mood refresh. Never raises — a Telegram hiccup here must
+    not break the chat flow. NOTE: this is the bot ACCOUNT's avatar, shared
+    across every chat it's in (see telegram_avatar.py)."""
+    try:
+        await asyncio.to_thread(telegram_avatar.set_avatar_for_mood, ctx.bot.token, mood)
+    except Exception as e:
+        log.warning("avatar sync failed (mood=%s): %s", mood, e)
+
+
 async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Post the pet health PNG to a chat (guilt-trip visual)."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
+    await _sync_avatar(g.pet.mood, ctx)
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
@@ -234,6 +248,7 @@ async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
     await asyncio.to_thread(state.persist_pet, g)
+    await _sync_avatar(g.pet.mood, ctx)
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
@@ -407,6 +422,7 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         g = state.get_or_create(chat_id)
         g.pet.refresh_mood()
         await asyncio.to_thread(state.persist_pet, g)
+        await _sync_avatar(g.pet.mood, ctx)
         # If live prices just pushed the pet to death's door, let it speak once.
         await maybe_speak_deathbed(chat_id, ctx)
 
