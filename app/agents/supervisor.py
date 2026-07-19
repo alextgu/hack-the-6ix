@@ -44,9 +44,34 @@ ATTEMPT_COOLDOWN_S = 10        # min gap between LLM turns even when Tabi stays 
 HEARTBEAT_SILENCE_S = 5 * 60   # quiet this long + plan incomplete → Tabi pushes
 NUDGE_MENTAL_DECAY = 7         # each ignored nudge hurts the pet (guilt fuel)
 
+# Escalating gaps between UNANSWERED nudges. chat_log only records human
+# messages, so "how long has it been quiet?" never accounts for the pet's own
+# nudges — without a backoff the heartbeat re-fires every tick and the pet
+# answers the same message forever (observed live: 5 replies to one message in
+# 14 minutes, alternating between "locking this in" and "which month?").
+# A real person who got no reply waits longer before asking again.
+NUDGE_BACKOFF_S = [5 * 60, 15 * 60, 45 * 60, 2 * 60 * 60]
+
 _last_sent_at: dict[int, float] = {}
 _last_attempt_at: dict[int, float] = {}
 _last_profiled_n: dict[int, int] = {}
+_unanswered_nudges: dict[int, int] = {}
+
+
+def nudge_gap_s(chat_id: int) -> float:
+    """How long the pet must stay quiet before nudging again, given how many
+    nudges have already gone unanswered."""
+    n = _unanswered_nudges.get(chat_id, 0)
+    return NUDGE_BACKOFF_S[min(n, len(NUDGE_BACKOFF_S) - 1)]
+
+
+def note_nudge_sent(chat_id: int) -> None:
+    _unanswered_nudges[chat_id] = _unanswered_nudges.get(chat_id, 0) + 1
+
+
+def note_user_spoke(chat_id: int) -> None:
+    """A human replied — the pet earned its way back to a short leash."""
+    _unanswered_nudges.pop(chat_id, None)
 
 
 def can_speak(chat_id: int) -> bool:
@@ -478,7 +503,12 @@ Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
     cands = sorted((c for c in out.get("candidates", []) if c.get("text")),
                    key=lambda c: -(c.get("motivation") or 0))
     best = cands[0] if cands else None
-    always = s["trigger"] in ("kickoff", "heartbeat") or s.get("urgent")
+    # Only kickoff and genuine urgency bypass the motivation bar. Heartbeats
+    # used to be in here, which meant a quiet chat got a message every tick no
+    # matter how little the model had to add — that's how the pet ended up
+    # re-answering one message five times, contradicting itself as it went.
+    # A nudge now has to actually clear the bar like any other contribution.
+    always = s["trigger"] == "kickoff" or s.get("urgent")
     send = bool(best) and (always or (best.get("motivation") or 0) >= MOTIVATION_THRESHOLD)
 
     message = best.get("text") if (best and send) else None
@@ -621,6 +651,7 @@ def reset_chat(chat_id: int) -> None:
     _last_sent_at.pop(chat_id, None)
     _last_attempt_at.pop(chat_id, None)
     _last_profiled_n.pop(chat_id, None)
+    _unanswered_nudges.pop(chat_id, None)
 
 
 def try_lock_flight(chat_id: int, text: str) -> Optional[tuple[str, bool]]:

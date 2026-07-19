@@ -376,8 +376,13 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
     if d.action == "post_flights":
         opts = await asyncio.to_thread(flights.get_options, chat_id,
                                        g.trip.city, g.trip.budget_per_person)
-        text = (d.message + "\n\n" if d.message else "") + flights.render_options(opts)
-        msg = await ctx.bot.send_message(chat_id=chat_id, text=text)
+        # Tabi's line goes through _say so [name](tg://user?id=…) renders as a
+        # real mention. Concatenating it onto the flight list and sending raw
+        # skipped parse_mode entirely and printed the markup literally in chat.
+        if d.message:
+            await _say(chat_id, d.message, ctx)
+        msg = await ctx.bot.send_message(chat_id=chat_id,
+                                         text=flights.render_options(opts))
         supervisor.note_flights_posted(chat_id, opts)
         await _green_react(ctx, chat_id, msg.message_id)  # a 🌱 option is on the table
         return
@@ -463,10 +468,11 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await asyncio.to_thread(set_muted, g.chat_id, False)  # /start always wakes
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
-        "hi. i'm the pet. i live here now.\n"
-        "start talking about the japan trip. every real decision heals me. "
-        "silence and rising prices kill me. try /health any time. "
-        "dev: /scrub 0..6 to fast-forward, /commit to book.",
+        # Deliberately NOT a greeting: the kickoff turn right below is the pet
+        # introducing itself in character. This used to say "hi. i'm the pet."
+        # and then Tabi immediately said hi again — two hellos, back to back.
+        "every real decision heals me. silence and rising prices kill me.\n"
+        "/health any time · dev: /scrub 0..6 to fast-forward, /commit to book.",
         reply_markup=_webapp_keyboard(g.chat_id, ctx.bot.username, label="🐾 open live pet"),
     )
     await _send_pet(update, ctx)
@@ -698,6 +704,7 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = str(update.effective_user.id) if update.effective_user else "unknown"
     await asyncio.to_thread(db.log_chat_message, chat_id, user_id, speaker,
                             update.message.text, update.message.message_id)
+    supervisor.note_user_spoke(chat_id)   # someone replied → short leash again
 
     # Asking Tabi directly ("how much have we saved?", "carbon footprint?")
     # answers with the ledger — same card as /saved, no LLM round-trip needed.
