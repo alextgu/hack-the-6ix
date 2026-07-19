@@ -71,22 +71,29 @@ def completer_flash(run_id: str):
     return _c
 
 
-def run_eval(completer, n: int | None = None, tag: str = "") -> dict:
+def run_eval(completer, n: int | None = None, tag: str = "",
+             dump: str | None = None) -> dict:
     rows = [json.loads(l) for l in EVAL.read_text().splitlines() if l.strip()]
     if n:
         rows = rows[:n]
     agg = {"valid": 0, "f1": 0.0, "voice": 0, "len": 0, "errors": 0}
+    per_example: list[dict] = []
     for i, r in enumerate(rows):
         gold = str((_extract_json(r["output"]) or {}).get("message", ""))
         try:
             out = completer(r["input"])
-        except Exception:
+        except Exception as e:
             agg["errors"] += 1
+            per_example.append({"i": i, "input": r["input"], "gold": gold,
+                                "error": repr(e)[:200]})
             continue
         msg = str(((_extract_json(out) or {}).get("message")) or "").strip()
         m = _metrics(msg, gold)
         agg["valid"] += m["valid"]; agg["f1"] += m["f1"]
         agg["voice"] += m["voice"]; agg["len"] += m["len"]
+        # Per-example record — the artifact anyone can open and re-score.
+        per_example.append({"i": i, "input": r["input"], "gold": gold,
+                            "raw": out, "message": msg, "metrics": m})
         if (i + 1) % 10 == 0:
             print(f"    …{i+1}/{len(rows)}", file=sys.stderr)
     k = len(rows) - agg["errors"] or 1
@@ -95,6 +102,15 @@ def run_eval(completer, n: int | None = None, tag: str = "") -> dict:
            "gold_f1": round(agg["f1"] / k, 4),
            "voice_pct": round(100 * agg["voice"] / k, 1),
            "avg_len": round(agg["len"] / k)}
+    if dump:
+        dp = Path(dump)
+        dp.parent.mkdir(parents=True, exist_ok=True)
+        with dp.open("w") as f:
+            # Line 1 = aggregate summary; remaining lines = one per example.
+            f.write(json.dumps({"summary": res}) + "\n")
+            for rec in per_example:
+                f.write(json.dumps(rec) + "\n")
+        print(f"    wrote {len(per_example)} rows → {dp}", file=sys.stderr)
     print(json.dumps(res))
     return res
 
@@ -104,6 +120,8 @@ if __name__ == "__main__":
     ap.add_argument("--model", required=True, help="gemini | flash:<run-id>")
     ap.add_argument("--n", type=int, default=None)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--dump", default=None,
+                    help="write per-example completions+scores to this .jsonl")
     a = ap.parse_args()
     try:
         from dotenv import load_dotenv
@@ -111,4 +129,4 @@ if __name__ == "__main__":
     except ImportError:
         pass
     comp = completer_gemini if a.model == "gemini" else completer_flash(a.model.split(":", 1)[1])
-    run_eval(comp, a.n, a.tag or a.model)
+    run_eval(comp, a.n, a.tag or a.model, a.dump)
