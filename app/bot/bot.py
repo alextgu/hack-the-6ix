@@ -320,6 +320,30 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
 _TRIP_COIN_IMG = Path(__file__).resolve().parents[2] / "assets" / "trip_coin.jpeg"
 
 
+def _human_since(iso: str | None) -> str:
+    """Rough human duration from an ISO timestamp to now (coin 'time to book').
+    Returns '' on any problem — the field is optional."""
+    if not iso:
+        return ""
+    try:
+        from datetime import datetime, timezone
+        start = datetime.fromisoformat(iso)
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        secs = (datetime.now(timezone.utc) - start).total_seconds()
+        if secs < 3600:
+            n = max(1, int(secs // 60)); unit = "minute"
+        elif secs < 86400:
+            n = int(secs // 3600); unit = "hour"
+        elif secs < 86400 * 14:
+            n = int(secs // 86400); unit = "day"
+        else:
+            n = int(secs // (86400 * 7)); unit = "week"
+        return f"{n} {unit}{'s' if n != 1 else ''}"
+    except Exception:
+        return ""
+
+
 async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
                               ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Mint the devnet souvenir coin, then post the art + Explorer link. Fully
@@ -330,12 +354,35 @@ async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
         name = solana_coin.format_trip_name(
             getattr(trip, "city", None),
             getattr(dates, "start", None), getattr(dates, "end", None))
+        # Souvenir metadata — each field independently fail-open, so a missing
+        # signal just drops that attribute (never blocks the mint).
+        location = getattr(trip, "city", None) or ""
+        try:
+            time_spent = _human_since(await asyncio.to_thread(db.first_message_at, chat_id))
+        except Exception:
+            time_spent = ""
+        try:
+            slacker = await asyncio.to_thread(db.least_active_member, chat_id) or ""
+        except Exception:
+            slacker = ""
         result = await asyncio.to_thread(
-            solana_coin.mint_trip_coin, {"name": name, "booking_url": booking_url or ""}, chat_id)
+            solana_coin.mint_trip_coin,
+            {"name": name, "booking_url": booking_url or "",
+             "location": location, "time_spent": time_spent, "slacker": slacker},
+            chat_id)
         if not result:
             return  # skipped/failed silently — booking already complete
         caption = (f"🎉 minted your Japan Trip Coin — {result['name']}\n"
                    f"you actually booked it.\n{result['explorer_url']}")
+        extras = []
+        if result.get("location"):
+            extras.append(f"📍 {result['location']}")
+        if result.get("time_spent"):
+            extras.append(f"⏱️ booked in {result['time_spent']}")
+        if result.get("slacker"):
+            extras.append(f"🛌 did the least: {result['slacker']}")
+        if extras:
+            caption += "\n\n" + "  ·  ".join(extras)
         try:
             if _TRIP_COIN_IMG.exists():
                 await ctx.bot.send_photo(

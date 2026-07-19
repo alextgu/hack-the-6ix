@@ -46,6 +46,16 @@ async function main() {
   const ata = await getOrCreateAssociatedTokenAccount(conn, treasury, mint, treasury.publicKey);
   const signature = await mintTo(conn, treasury, mint, ata.address, treasury, 1);
 
+  // Souvenir metadata attributes — trait_type/value pairs (Metaplex shape),
+  // omitting any that weren't supplied.
+  const attributes = [
+    ["Destination", process.env.COIN_LOCATION],
+    ["Time to book", process.env.COIN_TIME_SPENT],
+    ["Did the least work", process.env.COIN_SLACKER],
+  ]
+    .filter(([, v]) => (v || "").trim())
+    .map(([trait_type, value]) => ({ trait_type, value: value.trim() }));
+
   out({
     ok: true,
     cluster,
@@ -56,6 +66,7 @@ async function main() {
     name: process.env.COIN_NAME || "",
     booking_url: process.env.COIN_BOOKING_URL || "",
     image_url: process.env.TRIP_COIN_IMAGE_URL || "",
+    attributes,
   });
 }
 

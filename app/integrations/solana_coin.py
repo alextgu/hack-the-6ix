@@ -77,11 +77,18 @@ def mint_trip_coin(trip: dict, group_id: int) -> Optional[dict]:
         return None
     name = str((trip or {}).get("name") or "Japan Trip")
     booking_url = str((trip or {}).get("booking_url") or "")
+    # Souvenir metadata attributes — all optional, empty string = omitted.
+    location = str((trip or {}).get("location") or "")
+    time_spent = str((trip or {}).get("time_spent") or "")
+    slacker = str((trip or {}).get("slacker") or "")
     try:
         env = {
             **os.environ,
             "COIN_NAME": name,
             "COIN_BOOKING_URL": booking_url,
+            "COIN_LOCATION": location,
+            "COIN_TIME_SPENT": time_spent,
+            "COIN_SLACKER": slacker,
             "SOLANA_CLUSTER": os.environ.get("SOLANA_CLUSTER", "devnet"),
         }
         proc = subprocess.run(
@@ -106,6 +113,9 @@ def mint_trip_coin(trip: dict, group_id: int) -> Optional[dict]:
         "signature": res.get("signature"),
         "name": name,
         "booking_url": booking_url,
+        "location": location or None,
+        "time_spent": time_spent or None,
+        "slacker": slacker or None,
         "image_url": os.environ.get("TRIP_COIN_IMAGE_URL", "").strip() or None,
     }
 
