@@ -58,6 +58,72 @@ _last_profiled_n: dict[int, int] = {}
 _unanswered_nudges: dict[int, int] = {}
 
 
+# ─── Ask memory ─────────────────────────────────────────────────────────────
+# The pet used to ask "which month?", forget, lock the trip in anyway, then ask
+# "which month?" again — because every turn is a fresh LLM call whose only
+# memory is the raw transcript. Persisted in trip_plans.open_asks as
+# {field: {"count": n, "last": "<what it said>"}} so the next turn KNOWS it has
+# already chased this, and how many times. Survives restarts; Mongo-optional.
+ASK_FIELDS = {"city", "dates", "budget", "group_size"}
+ASK_ESCALATE_AT = 2   # asked this many times with no answer → stop repeating
+
+
+def _open_asks(plan: dict) -> dict:
+    raw = plan.get("open_asks") or {}
+    return {k: v for k, v in raw.items() if k in ASK_FIELDS and isinstance(v, dict)}
+
+
+def note_ask(chat_id: int, plan: dict, field: str, text: str) -> None:
+    """Record that the pet just chased `field`."""
+    if field not in ASK_FIELDS:
+        return
+    asks = _open_asks(plan)
+    prev = asks.get(field) or {}
+    asks[field] = {"count": int(prev.get("count", 0)) + 1, "last": (text or "")[:160]}
+    db.update_plan(chat_id, {"open_asks": asks})
+
+
+def clear_answered_asks(chat_id: int, plan: dict, trip) -> dict:
+    """Drop asks for fields the group has since actually answered. Without this
+    the pet keeps being told "you already asked for budget" long after someone
+    gave it a budget."""
+    asks = _open_asks(plan)
+    if not asks:
+        return asks
+    known = {
+        "city": bool(getattr(trip, "city", None)),
+        "dates": bool(getattr(trip, "dates", None) and trip.dates.start),
+        "budget": getattr(trip, "budget_per_person", None) is not None,
+        "group_size": bool(getattr(trip, "group_size", None)),
+    }
+    remaining = {k: v for k, v in asks.items() if not known.get(k)}
+    if remaining != asks:
+        db.update_plan(chat_id, {"open_asks": remaining})
+    return remaining
+
+
+def render_ask_memory(asks: dict) -> str:
+    """The prompt fragment. Explicitly tells the pet what NOT to do again."""
+    if not asks:
+        return "ALREADY ASKED: nothing yet — you haven't chased anyone for a field."
+    lines = []
+    for field, v in sorted(asks.items()):
+        n = int(v.get("count", 1))
+        last = (v.get("last") or "").strip()
+        if n >= ASK_ESCALATE_AT:
+            lines.append(
+                f'  - {field}: asked {n}x, still unanswered. STOP asking the same '
+                f'way. Either @ one specific person and make it trivially easy to '
+                f'answer, propose a concrete default they can veto ("march 14 '
+                f'unless someone objects"), or drop it and move the plan forward '
+                f'on what you DO have. Last attempt: "{last}"')
+        else:
+            lines.append(f'  - {field}: asked once already. Do not re-ask in the '
+                         f'same words. Last attempt: "{last}"')
+    return ("ALREADY ASKED (you have chased these — repeating yourself is the "
+            "single worst thing you can do here):\n" + "\n".join(lines))
+
+
 def nudge_gap_s(chat_id: int) -> float:
     """How long the pet must stay quiet before nudging again, given how many
     nudges have already gone unanswered."""
@@ -194,6 +260,8 @@ class AgentState(TypedDict, total=False):
     reply_to: Optional[int]  # telegram message_id to thread the reply onto
     pending: list         # unacknowledged contributions (from trip_plans)
     harvest_id: Optional[str]  # id of the logged messenger record (flywheel)
+    asks_for: Optional[str]    # trip field this message chases (ask memory)
+    urgent: bool
 
 
 @dataclass
@@ -425,6 +493,9 @@ def messenger(s: AgentState) -> AgentState:
     profiles = json.dumps(s["profiles"], default=str)[:1500]
     members = json.dumps(db.known_members(s["chat_id"]))[:600]
     pending = json.dumps(s.get("pending", []))[:800]
+    # Drop asks the group has since answered, then show what's still open.
+    asks_now = clear_answered_asks(s["chat_id"], s["plan"], g.trip)
+    ask_memory = render_ask_memory(asks_now)
     already_flights = bool(s["plan"].get("flights_posted"))
     saved = green.totals(s["chat_id"])["total_kg"]
     green_line = (f"GREEN LEDGER: the group has avoided {saved} kg CO2e so far by "
@@ -470,6 +541,7 @@ Group members (for mentions): {members}
 To @ someone use a Telegram mention: [their name](tg://user?id=<user_id>).
 Known per-person facts: {profiles}
 UNACKNOWLEDGED contributions you still owe a response to: {pending}
+{ask_memory}
 Recent chat (each line has its telegram message id):
 {convo}
 
@@ -494,8 +566,13 @@ If a candidate responds to one specific message, set reply_to to that
 message id. List any pending contribution ids/summaries the candidate
 answers in "acknowledges".
 
+Set "asks_for" to the field a candidate is chasing — one of city, dates,
+budget, group_size — or null if it isn't asking for a trip field. Be honest:
+this is what stops you asking the same question tomorrow.
+
 Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
-"kind": str, "reply_to": int|null, "acknowledges": [str]}}],
+"kind": str, "reply_to": int|null, "acknowledges": [str],
+"asks_for": "city"|"dates"|"budget"|"group_size"|null}}],
 "action": "none"|"post_flights"|"deal_cards", "show_health": bool, "why": str}}""",
                     prefer_freesolo=True)  # trained messenger model when FREESOLO set; else Gemini
 
@@ -538,6 +615,7 @@ Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
     harvest_id = _harvest(s, out.get("candidates", []), best) if (best and message) else None
     return {**s, "send": send, "message": message, "action": action,
             "reply_to": reply_to, "show_health": bool(out.get("show_health")),
+            "asks_for": (best or {}).get("asks_for"),
             "harvest_id": harvest_id, "done": s["done"] + ["messenger"]}
 
 
@@ -634,13 +712,18 @@ def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> De
             g.pet.mental = max(0, g.pet.mental - NUDGE_MENTAL_DECAY)
             g.pet.refresh_mood()
             state.persist_pet(g)
-        return _gate(chat_id, Decision(send=out.get("send", False),
-                                       message=out.get("message"),
-                                       action=out.get("action", "none"),
-                                       show_health=bool(out.get("show_health")),
-                                       reply_to=out.get("reply_to"),
-                                       harvest_id=out.get("harvest_id")),
-                     urgent=urgent or trigger == "kickoff")
+        d = _gate(chat_id, Decision(send=out.get("send", False),
+                                    message=out.get("message"),
+                                    action=out.get("action", "none"),
+                                    show_health=bool(out.get("show_health")),
+                                    reply_to=out.get("reply_to"),
+                                    harvest_id=out.get("harvest_id")),
+                  urgent=urgent or trigger == "kickoff")
+        # Record the ask ONLY once the gate has committed to sending it —
+        # the messenger drafts every turn and the cooldown swallows most.
+        if d.send and d.message and out.get("asks_for"):
+            note_ask(chat_id, plan, str(out["asks_for"]), d.message)
+        return d
     except Exception as e:
         log.warning("run_turn failed (chat=%s): %s", chat_id, e)
         return Decision()
