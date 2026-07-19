@@ -343,17 +343,21 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
     _deathbed_last_spoken[chat_id] = time.monotonic()
     await speak_pet(
         chat_id,
+        # These are the lines /dead and the deathbed moment actually SPEAK, so
+        # they carry the same voice as everything else — one or two Japanese
+        # words, still readable to someone who speaks none. Romaji only: a
+        # voice model has to read them aloud.
         random.choice([
-            "i'm fading here... the prices keep climbing and nobody's deciding. "
-            "please — just book something.",
-            "okay. real talk. i don't think i've got another week of this in me. "
-            "somebody pick something.",
-            "the hotels got more expensive again. i got smaller again. "
-            "you see how this ends, right?",
-            "i'm not doing the bit anymore. i'm genuinely running out. "
-            "book anything and i'll be fine.",
-            "this is the part where i'd normally be funny about it. "
-            "i can't. please just choose.",
+            "i'm fading here... the prices keep climbing and nobody is deciding. "
+            "onegai — just book something.",
+            "okay. real talk. i don't think i have another week of this in me. "
+            "somebody pick something, onegai.",
+            "the hotels got more expensive again. i got smaller again. yabai. "
+            "you see how this ends, ne?",
+            "i'm not doing the bit anymore. mou, i am genuinely running out. "
+            "book anything and i will be fine.",
+            "this is the part where i would normally be funny about it. "
+            "gomen ne. i can't. please just choose.",
         ]),
         ctx, mood="dying", physical=g.pet.physical,
     )

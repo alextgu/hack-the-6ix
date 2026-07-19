@@ -51,13 +51,36 @@ def _voice_for(mood: Optional[str], physical: Optional[int]) -> str:
     return alive or legacy or dying
 
 
+# Delivery, not casting. The pet is ONE character — a Japanese girl — so the
+# voice id stays the same whether she's thriving or dying; what changes is how
+# she performs. Swapping voice ids by mood made her sound like two different
+# people, which is worse than sounding tired.
+#
+# Lower stability = more pitch and pace variance (emotional, unsteady). Higher
+# style pushes expressiveness. A dying pet should waver; a healthy one is
+# bright and even.
+_SETTINGS_ALIVE = {"stability": 0.42, "similarity_boost": 0.80,
+                   "style": 0.55, "use_speaker_boost": True}
+_SETTINGS_DYING = {"stability": 0.22, "similarity_boost": 0.75,
+                   "style": 0.80, "use_speaker_boost": True}
+
+
+def _settings_for(mood: Optional[str], physical: Optional[int]) -> dict:
+    is_dying = mood in _DYING_MOODS or (physical is not None and physical < _DYING_PHYSICAL)
+    return _SETTINGS_DYING if is_dying else _SETTINGS_ALIVE
+
+
 def _tts(text: str, voice: str, api_key: str, model_id: str,
-         output_format: Optional[str], accept: str) -> Optional[bytes]:
+         output_format: Optional[str], accept: str,
+         settings: Optional[dict] = None) -> Optional[bytes]:
     """One synthesis call. `output_format` None → the API's mp3 default."""
     url = ENDPOINT.format(voice_id=voice)
     if output_format:
         url += f"?output_format={output_format}"
-    body = json.dumps({"text": text, "model_id": model_id}).encode("utf-8")
+    payload = {"text": text, "model_id": model_id}
+    if settings:
+        payload["voice_settings"] = settings
+    body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url, data=body, method="POST",
         headers={"xi-api-key": api_key, "Content-Type": "application/json",
@@ -87,7 +110,8 @@ def text_to_speech(
     voice = (voice_id or _voice_for(mood, physical)).strip()
     if not (api_key and voice and text):
         return None
-    return _tts(text, voice, api_key, model_id, None, "audio/mpeg")
+    return _tts(text, voice, api_key, model_id, None, "audio/mpeg",
+                _settings_for(mood, physical))
 
 
 # Telegram voice notes must be OGG/Opus. ElevenLabs can return exactly that if
@@ -110,7 +134,8 @@ def text_to_opus(
     voice = (voice_id or _voice_for(mood, physical)).strip()
     if not (api_key and voice and text):
         return None
-    data = _tts(text, voice, api_key, model_id, OPUS_FORMAT, "audio/ogg")
+    data = _tts(text, voice, api_key, model_id, OPUS_FORMAT, "audio/ogg",
+                _settings_for(mood, physical))
     if data and data[:4] != b"OggS":
         log.warning("expected an OGG container, got %r — discarding", data[:4])
         return None
