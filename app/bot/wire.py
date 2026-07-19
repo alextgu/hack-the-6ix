@@ -10,6 +10,7 @@ consume later without needing to re-parse notes strings.
 from __future__ import annotations
 import asyncio
 import logging
+import re
 from collections import defaultdict, deque
 from datetime import date, datetime, timezone
 from typing import Optional
@@ -37,13 +38,44 @@ _last_consensus_at:   dict[int, float] = {}
 _last_stay22_at:      dict[int, float] = {}
 _blockers:            dict[int, list[str]] = defaultdict(list)
 _last_reconciled:     dict[int, dict]  = {}
+_signal_pending:      set[int]         = set()   # chats with an unextracted answer
 
 
 # ─── Public: called by the bot's message handler ────────────────────────────
+# A message that plausibly carries a trip constraint must not sit in the buffer
+# waiting for two more messages to show up. Live failure: Kaamil answered the
+# pet's "name one city" with exactly "tokyo" — one message, so consensus never
+# ran, trip.city stayed None, and five minutes later the pet nagged for the
+# city it had just been given ("tokyo is still just a rumor"). The model even
+# said so in its own reasoning: "Even though Tokyo was mentioned, the system
+# still lists 'city' as missing".
+#
+# Deliberately loose: a false positive costs one extraction call, a false
+# negative makes the pet look like it wasn't listening.
+_SIGNAL_RE = re.compile(
+    r"\b(tokyo|kyoto|osaka|sapporo|fukuoka|nagoya|okinawa|hiroshima|nara|kobe"
+    r"|yokohama|hakone|nikko|kanazawa|sendai|niseko|hakodate|shibuya|shinjuku"
+    r"|japan)\b"
+    r"|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b"
+    r"|\b(spring|summer|autumn|fall|winter|weekend|week|month|new year)\b"
+    r"|\$\s?\d|\d\s?k\b|\b\d{3,}\b"                      # money
+    r"|\bi'?m in\b|\bcount me in\b|\bi'?m down\b|\bdown for\b|\bworks for me\b"
+    r"|\byes\b|\byeah\b|\bsure\b|\bok(ay)?\b",           # agreement
+    re.IGNORECASE)
+
+
+def carries_signal(text: str) -> bool:
+    """Does this message plausibly contain a city/date/budget/commitment?"""
+    return bool(_SIGNAL_RE.search(text or ""))
+
+
 def note_message(chat_id: int, sender: str, text: str) -> None:
     """Buffer one incoming message. Cheap — safe on every message."""
     _messages[chat_id].append({"sender": sender, "text": text})
     _new_msg_count[chat_id] += 1
+    if carries_signal(text):
+        # Count it as enough on its own so the next maybe_process extracts.
+        _signal_pending.add(chat_id)
 
 
 def reset_chat(chat_id: int) -> None:
@@ -51,6 +83,7 @@ def reset_chat(chat_id: int) -> None:
     for store in (_messages, _new_msg_count, _last_consensus_at,
                   _last_stay22_at, _blockers, _last_reconciled):
         store.pop(chat_id, None)
+    _signal_pending.discard(chat_id)
 
 
 def get_blockers(chat_id: int) -> list[str]:
@@ -68,6 +101,7 @@ async def maybe_process(chat_id: int) -> Optional[dict]:
         return None
     _last_consensus_at[chat_id] = _now()
     _new_msg_count[chat_id] = 0
+    _signal_pending.discard(chat_id)
 
     msgs = list(_messages[chat_id])
     if not msgs:
@@ -96,7 +130,11 @@ def _now() -> float:
 
 
 def _should_run_consensus(chat_id: int) -> bool:
-    if _new_msg_count[chat_id] < CONSENSUS_MIN_MESSAGES:
+    """Chatter waits for CONSENSUS_MIN_MESSAGES; a message that looks like an
+    actual answer jumps the queue. The interval guard still applies either way,
+    so this can't turn into an extraction call per keystroke."""
+    enough = _new_msg_count[chat_id] >= CONSENSUS_MIN_MESSAGES
+    if not enough and chat_id not in _signal_pending:
         return False
     last = _last_consensus_at.get(chat_id)
     if last is not None and (_now() - last) < CONSENSUS_MIN_INTERVAL:

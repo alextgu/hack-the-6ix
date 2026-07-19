@@ -149,9 +149,20 @@ def _focus_line(s: AgentState) -> str:
     rest = [m for m in missing if m != f]
     tail = (f" You also still need {', '.join(rest)} — but NOT in this message. "
             f"One thing at a time." if rest else "")
+    # Extraction lags the chat: someone answers, and for a few seconds the field
+    # still reads as missing. Without this escape hatch the pet argues with its
+    # own transcript — it told Kaamil "tokyo is still just a rumor" minutes
+    # after Kaamil said tokyo, and its own reasoning admitted the contradiction
+    # ("Even though Tokyo was mentioned, the system still lists city missing").
+    # Trust the humans over the state when they plainly disagree.
     return (f"FOCUS — this message chases exactly ONE thing: {f.upper()} "
             f"({_FOCUS_HOW[f]}). Do not mention or ask about anything else."
-            f"{tail}")
+            f"{tail}\n"
+            f"BUT: if the recent chat shows someone ALREADY answered {f}, do "
+            f"NOT ask again — the extractor is just behind. Say it back to them "
+            f"as settled ('{f} is locked') and move to the next thing. Asking "
+            f"for something they can see they just gave you is the single "
+            f"fastest way to look broken.")
 
 
 def _member_names(members) -> list[str]:
@@ -185,14 +196,23 @@ def _target_line(chat_id: int, members) -> str:
     starts ignoring a bot."""
     names = _member_names(members)
     last = _last_target.get(chat_id)
+    # Acknowledging and asking are different jobs. Collapsing them made the pet
+    # answer only whoever spoke last: Ryan said "yea i'm down for tokyo too"
+    # and Lucas said "i'm in" ten seconds apart, and the reply was just "Lucas
+    # is in" — Ryan got dropped on the floor for agreeing.
+    ack = ("ACKNOWLEDGE: if several people just chimed in, name EVERY one of "
+           "them in the same breath ('ryan and lucas are in') before you ask "
+           "anything. Skipping someone who just agreed is worse than saying "
+           "nothing — they spoke up and got ignored.\n")
     if not names:
-        return "WHO: nobody has spoken yet — address the group, name no one."
+        return ack + "WHO: nobody has spoken yet — address the group, name no one."
     if last and len(names) > 1:
         others = [n for n in names if n != last]
-        return (f"WHO: you asked {last} last time. Ask someone else now — "
-                f"try {others[0]}. Going back to the same person twice in a row "
-                f"is how a group chat learns to ignore you.")
-    return (f"WHO: pick ONE person from {names} and ask only them. "
+        return (ack + f"WHO to ASK: you aimed the last question at {last}. Aim "
+                f"this one at someone else — try {others[0]}. Going back to the "
+                f"same person twice in a row is how a group chat learns to "
+                f"ignore you.")
+    return (ack + f"WHO to ASK: aim the question at ONE person from {names}. "
             "A question aimed at everyone gets answered by no one.")
 
 
