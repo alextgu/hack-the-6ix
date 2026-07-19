@@ -1,0 +1,14 @@
+# Hosts the Telegram Mini App (webapp/) as a static site on Netlify.
+# The app calls the backend with relative /api/* paths, so we proxy those to
+# the live Cloud Run FastAPI service — the static site then works unchanged.
+[build]
+  publish = "webapp"
+  command = ""
+
+# Server-side proxy (status = 200 = rewrite, not a redirect): every /api/* hit
+# on the Netlify site is fetched from the backend and returned as same-origin.
+[[redirects]]
+  from = "/api/*"
+  to = "https://trippet-69987838202.us-central1.run.app/api/:splat"
+  status = 200
+  force = true
