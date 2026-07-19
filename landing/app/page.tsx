@@ -271,7 +271,7 @@ export default function Home() {
           </Reveal>
           <Reveal delay={100}>
             <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed sm:text-lg" style={{ color: "var(--muted)" }}>
-              This is where we open Telegram and plan a real trip. Watch the walkthrough:
+              This is where we open Telegram and plan a real trip. Watch the video:
             </p>
           </Reveal>
           <Reveal delay={160} className="mt-8">
@@ -289,7 +289,7 @@ export default function Home() {
               >
                 <iframe
                   src={DEMO_VIDEO}
-                  title="Tabi demo walkthrough"
+                  title="Tabi demo video"
                   className="absolute inset-0 h-full w-full border-0"
                   allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
@@ -340,20 +340,73 @@ export default function Home() {
 
             <Reveal delay={260}>
               <div
-                className="flex h-full flex-col justify-center rounded-2xl p-7 text-center"
+                className="flex h-full flex-col rounded-2xl p-6"
                 style={{
                   background: "var(--card-peach)",
                   border: "1px solid rgba(107,63,40,0.14)",
                   boxShadow: "var(--sheen), var(--shadow)",
                 }}
               >
-                <div className="text-xs uppercase tracking-[0.24em]" style={{ color: "var(--muted)" }}>
-                  the group&apos;s shared ledger
+                {/* header — leaf badge + label */}
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-base"
+                    style={{ background: "var(--card-mint)", border: "1px solid rgba(47,107,74,0.2)" }}
+                    aria-hidden
+                  >
+                    🌱
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--card-peach-ink)" }}>
+                    the group&apos;s shared ledger
+                  </span>
                 </div>
-                <div className="ds-title mt-4 text-2xl leading-tight sm:text-3xl" style={{ color: "var(--card-coral-ink)" }}>
-                  142 miles not driven
+
+                {/* hero number */}
+                <div className="mt-5 flex items-baseline gap-3">
+                  <span className="ds-title text-6xl leading-none sm:text-7xl" style={{ color: "var(--card-coral-ink)" }}>
+                    142
+                  </span>
+                  <span className="ds-title text-base leading-tight sm:text-lg" style={{ color: "var(--fg)" }}>
+                    miles<br />not driven
+                  </span>
                 </div>
-                <div className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
+
+                {/* the road — a car's worth of driving, skipped */}
+                <div className="relative mt-4 h-6" aria-hidden>
+                  <div
+                    className="absolute inset-x-0 top-1/2 h-0"
+                    style={{ borderTop: "2px dashed rgba(107,63,40,0.35)" }}
+                  />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 text-sm" style={{ filter: "grayscale(1)", opacity: 0.55 }}>🚗</span>
+                  <span className="absolute right-0 top-1/2 -translate-y-1/2 text-sm">🚄</span>
+                </div>
+
+                {/* ledger entries — every green choice, counted */}
+                <div className="mt-4 flex flex-col gap-2 text-sm" style={{ color: "var(--fg)" }}>
+                  {[
+                    ["✈️", "greener flight picked"],
+                    ["🏨", "low-carbon stay won the vote"],
+                    ["🚄", "rail routed over cars"],
+                  ].map(([e, t]) => (
+                    <div
+                      key={t}
+                      className="flex items-center gap-2.5 rounded-xl px-3 py-2"
+                      style={{ background: "rgba(255,255,255,0.55)" }}
+                    >
+                      <span aria-hidden>{e}</span>
+                      <span className="flex-1">{t}</span>
+                      <iconify-icon
+                        icon="heroicons:check-circle-solid"
+                        width="17"
+                        height="17"
+                        style={{ color: "var(--health-good)" }}
+                        aria-hidden
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-auto pt-4 text-xs" style={{ color: "var(--muted)" }}>
                   every green choice, counted and totalled
                 </div>
               </div>
