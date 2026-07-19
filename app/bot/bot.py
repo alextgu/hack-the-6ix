@@ -531,6 +531,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     wire.reset_chat(g.chat_id)
     supervisor.reset_chat(g.chat_id)
     voice.forget(g.chat_id)      # a fresh pet shouldn't dodge its past self's lines
+    # A fresh pet must not inherit the previous trip's agreed hotel (deck winner).
+    await asyncio.to_thread(db.update_plan, g.chat_id, {"deck_winner": None})
     await asyncio.to_thread(set_muted, g.chat_id, False)  # /start always wakes
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
@@ -630,7 +632,7 @@ async def cmd_silence(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: dict,
-                    guests: int, nights: int) -> None:
+                    guests: int, nights: int, notice: str = "") -> None:
     """The convergence finale. The booking link + summary posts FIRST and
     ALWAYS; green stats, the graduation voice, the itinerary, and the trip coin
     are additive and each swallow their own errors — none can stop the booking
@@ -654,10 +656,17 @@ async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: di
 
     # ── CORE: trip summary + the real Allez button. Posts first and always. ──
     rating = f" · {opts['rating']:.1f}/10" if opts.get("rating") else ""
-    over = "\n(over budget — cheapest that fit)" if opts.get("fallback") else ""
+    fb = opts.get("fallback")
+    if fb == "winner_over_budget":
+        over = "\n(your pick — a little over budget)"
+    elif fb:
+        over = "\n(over budget — cheapest that fit)"
+    else:
+        over = ""
     budget = f" · 💰 ${trip.budget_per_person}/person" if trip.budget_per_person else ""
     summary = (
-        "🎉 we did it — Japan is BOOKED!\n\n"
+        (f"{notice}\n\n" if notice else "")
+        + "🎉 we did it — Japan is BOOKED!\n\n"
         f"📍 {trip.city}\n"
         f"🗓️ {_fmt_date_range(trip.dates.start, trip.dates.end)}\n"
         f"👥 {guests} travelers{budget}\n"
@@ -725,8 +734,27 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     results = await asyncio.to_thread(
         stay22.search_raw, f"{trip.city}, Japan", checkin, checkout, guests
     )
-    chosen = booking.pick_hotel(results or [], trip.budget_per_person, guests, nights) if results else None
-    opts = booking.booking_options(chosen) if chosen else None
+
+    # Prefer the hotel the group agreed on in the swipe deck, if it's still
+    # bookable in the fresh results. ENTIRELY fail-open: a missing/malformed
+    # winner, a Mongo read failure, or ANY error here falls straight through to
+    # today's best-rated-in-budget pick below — no new way to block a booking.
+    opts = None
+    winner_notice = ""
+    try:
+        plan = await asyncio.to_thread(db.get_plan, g.chat_id)  # {} on any Mongo error
+        dw = (plan or {}).get("deck_winner")
+        if dw and results:
+            opts, winner_notice = booking.commit_prefer_winner(
+                results, dw, trip.budget_per_person, guests, nights, trip.city)
+    except Exception as e:
+        log.warning("deck-winner preference skipped (chat=%s): %s", g.chat_id, e)
+        opts, winner_notice = None, ""
+
+    # Fallback / default path — today's behavior, unchanged.
+    if opts is None:
+        chosen = booking.pick_hotel(results or [], trip.budget_per_person, guests, nights) if results else None
+        opts = booking.booking_options(chosen) if chosen else None
 
     if not opts or not opts.get("book_url"):
         budget_note = f" under ${trip.budget_per_person}/person" if trip.budget_per_person else ""
@@ -739,7 +767,7 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # The convergence finale — booking link first + always, everything else
     # additive and fail-safe (see _graduate).
-    await _graduate(g.chat_id, ctx, trip, opts, guests, nights)
+    await _graduate(g.chat_id, ctx, trip, opts, guests, nights, notice=winner_notice)
 
 
 async def cmd_end(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
