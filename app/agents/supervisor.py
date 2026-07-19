@@ -483,6 +483,49 @@ def profile_tracker(s: AgentState) -> AgentState:
             "done": s["done"] + ["profiles"]}
 
 
+def _freesolo_messenger_turn(s: AgentState) -> Optional[dict]:
+    """When a trained Freesolo messenger is deployed, query it with the SAME
+    serialized context it was trained on (training.build_dataset.serialize_context
+    — single source of truth, parity by construction) and adapt its
+    {"message": ...} reply into the candidates shape. Returns None on any
+    failure/missing config so the Gemini inner-thoughts path runs unchanged."""
+    base = os.environ.get("FREESOLO_AGENT_BASE_URL", "").strip()
+    key = os.environ.get("FREESOLO_API_KEY", "").strip()
+    if not (base and key):
+        return None
+    try:
+        from training.build_dataset import serialize_context
+        g = state.get_or_create(s["chat_id"])
+        trip = g.trip
+        ctx = {
+            "trip_state": {
+                "city": trip.city,
+                "dates": {"start": trip.dates.start.isoformat() if trip.dates and trip.dates.start else None,
+                          "end": trip.dates.end.isoformat() if trip.dates and trip.dates.end else None},
+                "budget_per_person": trip.budget_per_person,
+                "group_size": trip.group_size,
+                "stage": s.get("stage"), "missing": s.get("missing", []),
+                "physical": g.pet.physical, "mental": g.pet.mental,
+            },
+            "blocker_flags": _get_blockers(s["chat_id"]),
+            "recent_chat": [{"name": m.get("name"), "text": m.get("text")}
+                            for m in s["transcript"][-15:]],
+        }
+        raw = _freesolo_complete(serialize_context(ctx), base, key)
+        data = _extract_json(raw)
+        msg = str((data or {}).get("message", "")).strip()
+        if not msg:
+            log.warning("freesolo messenger: unparseable reply — falling back to gemini")
+            return None
+        log.info("freesolo messenger replied (chat=%s): %.60s", s["chat_id"], msg)
+        return {"candidates": [{"text": msg, "motivation": 4.0, "kind": "trained",
+                                "reply_to": None, "acknowledges": []}],
+                "action": "none", "show_health": False, "why": "freesolo trained messenger"}
+    except Exception as e:
+        log.warning("freesolo messenger failed (%s) — falling back to gemini", e)
+        return None
+
+
 def messenger(s: AgentState) -> AgentState:
     """Gemini-as-Tabi, Inner-Thoughts style: generate candidate contributions,
     self-score each for motivation (1-5), then code picks the best one above
@@ -579,8 +622,11 @@ this is what stops you asking the same question tomorrow.
 Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
 "kind": str, "reply_to": int|null, "acknowledges": [str],
 "asks_for": "city"|"dates"|"budget"|"group_size"|null}}],
-"action": "none"|"post_flights"|"deal_cards", "show_health": bool, "why": str}}""",
-                    prefer_freesolo=True)  # trained messenger model when FREESOLO set; else Gemini
+"action": "none"|"post_flights"|"deal_cards", "show_health": bool, "why": str}}""") \
+        if (fs_out := _freesolo_messenger_turn(s)) is None else fs_out
+    # ^ trained Freesolo messenger first (training-serializer parity); any
+    #   failure/missing config → the Gemini inner-thoughts path (with ask-memory),
+    #   unchanged.
 
     out = out or {"candidates": [], "action": "none"}
     cands = sorted((c for c in out.get("candidates", []) if c.get("text")),

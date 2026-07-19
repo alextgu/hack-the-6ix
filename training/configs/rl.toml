@@ -11,8 +11,8 @@ max_examples = 332
 # Warm-start GRPO from the SFT adapter (recommended): set init_from_adapter to
 # the SFT run id and do NOT set lora_rank/alpha (the source adapter's win).
 # init_from_adapter = "<sft-run-id>"
-lora_rank = 32
-lora_alpha = 64
+# lora_rank inherited from warm-start adapter
+# lora_alpha inherited
 group_size = 8                    # within-group variance = the GRPO gradient
 temperature = 0.9                 # entropy vs collapse
 max_completion_tokens = 320       # headroom kills truncation-poisoned rewards
