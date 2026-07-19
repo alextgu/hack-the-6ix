@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import SushiDemo from "@/components/SushiDemo";
 import Reveal from "@/components/Reveal";
 import Petals from "@/components/Petals";
+import PipelineYouTube from "@/components/PipelineYouTube";
 
 const BOT_HANDLE = "@PetSamaBot";
 const BOT_URL = `https://t.me/${BOT_HANDLE.replace(/^@/, "")}`;
@@ -10,8 +11,11 @@ const SPONSORS = ["Stay22", "Phoebe", "Freesolo", "MongoDB Atlas", "ElevenLabs",
 
 const PIPELINE_CARDS = [
   {
-    image: "/tokyo-poster.png",
-    imageAlt: "Planning dashboard / chat analysis",
+    media: "/pipeline-tabi-checkin.png",
+    mediaExtra: "/pet/all-avatars-fade.gif",
+    mediaType: "duo" as const,
+    fit: "contain" as const,
+    mediaAlt: "Tabi planning dashboard and avatar states",
     imageSide: "right" as const,
     steps: [
       {
@@ -29,8 +33,11 @@ const PIPELINE_CARDS = [
     ],
   },
   {
-    image: "/shibuya-stream-hotel.png",
-    imageAlt: "Group deciding on a hotel and trip plan",
+    media: "/pipeline-chat.png",
+    mediaExtra: undefined as string | undefined,
+    mediaType: "image" as const,
+    fit: "contain" as const,
+    mediaAlt: "Telegram group chat with Tabi planning Japan",
     imageSide: "left" as const,
     steps: [
       {
@@ -44,8 +51,11 @@ const PIPELINE_CARDS = [
     ],
   },
   {
-    image: "/pet/Full_Happy.png",
-    imageAlt: "Tabi healthy after the trip is booked",
+    media: "_v7N3bwIQSQ",
+    mediaExtra: undefined as string | undefined,
+    mediaType: "youtube" as const,
+    fit: "cover" as const,
+    mediaAlt: "Hotel swipe deck booking through Stay22",
     imageSide: "right" as const,
     steps: [
       {
@@ -222,97 +232,94 @@ function CardGrid({
 function PipelineCards() {
   let stepNo = 0;
   return (
-    <div className="mb-14 flex flex-col gap-4">
+    <div className="mb-14 flex flex-col gap-8">
       {PIPELINE_CARDS.map((card, i) => {
         const steps = card.steps.map((step) => {
           stepNo += 1;
           return { ...step, n: stepNo };
         });
         const imageFirst = card.imageSide === "left";
+        const mediaClass =
+          card.fit === "contain"
+            ? "absolute inset-0 h-full w-full object-contain p-4 sm:p-6"
+            : "absolute inset-0 h-full w-full object-cover";
+
         return (
-          <div key={card.imageAlt}>
-            {i > 0 ? (
-              <div
-                className="mb-4 text-center text-lg leading-none"
-                style={{ color: "var(--muted)" }}
-                aria-hidden
-              >
-                ↓
-              </div>
-            ) : null}
-            <Reveal delay={i * 100}>
-              <div
-                className="overflow-hidden"
-                style={{
-                  borderRadius: "var(--radius)",
-                  background: "var(--surface)",
-                  boxShadow: "var(--shadow)",
-                }}
-              >
-                <div className="grid items-stretch lg:grid-cols-2">
-                  <div
-                    className={`relative min-h-[220px] overflow-hidden ${
-                      imageFirst ? "lg:order-1" : "lg:order-2"
-                    }`}
-                    style={{
-                      background: card.image.includes("/pet/")
-                        ? "var(--card-peach)"
-                        : "var(--bg)",
-                    }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={card.image}
-                      alt={card.imageAlt}
-                      className={
-                        card.image.includes("/pet/")
-                          ? "absolute inset-0 m-auto h-[70%] w-[70%] object-contain"
-                          : "absolute inset-0 h-full w-full object-cover"
-                      }
+          <Reveal key={card.mediaAlt} delay={i * 100}>
+            <div
+              className="overflow-hidden"
+              style={{
+                borderRadius: "var(--radius)",
+                background: "var(--surface)",
+                boxShadow: "var(--shadow)",
+              }}
+            >
+              <div className="grid items-stretch lg:grid-cols-2">
+                <div
+                  className={`relative min-h-[280px] overflow-hidden sm:min-h-[320px] lg:min-h-[380px] ${
+                    imageFirst ? "lg:order-1" : "lg:order-2"
+                  }`}
+                  style={{ background: "var(--card-peach)" }}
+                >
+                  {card.mediaType === "youtube" ? (
+                    <PipelineYouTube
+                      videoId={card.media}
+                      title={card.mediaAlt}
                     />
-                  </div>
-                  <div
-                    className={`flex flex-col justify-center p-6 sm:p-8 ${
-                      imageFirst ? "lg:order-2" : "lg:order-1"
-                    }`}
-                  >
-                    {steps.map((step, si) => (
-                      <div key={step.n}>
-                        <div className="flex gap-3">
-                          <span
-                            className="ds-title shrink-0 tabular-nums"
-                            style={{ color: "var(--fg)", minWidth: "1.75rem" }}
-                          >
-                            {step.n}.
-                          </span>
-                          <div>
-                            <h3 className="ds-title text-base sm:text-lg">
-                              {step.title}
-                            </h3>
-                            <p
-                              className="mt-1 text-sm leading-relaxed"
-                              style={{ color: "var(--muted)" }}
-                            >
-                              {step.body}
-                            </p>
-                          </div>
-                        </div>
-                        {si < steps.length - 1 ? (
-                          <div
-                            className="my-3 pl-1 text-lg leading-none"
-                            style={{ color: "var(--muted)" }}
-                            aria-hidden
-                          >
-                            ↓
-                          </div>
-                        ) : null}
+                  ) : card.mediaType === "duo" && card.mediaExtra ? (
+                    <div className="absolute inset-0 flex items-center justify-center gap-3 p-3 sm:gap-4 sm:p-5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={card.media}
+                        alt={card.mediaAlt}
+                        className="h-full max-h-full w-auto max-w-[52%] object-contain"
+                      />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={card.mediaExtra}
+                        alt="Tabi avatar states fading through health moods"
+                        className="h-[72%] max-h-full w-auto max-w-[40%] object-contain"
+                      />
+                    </div>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={card.media}
+                      alt={card.mediaAlt}
+                      className={mediaClass}
+                    />
+                  )}
+                </div>
+                <div
+                  className={`flex flex-col justify-center gap-5 p-6 sm:gap-6 sm:p-8 ${
+                    imageFirst ? "lg:order-2" : "lg:order-1"
+                  }`}
+                >
+                  {steps.map((step) => (
+                    <div key={step.n} className="flex gap-3">
+                      <span
+                        className="ds-title shrink-0 tabular-nums"
+                        style={{ color: "var(--fg)", minWidth: "1.75rem" }}
+                      >
+                        {step.n}.
+                      </span>
+                      <div>
+                        <h3 className="ds-title text-base sm:text-lg">
+                          {step.title}
+                        </h3>
+                        <p
+                          className="mt-1 text-sm leading-relaxed"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          {step.body}
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </Reveal>
-          </div>
+            </div>
+          </Reveal>
         );
       })}
     </div>
