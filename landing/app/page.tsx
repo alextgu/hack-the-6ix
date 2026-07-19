@@ -57,6 +57,20 @@ const PIPELINE_CARDS = [
   },
 ];
 
+// The real roster, in the order a message actually moves through them:
+// four LangGraph nodes (supervisor routes, stage/profile trackers read state,
+// messenger writes) plus four standalone modules. Names match app/agents/.
+const AGENTS = [
+  "supervisor",
+  "stage tracker",
+  "profile tracker",
+  "messenger",
+  "brain",
+  "phoebe",
+  "greenplanner",
+  "face",
+];
+
 // The brain — the agents behind Tabi (script beat 3).
 const BRAIN = [
   {
@@ -213,6 +227,19 @@ export default function Home() {
               </div>
             </Reveal>
           </div>
+
+          {/* The actual roster. Names only — the four cards above already say
+              what they do, so this just shows there's a real team behind them
+              rather than one prompt wearing hats. One quiet line, no new
+              visual weight. */}
+          <Reveal delay={240}>
+            <p className="mt-8 text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+              <span className="font-semibold" style={{ color: "var(--fg)" }}>
+                Eight agents on the graph:
+              </span>{" "}
+              {AGENTS.join(" · ")}
+            </p>
+          </Reveal>
         </div>
       </section>
 
