@@ -18,17 +18,9 @@
 
 html {
   background-color: var(--bg);
-  /* Snap scroll: every section is a snap stop. `proximity` (not `mandatory`)
-     so tall sections — the pipeline, the benchmark — stay freely scrollable
-     inside instead of the browser fighting to re-center them. */
-  scroll-snap-type: y proximity;
   scroll-behavior: smooth;
 }
 
-.snap-start {
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
 /* A full-viewport, vertically-centered stage. Content taller than the screen
    simply grows the box (centering becomes a no-op) — never clipped. */
 .snap-panel {
@@ -210,6 +202,54 @@ input[type="range"].scrubber::-moz-range-track {
   background: linear-gradient(90deg, var(--health-good), var(--health-warn), var(--health-bad));
 }
 
+/* ── Pipeline slideshow ─────────────────────────────────────────────────── */
+@keyframes pipeFade {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.pipe-slide {
+  animation: pipeFade 0.45s cubic-bezier(0.22, 0.8, 0.36, 1) both;
+}
+.pipe-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 -10px;
+  border-radius: 9999px;
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.pipe-arrow:hover {
+  transform: translateY(-50%) scale(1.08);
+  box-shadow: 0 14px 36px rgba(42, 36, 28, 0.16);
+}
+.pipe-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--fg);
+  opacity: 0.22;
+  cursor: pointer;
+  transition: opacity 0.2s ease, width 0.2s ease, background 0.2s ease;
+}
+.pipe-dot[data-active="true"] {
+  width: 22px;
+  opacity: 1;
+  background: var(--card-coral-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pipe-slide { animation: none; }
+}
+
 .card-lift {
   transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.36, 1), box-shadow 0.3s ease;
 }
@@ -235,7 +275,6 @@ input[type="range"].scrubber::-moz-range-track {
     transition: none;
   }
   html {
-    scroll-snap-type: none;
     scroll-behavior: auto;
   }
 }

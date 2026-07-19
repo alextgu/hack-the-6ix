@@ -1,8 +1,8 @@
 import SushiDemo from "@/components/SushiDemo";
 import Reveal from "@/components/Reveal";
 import Petals from "@/components/Petals";
-import PipelineYouTube from "@/components/PipelineYouTube";
 import ModelBenchmark from "@/components/ModelBenchmark";
+import PipelineSlideshow from "@/components/PipelineSlideshow";
 
 const BOT_HANDLE = "@PetSamaBot";
 const BOT_URL = `https://t.me/${BOT_HANDLE.replace(/^@/, "")}`;
@@ -210,132 +210,11 @@ function CardGrid({
   );
 }
 
-function PipelineCards() {
-  let stepNo = 0;
-  return (
-    <div className="mb-14 flex flex-col gap-6 sm:gap-7">
-      {PIPELINE_CARDS.map((card, i) => {
-        const steps = card.steps.map((step) => {
-          stepNo += 1;
-          return { ...step, n: stepNo };
-        });
-        const imageFirst = card.imageSide === "left";
-        const mediaClass =
-          card.fit === "contain"
-            ? "absolute inset-0 h-full w-full object-contain p-3 sm:p-4"
-            : "absolute inset-0 h-full w-full object-cover";
-
-        return (
-          <Reveal key={card.mediaAlt} delay={i * 100}>
-            <article
-              className="card-lift overflow-hidden"
-              style={{
-                borderRadius: "var(--radius)",
-                background: "var(--surface)",
-                boxShadow: "var(--shadow)",
-              }}
-            >
-              {/* Media leads: ~60% of the row, taller panel so the visual carries the card. */}
-              <div className="grid items-stretch lg:grid-cols-[1.55fr_minmax(0,1fr)]">
-                <div
-                  className={`relative min-h-[300px] overflow-hidden sm:min-h-[360px] lg:min-h-[460px] ${
-                    imageFirst ? "lg:order-1" : "lg:order-2"
-                  }`}
-                  style={{ background: "var(--card-peach)" }}
-                >
-                  {card.mediaType === "youtube" ? (
-                    <PipelineYouTube videoId={card.media} title={card.mediaAlt} />
-                  ) : card.mediaType === "duo" && card.mediaExtra ? (
-                    <div className="absolute inset-0 flex items-center justify-center gap-3 p-4 sm:gap-5 sm:p-6">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={card.media}
-                        alt={card.mediaAlt}
-                        className="h-[92%] max-h-full w-auto max-w-[60%] object-contain drop-shadow-sm"
-                      />
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={card.mediaExtra}
-                        alt="Tabi avatar states fading through health moods"
-                        className="h-[86%] max-h-full w-auto max-w-[46%] object-contain"
-                      />
-                    </div>
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={card.media} alt={card.mediaAlt} className={mediaClass} />
-                  )}
-                  {/* soft inner edge so the visual seats into the card */}
-                  <div
-                    className="pointer-events-none absolute inset-0"
-                    style={{ boxShadow: "inset 0 0 0 1px rgba(42,36,28,0.05)" }}
-                    aria-hidden
-                  />
-                </div>
-
-                {/* Caption rail: condensed. Ghost step number + phase kicker + tight steps. */}
-                <div
-                  className={`relative flex flex-col justify-center overflow-hidden p-7 sm:p-8 lg:p-9 ${
-                    imageFirst ? "lg:order-2" : "lg:order-1"
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className="ds-title pointer-events-none absolute -top-3 right-3 select-none leading-none tabular-nums"
-                    style={{ fontSize: "6.5rem", color: "var(--fg)", opacity: 0.05 }}
-                  >
-                    {i + 1}
-                  </span>
-                  <p
-                    className="mb-5 inline-flex w-fit items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em]"
-                    style={{ color: "var(--card-coral-ink)" }}
-                  >
-                    <span
-                      className="inline-block h-1.5 w-1.5 rounded-full"
-                      style={{ background: "var(--card-coral-ink)" }}
-                    />
-                    Phase {i + 1} · {card.phase}
-                  </p>
-                  <ul className="relative flex flex-col gap-4">
-                    {steps.map((step) => (
-                      <li key={step.n} className="flex gap-3">
-                        <span
-                          className="ds-title mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs tabular-nums"
-                          style={{
-                            background: "var(--card-peach)",
-                            color: "var(--fg)",
-                          }}
-                        >
-                          {step.n}
-                        </span>
-                        <div>
-                          <h3 className="ds-title text-base leading-snug sm:text-[1.05rem]">
-                            {step.title}
-                          </h3>
-                          <p
-                            className="mt-1 text-[0.82rem] leading-relaxed"
-                            style={{ color: "var(--muted)" }}
-                          >
-                            {step.body}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </article>
-          </Reveal>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function Home() {
   return (
     <main style={{ color: "var(--fg)" }}>
       {/* ─── 1. Hero ──────────────────────────────────────────────────────── */}
-      <section className="hero-split snap-start relative lg:grid lg:min-h-dvh lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
+      <section className="hero-split relative lg:grid lg:min-h-dvh lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
         <div className="relative flex flex-col justify-center px-6 py-16 sm:px-10 sm:py-20 lg:px-12 lg:py-24 xl:px-16">
           <Petals />
 
@@ -382,34 +261,21 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 2. Problem — one big line, no title ──────────────────────────── */}
-      <section className="snap-start snap-panel relative px-6">
+      {/* ─── 2. Problem line + demo video (merged, condensed) ─────────────── */}
+      <section className="snap-panel relative px-6">
         <Petals />
-        <div className="relative mx-auto max-w-4xl text-center">
+        <div className="relative mx-auto w-full max-w-6xl">
           <Reveal>
-            <p className="ds-title text-[2.1rem] leading-[1.1] sm:text-5xl lg:text-6xl">
+            <p className="mx-auto mb-8 max-w-3xl text-center text-xl leading-snug sm:text-2xl">
               Someone drops{" "}
               <span style={{ color: "var(--card-coral-ink)" }}>
                 &ldquo;let&apos;s go to Japan bro.&rdquo;
-              </span>
-              <br className="hidden sm:block" /> Nobody ever books it.
+              </span>{" "}
+              Nobody books it — so we made it{" "}
+              <span style={{ color: "var(--card-coral-ink)" }}>a creature that dies with it.</span>
             </p>
           </Reveal>
-          <Reveal delay={160}>
-            <p
-              className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed sm:text-2xl"
-              style={{ color: "var(--muted)" }}
-            >
-              A few react, dates get half-discussed, the thread dies. The trip stays a
-              sentence — so we turned it into a creature that dies with it.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ─── 3. Video — full-bleed, no title ──────────────────────────────── */}
-      <section className="snap-start snap-panel px-6">
-        <Reveal className="mx-auto w-full max-w-6xl">
+          <Reveal delay={140}>
           <div
             className="overflow-hidden"
             style={{
@@ -441,21 +307,24 @@ export default function Home() {
               </div>
             </div>
           </div>
-        </Reveal>
+          </Reveal>
+        </div>
       </section>
 
-      {/* ─── 4. How it works — the 3-step pipeline (cards self-label) ─────── */}
-      <section className="snap-start px-6 py-24">
+      {/* ─── 3. How it works — auto-advancing slideshow of the 3 phases ────── */}
+      <section className="snap-panel px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <Reveal>
             <p className="kicker mb-8">How it works</p>
           </Reveal>
-          <PipelineCards />
+          <Reveal delay={120}>
+            <PipelineSlideshow cards={PIPELINE_CARDS} />
+          </Reveal>
         </div>
       </section>
 
       {/* ─── 5. The interactive scrubber — the centerpiece, big ───────────── */}
-      <section className="snap-start snap-panel px-6">
+      <section className="snap-panel px-6">
         <div className="mx-auto w-full max-w-5xl">
           <Reveal>
             <SushiDemo />
@@ -473,7 +342,7 @@ export default function Home() {
       </section>
 
       {/* ─── 6. Pillars — cards only ──────────────────────────────────────── */}
-      <section className="snap-start snap-panel px-6 py-20">
+      <section className="snap-panel px-6 py-20">
         <div className="mx-auto max-w-5xl">
           <Reveal>
             <p className="kicker mb-8">What&apos;s under the hood</p>
@@ -483,7 +352,7 @@ export default function Home() {
       </section>
 
       {/* ─── 7. Proof — the benchmark leads, accomplishments support ──────── */}
-      <section className="snap-start snap-panel px-6 py-20">
+      <section className="snap-panel px-6 py-20">
         <div className="mx-auto max-w-5xl">
           <Reveal>
             <div className="mb-10 flex justify-center">
@@ -495,7 +364,7 @@ export default function Home() {
       </section>
 
       {/* ─── 8. Learned + next — de-titled, small kickers only ────────────── */}
-      <section className="snap-start px-6 py-24">
+      <section className="px-6 py-24">
         <div className="mx-auto max-w-5xl space-y-16">
           <div>
             <Reveal>
@@ -513,7 +382,7 @@ export default function Home() {
       </section>
 
       {/* ─── 9. Footer / CTA ──────────────────────────────────────────────── */}
-      <section className="snap-start snap-panel relative overflow-hidden px-6">
+      <section className="snap-panel relative overflow-hidden px-6">
         <Petals />
         <div className="relative mx-auto max-w-3xl text-center">
           <Reveal>
