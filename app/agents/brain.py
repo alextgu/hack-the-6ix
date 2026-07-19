@@ -29,7 +29,10 @@ except ImportError:
 # Per PIPELINE.md: Read seam = Gemini. Freesolo lives on the Agent seam in
 # phoebe.py. Do NOT re-add Freesolo here. Cross-wiring is exactly the
 # foot-gun PIPELINE.md exists to prevent.
-MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-exp")
+# "gemini-flash-latest" tracks the current fast Flash. Pinned ids rot:
+# gemini-2.0-flash-exp is retired and 404s, so this default only ever
+# worked because GEMINI_MODEL happened to be set in the environment.
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
 
 
 def call_model(prompt: str) -> str:
