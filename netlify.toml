@@ -6,3 +6,14 @@
   base = "landing"
   command = "npm run build"
   publish = "out"
+
+[build.environment]
+  # Netlify's secret scanner flags env-var VALUES that appear in the build.
+  # These keys hold PUBLIC, non-secret config (a network name, model ids, an
+  # affiliate id, currency, a public image URL) — and some appear verbatim in
+  # the landing copy (e.g. SOLANA_CLUSTER="devnet" → "minted on devnet"), which
+  # is a false positive. Omit ONLY these; real secrets (API keys, tokens, the
+  # Mongo URI, the treasury key) are deliberately NOT listed and stay scanned.
+  # The static landing needs none of these — ideally also remove them from the
+  # Netlify site's env vars entirely.
+  SECRETS_SCAN_OMIT_KEYS = "SOLANA_CLUSTER,GEMINI_MODEL,STAY22_AID,STAY22_CURRENCY,STAY22_CLUSTER,STAY22_CLUSTER_PRECISION,STAY22_MIN_REVIEWS,MONGODB_DB,FREESOLO_AGENT_MODEL,PHOEBE_PROVIDER,PHOEBE_MODEL,TRIP_COIN_IMAGE_URL,PORT"
