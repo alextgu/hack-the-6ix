@@ -41,6 +41,7 @@ import logging
 import os
 import random
 import re
+import time
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -219,8 +220,11 @@ async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, *,
                         caption=caption, parse_mode=parse_mode, reply_to_message_id=rt,
                     )
                     return
-                except Exception:
+                except Exception as e:
+                    log.warning("send_animation failed (chat=%s, parse_mode=%s): %s",
+                               chat_id, parse_mode, e)
                     continue
+        log.warning("gif send exhausted all attempts (chat=%s) — falling back to photo", chat_id)
 
     png_bytes = pet.render_pet_png(g)
     for parse_mode in (ParseMode.MARKDOWN, None):
@@ -244,10 +248,14 @@ async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, *,
 # ─── Voice (ElevenLabs) — gated: deathbed + graduation only ─────────────────
 # The pet speaks aloud only at the two moments that earn it: crossing into
 # critical health (the deathbed plea) and graduating. Never on a normal
-# message. Deduped per chat so each fires at most once; re-armed on /start.
-_spoke_deathbed: set[int] = set()
+# message. Graduation fires at most once per chat (re-armed on /start). The
+# deathbed plea is cooldown-gated instead of one-shot: as long as the chat
+# stays critical, it can plead again every DEATHBED_COOLDOWN_S — a group that
+# ignores the first plea should keep hearing it, not go silent after one try.
+_deathbed_last_spoken: dict[int, float] = {}
 _spoke_graduated: set[int] = set()
 _DEATHBED_PHYSICAL = 20  # physical at/below this counts as the deathbed moment
+DEATHBED_COOLDOWN_S = int(os.environ.get("DEATHBED_COOLDOWN_S", "600"))
 
 
 async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
@@ -278,16 +286,16 @@ async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
 
 
 async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Speak the deathbed plea the first time the pet crosses into critical
-    health for this chat. Gated + deduped — reads state only, changes nothing."""
+    """Speak the deathbed plea while the pet is critical, at most once every
+    DEATHBED_COOLDOWN_S — a chat that stays critical keeps getting pled at
+    instead of going silent after the first try."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
     critical = g.pet.mood == "dying" or g.pet.physical <= _DEATHBED_PHYSICAL
-    if not critical or chat_id in _spoke_deathbed:
+    last = _deathbed_last_spoken.get(chat_id, 0.0)
+    if not critical or (time.monotonic() - last) < DEATHBED_COOLDOWN_S:
         return
-    _spoke_deathbed.add(chat_id)
-    # Fires once per chat, but a demo gets reset and re-run all evening — one
-    # fixed line makes the biggest beat in the show land identically every time.
+    _deathbed_last_spoken[chat_id] = time.monotonic()
     await speak_pet(
         chat_id,
         random.choice([
@@ -487,7 +495,7 @@ _ASK_SAVED_RE = re.compile(
 # ─── Handlers ────────────────────────────────────────────────────────────────
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
-    _spoke_deathbed.discard(g.chat_id)   # re-arm voice moments for the fresh pet
+    _deathbed_last_spoken.pop(g.chat_id, None)   # re-arm voice moments for the fresh pet
     _spoke_graduated.discard(g.chat_id)
     # state.reset() only rebuilds the in-memory pet. Without this, /start on a
     # live chat announces a fresh egg while wire still holds the old message
@@ -511,6 +519,9 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # The pet is the +1 member: hatching immediately opens the planning
     # conversation (kickoff bypasses the cooldown, always sends).
     decision = await asyncio.to_thread(supervisor.run_turn, g.chat_id, "kickoff")
+    # The pet card just went out above — never let the kickoff turn post a
+    # second one. Its line still goes out, just as text instead of a photo.
+    decision.show_health = False
     await execute_decision(g.chat_id, decision, ctx)
 
 
