@@ -268,8 +268,16 @@ def api_cards_swipe(group_id: str, body: SwipeBody) -> JSONResponse:
 
 @app.post("/api/cards/{group_id}/event")
 def api_cards_event(group_id: str, body: EventBody) -> JSONResponse:
-    """Fire-and-forget UI analytics: deck_open, card_view, detail_open, link_out."""
-    db.log_event(_chat_id(group_id), body.user_id, body.type, body.hotel_id, body.meta)
+    """Fire-and-forget UI analytics: deck_open, card_view, detail_open, link_out.
+
+    `link_out` is also the booking signal — somebody tapped through to Stay22.
+    That retires the deck so the next hotel conversation starts fresh instead
+    of re-serving a winner that may be for a city the group has since dropped.
+    """
+    cid = _chat_id(group_id)
+    db.log_event(cid, body.user_id, body.type, body.hotel_id, body.meta)
+    if body.type == "link_out":
+        cards.mark_booked(cid, body.user_id, body.hotel_id or "")
     return JSONResponse({"ok": True})
 
 

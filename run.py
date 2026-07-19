@@ -125,8 +125,31 @@ async def _run_api(port: int) -> None:
 _live_bot = None  # set by _run_bot once polling is up; heartbeat reads it
 
 
+def _register_booking_notifier(loop: asyncio.AbstractEventLoop) -> None:
+    """Let the Mini App announce a booking in the Telegram chat.
+
+    The card endpoints are sync FastAPI handlers running in a threadpool, so
+    they cannot await anything on the bot's loop. Hand cards.py a thread-safe
+    shim that hops the message back over via run_coroutine_threadsafe."""
+    from app.bot import cards as cards_mod
+
+    def notify(chat_id: int, text: str) -> None:
+        tg = _live_bot
+        if tg is None:
+            log.info("booking notice skipped (no live bot): chat=%s", chat_id)
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(
+                tg.send_message(chat_id=chat_id, text=text), loop)
+        except Exception as e:
+            log.warning("booking notice failed (chat=%s): %s", chat_id, e)
+
+    cards_mod.set_notifier(notify)
+
+
 async def _main() -> None:
     port = int(os.environ.get("PORT", "8000"))
+    _register_booking_notifier(asyncio.get_running_loop())
     tasks = [
         asyncio.create_task(_run_bot(), name="bot"),
         asyncio.create_task(_run_api(port), name="api"),

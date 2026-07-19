@@ -40,20 +40,52 @@ def _utcnow() -> str:
 
 
 # ─── Session lifecycle ───────────────────────────────────────────────────────
-def ensure_session(chat_id: int, force: bool = False) -> dict:
-    """Get-or-create the deck session for a group. BLOCKING (Stay22 + Mongo):
-    call via asyncio.to_thread from the bot loop; FastAPI sync handlers are
-    already off the event loop."""
+def _peek(chat_id: int) -> Optional[dict]:
+    """Current session from memory, else Mongo. Read-only, no build."""
     with _LOCK:
         s = _SESSIONS.get(chat_id)
-        if s and not force:
+    return s if s else db.load_session(chat_id)
+
+
+def _is_spent(s: Optional[dict]) -> bool:
+    """A session nobody should be shown again.
+
+    Once someone has opened the booking link the deck has done its job. Serving
+    it a second time was the bug: the group would move on, change city, ask for
+    hotels again, and get handed the same five cards and the same old winner —
+    for the wrong city — because ensure_session found a cached/persisted
+    session and returned it untouched."""
+    return bool(s) and s.get("status") == "booked"
+
+
+def ensure_session(chat_id: int, force: bool = False,
+                   renew_if_spent: bool = True) -> dict:
+    """Get-or-create the deck session for a group. BLOCKING (Stay22 + Mongo):
+    call via asyncio.to_thread from the bot loop; FastAPI sync handlers are
+    already off the event loop.
+
+    A spent session (booking link already visited) is treated like force=True,
+    so the next time the group is DEALT hotels they get a fresh deck built
+    against whatever the trip looks like now.
+
+    `renew_if_spent=False` is for read-only viewers: the Mini App must keep
+    showing the booked winner. Without it, the person who just tapped through
+    to Stay22 comes back to find their result silently replaced by five new
+    cards. Reflecting state and starting a new round are different actions.
+    """
+    renew = force or (renew_if_spent and _is_spent(_peek(chat_id)))
+    with _LOCK:
+        s = _SESSIONS.get(chat_id)
+        if s and not renew:
             return s
-        if not force:
+        if not renew:
             persisted = db.load_session(chat_id)
             if persisted:
                 _SESSIONS[chat_id] = persisted
                 log.info("session restored from Mongo (chat=%s)", chat_id)
                 return persisted
+        elif _is_spent(s):
+            log.info("deck already booked (chat=%s) — dealing a fresh one", chat_id)
 
     # Build the deck from the trip data we've extracted (Mongo-backed): group
     # size drives the green scoring (rooms the party needs), and the group's own
@@ -107,11 +139,81 @@ def forget(chat_id: int) -> None:
         _SESSIONS.pop(chat_id, None)
 
 
+# ─── Booking hand-off ────────────────────────────────────────────────────────
+# The Mini App runs in FastAPI's threadpool and has no Telegram bot handle, so
+# run.py registers a notifier here that can post back into the chat. Optional
+# by design: with nothing registered, booking still marks the session spent —
+# the group just doesn't get the "it's booked" line.
+_notifier = None
+
+
+def set_notifier(fn) -> None:
+    """fn(chat_id: int, text: str) -> None. Safe to call from any thread."""
+    global _notifier
+    _notifier = fn
+
+
+def mark_booked(chat_id: int, user_id: str = "", hotel_id: str = "") -> Optional[dict]:
+    """Someone opened the booking link → treat the trip as booked.
+
+    Deliberately trusting: we can't observe whether a booking completed on
+    Stay22, and forcing the group to confirm in chat adds a step nobody does.
+    One person opening the link is a strong enough signal, so we take it and
+    move on rather than leaving the deck half-finished forever.
+
+    Idempotent — only the FIRST visit announces and returns a payload, so five
+    people tapping the link don't produce five messages.
+    """
+    with _LOCK:
+        s = _SESSIONS.get(chat_id) or db.load_session(chat_id)
+        if not s:
+            return None
+        if s.get("status") == "booked":
+            _SESSIONS[chat_id] = s
+            return None                     # already announced
+        winner = (s.get("hotels") or {}).get(s.get("winner") or hotel_id or "")
+        s["status"] = "booked"
+        s["booked_at"] = _utcnow()
+        s["booked_by"] = str(user_id or "")
+        _SESSIONS[chat_id] = s
+        payload = {"name": (winner or {}).get("name"),
+                   "url": (winner or {}).get("url"),
+                   "price_total": (winner or {}).get("price_total"),
+                   "currency": (winner or {}).get("currency")}
+    db.save_session(s)
+    # Let the deck be dealt again next time hotels come up: the supervisor
+    # refuses to re-deal while cards_dealt_stage is still HOTELS.
+    try:
+        db.update_plan(chat_id, {"cards_dealt_stage": None})
+    except Exception as e:
+        log.warning("could not clear cards_dealt_stage (chat=%s): %s", chat_id, e)
+    log.info("BOOKED chat=%s hotel=%s by=%s — deck is spent, next ask deals fresh",
+             chat_id, payload.get("name"), user_id)
+    if _notifier:
+        try:
+            _notifier(chat_id, _booked_line(payload))
+        except Exception as e:
+            log.warning("booking notifier failed (chat=%s): %s", chat_id, e)
+    return payload
+
+
+def _booked_line(p: dict) -> str:
+    name = p.get("name")
+    return (f"that's booked then — {name}. i'll stop nagging about hotels.\n"
+            "say the word if plans change and i'll pull a fresh set."
+            if name else
+            "booking link's been opened — calling that done.\n"
+            "say the word if plans change and i'll pull a fresh set.")
+
+
 # ─── Views (what the UI polls) ───────────────────────────────────────────────
 def view_for(chat_id: int, user_id: str, name: str) -> dict:
     """Deck state for one user. Registers them as a participant — opening the
-    deck means your swipes are expected before the round can resolve."""
-    s = ensure_session(chat_id)
+    deck means your swipes are expected before the round can resolve.
+
+    Read-only with respect to a booked deck: viewing must never start a new
+    round under someone who is still looking at the result they just booked."""
+    s = ensure_session(chat_id, renew_if_spent=False)
     user_id = str(user_id)
     with _LOCK:
         if user_id not in s["participants"]:
