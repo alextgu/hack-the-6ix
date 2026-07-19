@@ -249,6 +249,24 @@ _spoke_deathbed: set[int] = set()
 _spoke_graduated: set[int] = set()
 _DEATHBED_PHYSICAL = 20  # physical at/below this counts as the deathbed moment
 
+# Below this the pet's replies go out as ElevenLabs voice notes instead of text.
+# Defaults to 40 to line up with elevenlabs._DYING_PHYSICAL, the point the
+# strained "dying" voice takes over — so the switch to speech and the switch to
+# the sicker voice happen together rather than at two unrelated moments.
+VOICE_HEALTH_THRESHOLD = int(os.environ.get("VOICE_HEALTH_THRESHOLD", "40"))
+# Recovering this far above the line re-arms the one-shot deathbed plea, so a
+# pet that nearly died, got saved, then slid back can plead again. Hysteresis:
+# without the gap, hovering on the boundary would re-trigger it constantly.
+_DEATHBED_REARM_AT = _DEATHBED_PHYSICAL + 20
+
+
+def _should_voice(g: state.GroupState) -> bool:
+    """Is the pet sick enough that it should speak rather than type?"""
+    if not elevenlabs.available():
+        return False
+    return (g.pet.physical <= VOICE_HEALTH_THRESHOLD
+            or g.pet.mood in ("sick", "dying"))
+
 
 async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
                     mood: str | None = None, physical: int | None = None) -> None:
@@ -282,6 +300,11 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
     health for this chat. Gated + deduped — reads state only, changes nothing."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
+    # Recovered well clear of the line → let it plead again if it slides back.
+    # Previously this fired once per chat FOREVER, so a pet that was saved and
+    # then neglected a second time died completely silently.
+    if g.pet.physical >= _DEATHBED_REARM_AT:
+        _spoke_deathbed.discard(chat_id)
     critical = g.pet.mood == "dying" or g.pet.physical <= _DEATHBED_PHYSICAL
     if not critical or chat_id in _spoke_deathbed:
         return
@@ -430,7 +453,16 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         # Tabi's line rides as the photo's caption — one message, not two.
         await send_pet_card(chat_id, ctx, message=d.message, reply_to=d.reply_to)
     elif d.message:
-        await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
+        # Below the health threshold the pet stops typing and starts TALKING.
+        # A voice note is a genuinely different kind of interruption — you feel
+        # obliged to listen to it — which is exactly the escalation a pet that's
+        # actually dying should get. Above the line it stays text so the voice
+        # keeps its weight.
+        if _should_voice(g):
+            await speak_pet(chat_id, d.message, ctx,
+                            mood=g.pet.mood, physical=g.pet.physical)
+        else:
+            await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
     # Flywheel: after a messenger line goes out, watch the chat for a window and
     # back-fill the ground-truth outcome. Fire-and-forget; no-ops without Mongo.
     if d.harvest_id:

@@ -30,6 +30,13 @@ _DYING_MOODS = {"sick", "dying"}
 _DYING_PHYSICAL = 40
 
 
+def available() -> bool:
+    """Is voice actually configured? Callers use this to decide whether to even
+    attempt speech, rather than synthesizing and silently falling back."""
+    return bool(os.environ.get("ELEVENLABS_API_KEY", "").strip()
+                and _voice_for(None, None))
+
+
 def _voice_for(mood: Optional[str], physical: Optional[int]) -> str:
     """Pick a voice id from mood/health. Guarantees a non-empty id as long as
     ANY of the three env voices is set — this is what fixes the /api/speak 502
@@ -42,6 +49,27 @@ def _voice_for(mood: Optional[str], physical: Optional[int]) -> str:
     if is_dying:
         return dying or legacy or alive
     return alive or legacy or dying
+
+
+def _tts(text: str, voice: str, api_key: str, model_id: str,
+         output_format: Optional[str], accept: str) -> Optional[bytes]:
+    """One synthesis call. `output_format` None → the API's mp3 default."""
+    url = ENDPOINT.format(voice_id=voice)
+    if output_format:
+        url += f"?output_format={output_format}"
+    body = json.dumps({"text": text, "model_id": model_id}).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body, method="POST",
+        headers={"xi-api-key": api_key, "Content-Type": "application/json",
+                 "Accept": accept},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read()
+    except Exception as e:
+        log.warning("text_to_speech failed (%s): %s: %s",
+                    output_format or "mp3", type(e).__name__, e)
+        return None
 
 
 def text_to_speech(
@@ -59,25 +87,34 @@ def text_to_speech(
     voice = (voice_id or _voice_for(mood, physical)).strip()
     if not (api_key and voice and text):
         return None
+    return _tts(text, voice, api_key, model_id, None, "audio/mpeg")
 
-    url = ENDPOINT.format(voice_id=voice)
-    body = json.dumps({"text": text, "model_id": model_id}).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "xi-api-key": api_key,
-            "Content-Type": "application/json",
-            "Accept": "audio/mpeg",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.read()
-    except Exception as e:
-        log.warning("text_to_speech failed: %s: %s", type(e).__name__, e)
+
+# Telegram voice notes must be OGG/Opus. ElevenLabs can return exactly that if
+# you ask for it — which removes the ffmpeg dependency entirely. That matters:
+# the runtime image is python:3.12-slim with no ffmpeg, so to_ogg_opus() has
+# been returning None in production since day one and EVERY voice note has
+# silently degraded to a plain-text message. Synthesis was never the problem.
+OPUS_FORMAT = "opus_48000_64"
+
+
+def text_to_opus(
+    text: str,
+    voice_id: Optional[str] = None,
+    mood: Optional[str] = None,
+    physical: Optional[int] = None,
+    model_id: str = "eleven_multilingual_v2",
+) -> Optional[bytes]:
+    """Synthesize straight to OGG/Opus bytes Telegram can send as a voice note."""
+    api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    voice = (voice_id or _voice_for(mood, physical)).strip()
+    if not (api_key and voice and text):
         return None
+    data = _tts(text, voice, api_key, model_id, OPUS_FORMAT, "audio/ogg")
+    if data and data[:4] != b"OggS":
+        log.warning("expected an OGG container, got %r — discarding", data[:4])
+        return None
+    return data
 
 
 def to_ogg_opus(mp3_bytes: bytes) -> Optional[bytes]:
@@ -110,8 +147,16 @@ def synthesize_voice_note(
     text: str, mood: Optional[str] = None, physical: Optional[int] = None
 ) -> Optional[bytes]:
     """text → mood-appropriate OGG/Opus voice-note bytes, or None on any
-    failure (missing key/voice, ElevenLabs error, ffmpeg missing). The bot
-    posts plain text when this returns None."""
+    failure (missing key/voice, ElevenLabs error). The bot posts plain text
+    when this returns None.
+
+    Asks ElevenLabs for Opus directly; only falls back to mp3+ffmpeg if that
+    request fails, so a host without ffmpeg (which includes ours) still gets
+    voice notes."""
+    opus = text_to_opus(text, mood=mood, physical=physical)
+    if opus:
+        return opus
+    log.info("native opus unavailable — trying mp3 + ffmpeg")
     mp3 = text_to_speech(text, mood=mood, physical=physical)
     if not mp3:
         return None
