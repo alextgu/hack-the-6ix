@@ -171,18 +171,38 @@ async def _sync_avatar(g: state.GroupState, ctx: ContextTypes.DEFAULT_TYPE) -> N
         log.warning("avatar sync failed (chat=%s): %s", g.chat_id, e)
 
 
-async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Post the pet health PNG to a chat (guilt-trip visual)."""
+async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, *,
+                        message: str | None = None, reply_to: int | None = None) -> None:
+    """Post the pet card PNG to a chat. Tabi's line (if any) rides as the
+    photo's OWN caption — one Telegram message, not a text message followed
+    by a separate photo. Falls back to the card's own mood caption when
+    there's no Tabi line (plain /health-style checks). If every caption
+    attempt fails (e.g. an unusually long line blowing past Telegram's
+    1024-char photo-caption cap), degrades to a bare photo + a separate text
+    send rather than silently dropping the turn."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
+    await asyncio.to_thread(state.persist_pet, g)
     asyncio.create_task(_sync_avatar(g, ctx))
     png_bytes = pet.render_pet_png(g)
-    caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
-    await ctx.bot.send_photo(
-        chat_id=chat_id,
-        photo=InputFile(BytesIO(png_bytes), filename="trippet.png"),
-        caption=caption,
-    )
+    caption = message or pet.pet_caption(g)
+
+    for parse_mode in (ParseMode.MARKDOWN, None):
+        for rt in (reply_to, None) if reply_to else (None,):
+            try:
+                await ctx.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=InputFile(BytesIO(png_bytes), filename="trippet.png"),
+                    caption=caption, parse_mode=parse_mode, reply_to_message_id=rt,
+                )
+                return
+            except Exception:
+                continue
+
+    await ctx.bot.send_photo(chat_id=chat_id,
+                             photo=InputFile(BytesIO(png_bytes), filename="trippet.png"))
+    if message:
+        await _say(chat_id, message, ctx, reply_to=reply_to)
 
 
 # ─── Voice (ElevenLabs) — gated: deathbed + graduation only ─────────────────
@@ -319,10 +339,11 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         supervisor.note_itinerary_posted(chat_id)
         await _green_react(ctx, chat_id, msg.message_id)
         return
-    if d.message:
-        await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
     if d.show_health:
-        await send_pet_card(chat_id, ctx)
+        # Tabi's line rides as the photo's caption — one message, not two.
+        await send_pet_card(chat_id, ctx, message=d.message, reply_to=d.reply_to)
+    elif d.message:
+        await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
     # Flywheel: after a messenger line goes out, watch the chat for a window and
     # back-fill the ground-truth outcome. Fire-and-forget; no-ops without Mongo.
     if d.harvest_id:
@@ -363,18 +384,7 @@ log = logging.getLogger("trippet")
 
 # ─── Rendering helper ────────────────────────────────────────────────────────
 async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    g = state.get_or_create(chat_id)
-    g.pet.refresh_mood()
-    await asyncio.to_thread(state.persist_pet, g)
-    asyncio.create_task(_sync_avatar(g, ctx))
-    png_bytes = pet.render_pet_png(g)
-    caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
-    await ctx.bot.send_photo(
-        chat_id=chat_id,
-        photo=InputFile(BytesIO(png_bytes), filename="trippet.png"),
-        caption=caption,
-    )
+    await send_pet_card(update.effective_chat.id, ctx)
 
 
 # Natural-language route into the green ledger. Deliberately narrow: it must
