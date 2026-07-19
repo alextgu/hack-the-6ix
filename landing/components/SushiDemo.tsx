@@ -175,7 +175,7 @@ export default function SushiDemo() {
               booked ? "animate-pop" : pet.mood === "dying" ? "" : "animate-floaty"
             }`}
             role="img"
-            aria-label={`Tama-Go-Chi looking ${pet.mood}`}
+            aria-label={`Tami looking ${pet.mood}`}
           >
             {outgoingSrc && (
               // eslint-disable-next-line @next/next/no-img-element

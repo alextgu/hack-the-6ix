@@ -15,20 +15,23 @@ export type PipelineCard = {
   steps: Step[];
 };
 
-const AUTO_MS = 10_000; // advance every 10s; resets on any manual nav
+const AUTO_MS = 20_000; // advance every 20s; resets on any manual nav
 
-/** One-at-a-time slideshow of the pipeline phases. Auto-advances every 10s,
- *  arrows + dots for manual control (which resets the timer). */
+/** One-at-a-time slideshow of the pipeline phases. Auto-advances every 20s,
+ *  pauses while hovered; arrows + dots for manual control (which resets the timer). */
 export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) {
   const n = cards.length;
   const [i, setI] = useState(0);
+  const [hovered, setHovered] = useState(false);
   const go = useCallback((next: number) => setI(((next % n) + n) % n), [n]);
 
-  // Timer is keyed on `i`, so any change — auto or manual — restarts the 10s.
+  // Timer is keyed on `i`, so any change — auto or manual — restarts the 20s.
+  // Paused while the slideshow is hovered.
   useEffect(() => {
+    if (hovered) return;
     const t = setTimeout(() => setI((c) => (c + 1) % n), AUTO_MS);
     return () => clearTimeout(t);
-  }, [i, n]);
+  }, [i, n, hovered]);
 
   const card = cards[i];
   const imageFirst = card.imageSide === "left";
@@ -38,7 +41,11 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
       : "absolute inset-0 h-full w-full object-cover";
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <article
         key={i}
         className="pipe-slide overflow-hidden"

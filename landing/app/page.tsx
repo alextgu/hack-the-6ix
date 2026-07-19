@@ -344,6 +344,19 @@ export default function Home() {
           <div className="ds-title mt-8 text-xs" style={{ color: "var(--muted)" }}>
             Built at Hack the 6ix · Tami · いってらっしゃい
           </div>
+          <div className="mt-12">
+            <div className="text-xs uppercase tracking-[0.3em]" style={{ color: "var(--muted)" }}>
+              the team
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/team.jpg"
+              alt="The team behind Tami at Hack the 6ix"
+              className="mx-auto mt-4 w-full max-w-lg rounded-2xl"
+              style={{ boxShadow: "var(--shadow)" }}
+              loading="lazy"
+            />
+          </div>
         </div>
       </footer>
     </main>
