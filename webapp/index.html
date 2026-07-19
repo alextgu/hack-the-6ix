@@ -98,7 +98,7 @@
       position: relative;
       z-index: 1;
       margin-bottom: 8%;
-      animation: tami-float 3.2s ease-in-out infinite;
+      animation: tabi-float 3.2s ease-in-out infinite;
       opacity: 1;
       transition: opacity 0.5s ease;
     }
@@ -114,14 +114,14 @@
       background: radial-gradient(ellipse at center, rgba(20, 16, 10, 0.32) 0%, rgba(20, 16, 10, 0) 72%);
       z-index: 0;
       pointer-events: none;
-      animation: tami-shadow 3.2s ease-in-out infinite;
+      animation: tabi-shadow 3.2s ease-in-out infinite;
     }
 
-    @keyframes tami-float {
+    @keyframes tabi-float {
       0%, 100% { transform: translateY(0); }
       50%      { transform: translateY(-10px); }
     }
-    @keyframes tami-shadow {
+    @keyframes tabi-shadow {
       0%, 100% { transform: scaleX(1); opacity: 1; }
       50%      { transform: scaleX(0.8); opacity: 0.6; }
     }
@@ -257,7 +257,7 @@
     <div id="pet-card">
       <div id="stage">
         <div id="pet-shadow"></div>
-        <img id="pet-sprite" alt="tami" />
+        <img id="pet-sprite" alt="tabi" />
       </div>
       <div id="pet-footer">
         <div id="caption">waking up…</div>

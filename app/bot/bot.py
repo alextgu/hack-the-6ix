@@ -187,7 +187,7 @@ async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
 
 
 async def _sync_avatar(g: state.GroupState, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Best-effort: swap the bot's own profile photo to match the exact tami
+    """Best-effort: swap the bot's own profile photo to match the exact tabi
     sprite (size/mold/feeling) currently shown in-chat. Deduped inside
     telegram_avatar (no-ops if this sprite is already set), so it's safe to
     call on every render. Never raises — a Telegram hiccup here must not
@@ -203,7 +203,7 @@ async def _sync_avatar(g: state.GroupState, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, *,
                         message: str | None = None, reply_to: int | None = None) -> None:
     """Post the pet card to a chat as an animated GIF (the sprite bobs, same
-    as the webapp's tami-float CSS) via send_animation — falling back to the
+    as the webapp's tabi-float CSS) via send_animation — falling back to the
     static PNG via send_photo if the GIF render or every animation-send
     attempt fails. Tabi's line (if any) rides as the media's OWN caption —
     one Telegram message, not a text message followed by a separate

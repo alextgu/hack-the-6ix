@@ -1,6 +1,6 @@
-"""Tami the sushi pet — real-art asset resolver.
+"""Tabi the sushi pet — real-art asset resolver.
 
-18 fully-baked PNGs live in `assets/tami/`, one per
+18 fully-baked PNGs live in `assets/tabi/`, one per
 (physical × expression × rotten) combo:
 
     {Rotten_?}{Full|Mid|Low}_{Happy|Mid|Sad}.png
@@ -20,10 +20,10 @@ from __future__ import annotations
 import logging
 import os
 
-log = logging.getLogger("trippet.tami")
+log = logging.getLogger("trippet.tabi")
 
-TAMI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), "assets", "tami")
+TABI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))), "assets", "tabi")
 
 # Public aliases kept for the /api/pet preview grid + callers.
 SIZES = ("Full", "Mid", "Low")
@@ -78,7 +78,7 @@ def sushi_filename(physical: int, mental: int, feeling: str | None = None) -> st
 
 
 def sushi_path(physical: int, mental: int, feeling: str | None = None) -> str:
-    return os.path.join(TAMI_DIR, sushi_filename(physical, mental, feeling))
+    return os.path.join(TABI_DIR, sushi_filename(physical, mental, feeling))
 
 
 def load_sushi_image(physical: int, mental: int, feeling: str | None = None):
@@ -89,5 +89,5 @@ def load_sushi_image(physical: int, mental: int, feeling: str | None = None):
     try:
         return Image.open(path).convert("RGBA")
     except (OSError, ValueError) as e:
-        log.warning("tami asset missing/unreadable: %s (%s)", path, e)
+        log.warning("tabi asset missing/unreadable: %s (%s)", path, e)
         return None

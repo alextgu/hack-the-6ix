@@ -19,6 +19,10 @@
 html {
   background-color: var(--bg);
   scroll-behavior: smooth;
+  /* Surface framing tokens (defined here, not tokens.css, so they always
+     resolve): a warm ink hairline + a paper sheen along the top edge. */
+  --hairline: rgba(42, 36, 28, 0.12);
+  --sheen: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* A full-viewport, vertically-centered stage. Content taller than the screen
@@ -209,6 +213,7 @@ input[type="range"].scrubber::-moz-range-track {
 }
 .pipe-slide {
   animation: pipeFade 0.45s cubic-bezier(0.22, 0.8, 0.36, 1) both;
+  border: 1px solid var(--hairline);
 }
 .pipe-arrow {
   position: absolute;
@@ -218,13 +223,14 @@ input[type="range"].scrubber::-moz-range-track {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  margin: 0 -10px;
+  width: 46px;
+  height: 46px;
+  margin: 0 -12px;
   border-radius: 9999px;
   background: var(--surface);
+  border: 1px solid var(--hairline);
   color: var(--fg);
-  box-shadow: var(--shadow);
+  box-shadow: var(--sheen), var(--shadow);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -251,11 +257,21 @@ input[type="range"].scrubber::-moz-range-track {
 }
 
 .card-lift {
-  transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.36, 1), box-shadow 0.3s ease;
+  border: 1px solid var(--hairline);
+  transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.36, 1),
+    box-shadow 0.3s ease, border-color 0.3s ease;
 }
 .card-lift:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 36px rgba(42, 36, 28, 0.12);
+  transform: translateY(-4px);
+  border-color: rgba(42, 36, 28, 0.16);
+  box-shadow: 0 1px 2px rgba(42, 36, 28, 0.06), 0 20px 42px rgba(42, 36, 28, 0.13);
+}
+
+/* Framed surface — hairline edge + paper sheen + layered depth. For the big
+   media/data cards that were reading flat against the page. */
+.framed {
+  border: 1px solid var(--hairline);
+  box-shadow: var(--sheen), var(--shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {

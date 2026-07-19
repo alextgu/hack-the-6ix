@@ -16,7 +16,7 @@ const unbounded = Unbounded({
 });
 
 export const metadata: Metadata = {
-  title: "Tami — Plan That Trip to Japan",
+  title: "Tabi — Plan That Trip to Japan",
   description:
     "Built at Hack the 6ix: a Telegram pet whose Physical health tracks live hotel data and whose Mental health tracks group engagement. The only way to save it is to book.",
 };

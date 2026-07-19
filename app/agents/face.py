@@ -1,7 +1,7 @@
 """Face seam — Gemini only, permanently.
 
 Classifies the feeling of ONE outgoing Tabi message into exactly one of the
-3 face expressions the art supports (happy/mid/sad — see app/render/tami.py),
+3 face expressions the art supports (happy/mid/sad — see app/render/tabi.py),
 so the pet's face in the chat image AND its Telegram profile photo both
 match how the message it just sent actually reads.
 

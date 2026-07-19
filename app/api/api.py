@@ -26,7 +26,7 @@ from app.core import health
 from app.bot import cards
 from app.integrations import db
 from app.integrations import elevenlabs
-from app.render import pet, tami
+from app.render import pet, tabi
 
 
 ROOT = Path(__file__).resolve().parents[2]   # app/api/api.py -> repo root
@@ -84,7 +84,7 @@ async def api_ping() -> dict:
     return {"ok": True, "service": "trippet-face"}
 
 
-# ─── Dev-only art preview — see the tami renders without launching the bot ──
+# ─── Dev-only art preview — see the tabi renders without launching the bot ──
 # No Telegram token needed: `uvicorn app.api.api:app --reload` then open
 # /api/preview in a browser. Synthetic, throwaway GroupState — never touches
 # real chat data.
@@ -105,14 +105,14 @@ def preview_pet_png(physical: int = 100, mental: int = 100, feeling: str = "mid"
 
 @app.get("/api/pet/sprite.png")
 def pet_sprite_png(physical: int = 100, mental: int = 100, feeling: str = "mid") -> Response:
-    """The raw tami sprite alone — the SAME image used for the Telegram chat
+    """The raw tabi sprite alone — the SAME image used for the Telegram chat
     card, the bot's profile photo, and the webapp pet-card. Pure function of
     (physical, mental, feeling); no group_id needed, so the webapp just reads
     the 3 numbers off its own /api/state poll and points an <img> here."""
-    img = tami.load_sushi_image(physical, mental, feeling)
+    img = tabi.load_sushi_image(physical, mental, feeling)
     if img is None:
         raise HTTPException(status_code=404,
-                           detail=f"missing asset: {tami.sushi_filename(physical, mental, feeling)}")
+                           detail=f"missing asset: {tabi.sushi_filename(physical, mental, feeling)}")
     buf = BytesIO()
     img.save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png")
@@ -130,11 +130,11 @@ _SPRITE_NAMES = (
 
 @app.get("/api/pet/asset/{name}")
 def pet_asset_file(name: str) -> FileResponse:
-    """Serve a named sprite from assets/tami (preview / debug only)."""
+    """Serve a named sprite from assets/tabi (preview / debug only)."""
     stem = name.removesuffix(".png")
     if stem not in _SPRITE_NAMES:
         raise HTTPException(status_code=404, detail="unknown sprite")
-    path = os.path.join(tami.TAMI_DIR, f"{stem}.png")
+    path = os.path.join(tabi.TABI_DIR, f"{stem}.png")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"missing asset: {stem}.png")
     return FileResponse(path, media_type="image/png")
@@ -161,16 +161,16 @@ def preview_gallery() -> HTMLResponse:
     cells = []
     for stem in _SPRITE_NAMES:
         fname = f"{stem}.png"
-        exists = os.path.exists(os.path.join(tami.TAMI_DIR, fname))
+        exists = os.path.exists(os.path.join(tabi.TABI_DIR, fname))
         sample = samples.get(stem)
         if sample is not None:
             physical, mental = sample
             img_src = f"/api/pet/sprite.png?physical={physical}&mental={mental}"
             href = f"/api/preview/pet.png?physical={physical}&mental={mental}"
             label = (
-                f"{tami.physical_tier(physical)} · "
-                f"{tami.expression_tier(mental)} · "
-                f"{'rotten' if tami.is_rotten(mental) else 'fresh'}"
+                f"{tabi.physical_tier(physical)} · "
+                f"{tabi.expression_tier(mental)} · "
+                f"{'rotten' if tabi.is_rotten(mental) else 'fresh'}"
             )
         else:
             img_src = f"/api/pet/asset/{fname}"
@@ -184,7 +184,7 @@ def preview_gallery() -> HTMLResponse:
             <div class="file">{fname}{'' if exists else ' — MISSING'}</div>
           </a>''')
     html = f'''<!doctype html><html><head><meta charset="utf-8">
-    <title>tami preview</title>
+    <title>tabi preview</title>
     <style>
       body {{ background:#121116; color:#eef1f6; font-family:-apple-system,sans-serif; padding:24px; }}
       .grid {{ display:grid; grid-template-columns:repeat(6,1fr); gap:14px; }}
@@ -195,7 +195,7 @@ def preview_gallery() -> HTMLResponse:
       .label {{ font-size:12px; margin-top:6px; color:#8a92a5; }}
       .file {{ font-size:10px; color:#5c6273; margin-top:2px; word-break:break-all; }}
     </style></head><body>
-    <h2>tami — sprites (physical × mental × rotten)</h2>
+    <h2>tabi — sprites (physical × mental × rotten)</h2>
     <p style="color:#8a92a5;font-size:13px">
       Physical &gt;70 Full / 40–70 Mid / &lt;40 Low ·
       Mental &gt;70 Happy / 40–70 Mid / &lt;40 Sad ·
