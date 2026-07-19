@@ -113,7 +113,7 @@ const ACCOMPLISHMENTS = [
   {
     icon: "heroicons:cpu-chip",
     title: "Freesolo over a frontier baseline",
-    body: "A 4B model trained on data our own product generated about itself beats a frontier model ~4× on held-out data (0.33 vs 0.086 gold-F1, 96% vs 0% pet-voice) and runs the live pet right now.",
+    body: "A 4B model trained on data our own product generated about itself beats a frontier model ~4× on held-out data (0.317 vs 0.078 gold-F1, 98% vs 0% pet-voice) and runs the live pet right now.",
   },
   {
     icon: "heroicons:musical-note",

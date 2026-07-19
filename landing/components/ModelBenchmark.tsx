@@ -18,10 +18,14 @@ type Metric = {
   ours: number;
 };
 
+// Numbers are the committed held-out run: training/eval/results-*.jsonl
+// (50 examples, 0 errors). Regenerate: python -m training.eval_harness
+// --model gemini|flash:<run> --dump <path>. Decoding is stochastic, so a
+// re-run moves these by ~0.01 — the file is the source of truth.
 const METRICS: Metric[] = [
-  { name: "Gold-F1", sub: "closeness to the ideal reply", unit: "", max: 0.4, decimals: 3, frontier: 0.086, ours: 0.33 },
-  { name: "In-voice", sub: "sounds like the pet, not an assistant", unit: "%", max: 100, decimals: 0, frontier: 0, ours: 96 },
-  { name: "Valid JSON", sub: "parseable structured output", unit: "%", max: 100, decimals: 0, frontier: 92, ours: 100 },
+  { name: "Gold-F1", sub: "closeness to the ideal reply", unit: "", max: 0.4, decimals: 3, frontier: 0.078, ours: 0.317 },
+  { name: "In-voice", sub: "sounds like the pet, not an assistant", unit: "%", max: 100, decimals: 0, frontier: 0, ours: 98 },
+  { name: "Valid JSON", sub: "parseable structured output", unit: "%", max: 100, decimals: 0, frontier: 88, ours: 100 },
 ];
 
 function Bar({ label, value, unit, max, decimals, color, strong }: {
@@ -101,7 +105,7 @@ export default function ModelBenchmark() {
         marginTop: 20, paddingTop: 16, borderTop: "1px solid rgba(42,36,28,0.1)",
         fontSize: 13.5, color: "var(--fg)", lineHeight: 1.5,
       }}>
-        <strong style={{ color: OURS }}>≈4× the frontier&apos;s Gold-F1</strong> and <strong>0 → 96% in-voice</strong> — trained
+        <strong style={{ color: OURS }}>≈4× the frontier&apos;s Gold-F1</strong> and <strong>0 → 98% in-voice</strong> — trained
         on data the product generated about itself (SFT → distillation → GRPO on Qwen&nbsp;3.5-4B), and the live pet runs on it right now.
       </div>
     </figure>
