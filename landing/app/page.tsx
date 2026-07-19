@@ -388,43 +388,40 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 5b. Show your work — carbon methodology (Deloitte AI-for-Green) ─ */}
-      <section className="snap-panel px-6 py-20">
-        <div className="mx-auto max-w-5xl">
-          <Reveal>
-            <p className="kicker mb-4">Show your work · the carbon math</p>
-          </Reveal>
-          <Reveal delay={60}>
-            <h2 className="ds-title max-w-3xl text-3xl leading-[1.1] sm:text-4xl lg:text-5xl">
-              The ledger never records a footprint. It records a difference.
-            </h2>
-          </Reveal>
-          <Reveal delay={120}>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed sm:text-lg" style={{ color: "var(--muted)" }}>
-              &ldquo;Your trip emits 3,080 kg&rdquo; is true and useless — it isn&apos;t a saving.
-              Every entry answers a narrower question:{" "}
-              <span style={{ color: "var(--fg)" }}>
-                versus the option actually on the table, how much less is this?
-              </span>{" "}
-              If a choice isn&apos;t better than its alternative, nothing is recorded — carbon accounting
-              that would survive an auditor.
-            </p>
-          </Reveal>
+      {/* ─── 5b. Show your work — one viewport: method left, live proof right.
+             The worked-example receipt lives in the Green section above, so
+             this beat is method + evidence only (no duplicate arithmetic). ─── */}
+      <section className="snap-panel px-6 py-16">
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          {/* Left — the method */}
+          <div>
+            <Reveal>
+              <p className="kicker mb-4">Show your work · the carbon math</p>
+            </Reveal>
+            <Reveal delay={60}>
+              <h2 className="ds-title max-w-xl text-3xl leading-[1.08] sm:text-4xl">
+                The ledger never records a footprint. It records a difference.
+              </h2>
+            </Reveal>
+            <Reveal delay={120}>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed sm:text-base" style={{ color: "var(--muted)" }}>
+                If a choice isn&apos;t better than the alternative on the table, nothing is
+                recorded — carbon accounting that would survive an auditor.
+              </p>
+            </Reveal>
 
-          <div className="mt-10 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_1.05fr]">
-            {/* the four steps — order matters, so they're numbered */}
-            <Reveal delay={200}>
-              <div className="grid h-full gap-3">
+            <Reveal delay={180}>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 {[
-                  { icon: "heroicons:calculator", t: "Measure the pick", s: "Distance or nights × a published factor. Every constant is local — a dead API can't move a carbon number." },
-                  { icon: "heroicons:scale", t: "Name the counterfactual", s: "The dirtiest flight on the list. The deck-average hotel. The same trip by car. Always something they could have picked." },
-                  { icon: "heroicons:users", t: "Delta × the people", s: "Per-person factors scale by group size, because four people flying is four times the flight." },
-                  { icon: "heroicons:shield-check", t: "Credit only if positive", s: "Pick the worst room on the deck and you earn zero, never a negative. The ledger can't go up on a bad choice." },
+                  { icon: "heroicons:calculator", t: "Measure the pick", s: "Distance or nights × a published factor — every constant local, no API in the loop." },
+                  { icon: "heroicons:scale", t: "Name the counterfactual", s: "The dirtiest flight listed, the deck-average hotel, the same trip by car." },
+                  { icon: "heroicons:users", t: "Delta × the people", s: "Four people flying is four times the flight — factors scale by group size." },
+                  { icon: "heroicons:shield-check", t: "Credit only if positive", s: "A worse pick earns zero, never a negative. Bad choices can't grow the ledger." },
                 ].map((d, i) => (
                   <div key={d.t} className="ds-health-card card-lift">
                     <div className="bar-top">
-                      <div className="bar-icon"><iconify-icon icon={d.icon} width="20" height="20" /></div>
-                      <h3 className="bar-name">{d.t}</h3>
+                      <div className="bar-icon"><iconify-icon icon={d.icon} width="18" height="18" /></div>
+                      <h3 className="bar-name text-sm">{d.t}</h3>
                       <span className="ml-auto text-xs tabular-nums" style={{ color: "var(--muted)" }} aria-hidden>0{i + 1}</span>
                     </div>
                     <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{d.s}</p>
@@ -433,73 +430,39 @@ export default function Home() {
               </div>
             </Reveal>
 
-            {/* the receipt — the actual arithmetic, itemised */}
-            <Reveal delay={260}>
+            <Reveal delay={240}>
               <div
-                className="flex h-full flex-col rounded-2xl p-6 sm:p-7"
-                style={{ background: "var(--surface)", border: "1px solid var(--hairline)", boxShadow: "var(--sheen), var(--shadow)" }}
+                className="mt-5 rounded-2xl p-5"
+                style={{ background: "var(--card-mint)", border: "1px solid rgba(47,107,74,0.16)" }}
               >
-                <div className="flex items-center gap-2">
-                  <iconify-icon icon="heroicons:receipt-percent" width="16" height="16" style={{ color: "var(--card-mint-ink)" }} />
-                  <span className="text-[0.68rem] font-bold uppercase tracking-[0.2em]" style={{ color: "var(--card-mint-ink)" }}>
-                    Worked example · Toronto → Tokyo, 4 people
-                  </span>
-                </div>
-                <div className="mt-5 flex flex-col gap-3 text-sm tabular-nums">
-                  <div className="flex items-baseline justify-between gap-4">
-                    <span>Nonstop <span style={{ color: "var(--muted)" }}>10,300 km × 0.1495 × 2</span></span>
-                    <span className="font-semibold">3,079.6 kg</span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-4">
-                    <span>Via Chicago <span style={{ color: "var(--muted)" }}>10,775 km + 50 kg stop</span></span>
-                    <span className="font-semibold">3,321.7 kg</span>
-                  </div>
-                  <div style={{ borderTop: "1px dashed var(--card-peach)" }} className="my-1" />
-                  <div className="flex items-baseline justify-between gap-4">
-                    <span style={{ color: "var(--muted)" }}>Avoided per person</span>
-                    <span className="font-semibold">242.1 kg</span>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-4">
-                    <span style={{ color: "var(--muted)" }}>× 4 travellers</span>
-                    <span className="ds-title text-2xl" style={{ color: "var(--card-mint-ink)" }}>968.4 kg</span>
-                  </div>
-                </div>
-                <div className="mt-5 rounded-xl px-4 py-3 text-xs leading-relaxed" style={{ background: "var(--card-mint)", color: "var(--card-mint-ink)" }}>
-                  Note what isn&apos;t claimed: the trip still emits over three tonnes a head. The ledger only
-                  says this choice avoided 242 kg of it — the detour distance plus one more takeoff and landing.
-                </div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: "var(--card-mint-ink)" }}>
+                  Not a slide — the live product →
+                </p>
+                <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--card-mint-ink)" }}>
+                  Type <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{"/saved "}</span>
+                  in the chat and Tabi computes the group&apos;s real ledger on the spot — equivalents, scale-up, and
+                  sources — from the same module behind every figure on this page.
+                </p>
               </div>
+            </Reveal>
+
+            <Reveal delay={300}>
+              <p className="mt-4 text-xs" style={{ color: "var(--muted)" }}>
+                Factors: DEFRA 2024 · CHSB 2023 · EPA · JR Central.
+              </p>
             </Reveal>
           </div>
 
-          {/* supporting evidence — the LIVE /saved output, straight from the bot */}
-          <Reveal delay={320}>
-            <div className="mt-8 grid items-center gap-6 lg:grid-cols-[auto_minmax(0,1fr)]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/japannnn.png"
-                alt="Tabi's live /saved green ledger in the Telegram chat: 19.9 kg CO2e avoided, EPA equivalents, 1,000-group scale-up, and sources (DEFRA, EPA, CHSB, JR Central)"
-                className="framed mx-auto w-full max-w-[260px] rounded-2xl"
-                loading="lazy"
-              />
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.18em]" style={{ color: "var(--card-mint-ink)" }}>
-                  Not a slide — the live product
-                </p>
-                <p className="mt-2 max-w-md text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
-                  Every figure on this page comes from the same module the bot runs. Type{" "}
-                  <span style={{ fontFamily: "monospace", color: "var(--fg)" }}>/saved</span>{" "}in the
-                  chat and Tabi returns the group&apos;s real ledger — equivalents, scale-up, sources and all —
-                  computed on the spot, never written by hand.
-                </p>
-              </div>
-            </div>
-          </Reveal>
-
-          <Reveal delay={360}>
-            <p className="mt-6 text-xs" style={{ color: "var(--muted)" }}>
-              Factors: DEFRA 2024 · CHSB 2023 · EPA · JR Central. Every figure computed from the live module.
-            </p>
+          {/* Right — the live /saved output in the actual chat, full column height */}
+          <Reveal delay={200}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/japannnn.png"
+              alt="Tabi's live /saved green ledger in the Telegram chat: 19.9 kg CO2e avoided, EPA equivalents, 1,000-group scale-up, and sources (DEFRA, EPA, CHSB, JR Central)"
+              className="framed mx-auto w-auto rounded-3xl"
+              style={{ maxHeight: "min(78vh, 720px)" }}
+              loading="lazy"
+            />
           </Reveal>
         </div>
       </section>
