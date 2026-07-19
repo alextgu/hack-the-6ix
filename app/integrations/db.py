@@ -207,13 +207,25 @@ def load_pet(chat_id: int) -> Optional[dict]:
 
 # ─── Chat log (the pet's long-term memory) ──────────────────────────────────
 def log_chat_message(chat_id: int, user_id: str, name: str, text: str,
-                     message_id: int | None = None) -> None:
+                     message_id: int | None = None, role: str = "user") -> None:
+    """`role` is "user" or "pet". Until 2026-07-19 only human messages were
+    logged, so the transcript the supervisor reads was one-sided — the pet
+    could not see a single thing it had said. It re-asked questions it had
+    just asked and forgot decisions it had just announced ("i am choosing
+    tokyo", then "we have two cities" thirteen minutes later), because from
+    its point of view neither had happened.
+
+    Pet turns are logged too, but tagged so last_message_at can ignore them:
+    "has the chat gone quiet?" must mean the HUMANS have gone quiet, or the
+    pet talking to itself would keep resetting its own heartbeat timer.
+    Documents written before this change have no `role` and are treated as
+    "user", which is what they were."""
     d = _db()
     if d is None:
         return
     try:
         d.chat_log.insert_one({"chat_id": chat_id, "user_id": str(user_id),
-                               "name": name, "text": text,
+                               "name": name, "text": text, "role": role,
                                "message_id": message_id, "ts": _utcnow()})
     except Exception as e:
         log.warning("log_chat_message failed: %s", e)
@@ -322,7 +334,11 @@ def last_message_at(chat_id: int) -> Optional[str]:
     if d is None:
         return None
     try:
-        row = d.chat_log.find_one({"chat_id": chat_id}, sort=[("ts", -1)])
+        # HUMAN messages only — the pet's own turns must not count as chat
+        # activity, or it resets the silence timer it is supposed to be
+        # measuring. Legacy rows predate `role` and were all human.
+        row = d.chat_log.find_one({"chat_id": chat_id,
+                                   "role": {"$ne": "pet"}}, sort=[("ts", -1)])
         return row["ts"] if row else None
     except Exception as e:
         log.warning("last_message_at failed: %s", e)

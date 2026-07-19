@@ -124,6 +124,78 @@ def render_ask_memory(asks: dict) -> str:
             "single worst thing you can do here):\n" + "\n".join(lines))
 
 
+# ─── Focus + target rotation ────────────────────────────────────────────────
+# Observed live: the pet chased dates, budget and the flight list in a single
+# message, every message, at whoever spoke last. Reads as panic, and asking one
+# person three things is a reliable way to get zero answers. The code picks
+# WHAT to chase and WHO to chase; the model only decides how to phrase it.
+_FOCUS_ORDER = ["city", "dates", "budget"]
+_last_target: dict[int, str] = {}
+
+_FOCUS_HOW = {
+    "city": "which city — one name, that's all you need from them",
+    "dates": "when — a month, or a concrete window they can say yes to",
+    "budget": "a per-person number — a ceiling, not an exact figure",
+}
+
+
+def _focus_line(s: AgentState) -> str:
+    missing = [f for f in _FOCUS_ORDER if f in (s.get("missing") or [])]
+    if not missing:
+        return ("FOCUS: nothing is missing. Do NOT re-ask for city, dates or "
+                "budget — you have them. Push the CURRENT stage forward and "
+                "nothing else.")
+    f = missing[0]
+    rest = [m for m in missing if m != f]
+    tail = (f" You also still need {', '.join(rest)} — but NOT in this message. "
+            f"One thing at a time." if rest else "")
+    return (f"FOCUS — this message chases exactly ONE thing: {f.upper()} "
+            f"({_FOCUS_HOW[f]}). Do not mention or ask about anything else."
+            f"{tail}")
+
+
+def _member_names(members) -> list[str]:
+    out = []
+    for m in (members or []):
+        n = m.get("name") if isinstance(m, dict) else str(m)
+        if n:
+            out.append(str(n))
+    return out
+
+
+def note_target(chat_id: int, name: str, members=None) -> None:
+    """Store WHO was just asked — but only if it's a real member name.
+
+    The model sometimes returns the telegram user_id it saw in the mention
+    markup ("2") instead of the name. Storing that silently breaks rotation:
+    "2" matches nobody, so the next turn thinks it hasn't asked anyone.
+    Resolve against the member list and drop anything unrecognisable."""
+    if not name:
+        return
+    names = _member_names(members if members is not None else db.known_members(chat_id))
+    match = next((n for n in names if n.lower() == str(name).strip().lower()), None)
+    if match:
+        _last_target[chat_id] = match
+    else:
+        log.debug("target %r not a known member (%s) — not recording", name, names)
+
+
+def _target_line(chat_id: int, members) -> str:
+    """Spread the asking around. Hammering the same person is how a group chat
+    starts ignoring a bot."""
+    names = _member_names(members)
+    last = _last_target.get(chat_id)
+    if not names:
+        return "WHO: nobody has spoken yet — address the group, name no one."
+    if last and len(names) > 1:
+        others = [n for n in names if n != last]
+        return (f"WHO: you asked {last} last time. Ask someone else now — "
+                f"try {others[0]}. Going back to the same person twice in a row "
+                f"is how a group chat learns to ignore you.")
+    return (f"WHO: pick ONE person from {names} and ask only them. "
+            "A question aimed at everyone gets answered by no one.")
+
+
 def nudge_gap_s(chat_id: int) -> float:
     """How long the pet must stay quiet before nudging again, given how many
     nudges have already gone unanswered."""
@@ -261,6 +333,7 @@ class AgentState(TypedDict, total=False):
     pending: list         # unacknowledged contributions (from trip_plans)
     harvest_id: Optional[str]  # id of the logged messenger record (flywheel)
     asks_for: Optional[str]    # trip field this message chases (ask memory)
+    asks_person: Optional[str]  # who it was aimed at (target rotation)
     urgent: bool
 
 
@@ -455,7 +528,11 @@ def profile_tracker(s: AgentState) -> AgentState:
     chat_id = s["chat_id"]
     transcript = s["transcript"]
     seen = _last_profiled_n.get(chat_id, 0)
-    fresh = transcript[seen:]
+    # The transcript now includes the pet's own turns (so the messenger can see
+    # what it already said). Profiles and pending obligations are about HUMANS
+    # — without this filter the pet builds a user profile for itself and starts
+    # owing itself replies.
+    fresh = [m for m in transcript[seen:] if m.get("role") != "pet"]
     _last_profiled_n[chat_id] = len(transcript)
     pending = list(s["plan"].get("pending", []))
     if fresh:
@@ -531,8 +608,14 @@ def messenger(s: AgentState) -> AgentState:
     self-score each for motivation (1-5), then code picks the best one above
     threshold — or silence. Every send is explainable by its winning thought."""
     g = state.get_or_create(s["chat_id"])
-    convo = "\n".join(f"[id={m.get('message_id')}] {m['name']}: {m['text']}"
-                      for m in s["transcript"][-25:])
+    # Mark the pet's own turns explicitly. Seeing them as "Tabi:" alongside the
+    # humans isn't enough — it has to recognise them as ITSELF to notice it
+    # already asked this, or already made the call it's about to re-litigate.
+    convo = "\n".join(
+        (f"[id={m.get('message_id')}] YOU (Tabi) said: {m['text']}"
+         if m.get("role") == "pet" else
+         f"[id={m.get('message_id')}] {m['name']}: {m['text']}")
+        for m in s["transcript"][-25:])
     profiles = json.dumps(s["profiles"], default=str)[:1500]
     # After /reset the profile collection is empty, and an empty list used to
     # read as "make some up" — the pet greeted "sam, alex" in a chat with
@@ -545,6 +628,11 @@ def messenger(s: AgentState) -> AgentState:
     # Drop asks the group has since answered, then show what's still open.
     asks_now = clear_answered_asks(s["chat_id"], s["plan"], g.trip)
     ask_memory = render_ask_memory(asks_now)
+    # ONE thing at a time. Chasing city+dates+budget in a single message reads
+    # as flailing, and nobody answers three questions at once — so the code
+    # picks the target and the model only gets to decide how to say it.
+    focus_line = _focus_line(s)
+    target_line = _target_line(s["chat_id"], db.known_members(s["chat_id"]))
     already_flights = bool(s["plan"].get("flights_posted"))
     saved = green.totals(s["chat_id"])["total_kg"]
     green_line = (f"GREEN LEDGER: the group has avoided {saved} kg CO2e so far by "
@@ -582,6 +670,8 @@ Stages: GATHER (lock city+dates+budget — the first 50%) → FLIGHTS (pick a
 mock flight) → HOTELS (swipe the card deck) → BOOK.
 
 Current stage: {s['stage']}. Missing fields: {s['missing']}.
+{focus_line}
+{target_line}
 Current phase: {s.get('phase', PHASE_GATHER)} — {PHASE_INTENT.get(s.get('phase'), '')}
 Pet health: physical {g.pet.physical}, mental {g.pet.mental} ({g.pet.mood}).
 {green_line}
@@ -616,12 +706,15 @@ message id. List any pending contribution ids/summaries the candidate
 answers in "acknowledges".
 
 Set "asks_for" to the field a candidate is chasing — one of city, dates,
-budget, group_size — or null if it isn't asking for a trip field. Be honest:
-this is what stops you asking the same question tomorrow.
+budget, group_size — or null if it isn't asking for a trip field. Set
+"asks_person" to the ONE person you aimed it at — their NAME exactly as it
+appears in the members list, never a user id (or null). Both are honest
+bookkeeping: they're what stop you asking the same thing, of the same person,
+tomorrow.
 
 Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
 "kind": str, "reply_to": int|null, "acknowledges": [str],
-"asks_for": "city"|"dates"|"budget"|"group_size"|null}}],
+"asks_for": "city"|"dates"|"budget"|"group_size"|null, "asks_person": str|null}}],
 "action": "none"|"post_flights"|"deal_cards", "show_health": bool, "why": str}}""") \
         if (fs_out := _freesolo_messenger_turn(s)) is None else fs_out
     # ^ trained Freesolo messenger first (training-serializer parity); any
@@ -668,6 +761,7 @@ Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
     return {**s, "send": send, "message": message, "action": action,
             "reply_to": reply_to, "show_health": bool(out.get("show_health")),
             "asks_for": (best or {}).get("asks_for"),
+            "asks_person": (best or {}).get("asks_person"),
             "harvest_id": harvest_id, "done": s["done"] + ["messenger"]}
 
 
@@ -773,8 +867,11 @@ def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> De
                   urgent=urgent or trigger == "kickoff")
         # Record the ask ONLY once the gate has committed to sending it —
         # the messenger drafts every turn and the cooldown swallows most.
-        if d.send and d.message and out.get("asks_for"):
-            note_ask(chat_id, plan, str(out["asks_for"]), d.message)
+        if d.send and d.message:
+            if out.get("asks_for"):
+                note_ask(chat_id, plan, str(out["asks_for"]), d.message)
+            if out.get("asks_person"):
+                note_target(chat_id, str(out["asks_person"]))  # validated inside
         return d
     except Exception as e:
         log.warning("run_turn failed (chat=%s): %s", chat_id, e)
@@ -787,6 +884,7 @@ def reset_chat(chat_id: int) -> None:
     _last_attempt_at.pop(chat_id, None)
     _last_profiled_n.pop(chat_id, None)
     _unanswered_nudges.pop(chat_id, None)
+    _last_target.pop(chat_id, None)
 
 
 def try_lock_flight(chat_id: int, text: str) -> Optional[tuple[str, bool]]:

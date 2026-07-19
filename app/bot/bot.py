@@ -145,6 +145,10 @@ async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ctx.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
 
 
+# How the pet appears in its own transcript lines ("Tabi: ...").
+PET_NAME = "Tabi"
+
+
 async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
                reply_to: int | None = None) -> None:
     """Send with Markdown so [name](tg://user?id=...) mentions ping people;
@@ -153,9 +157,16 @@ async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
     for parse_mode in (ParseMode.MARKDOWN, None):
         for rt in (reply_to, None) if reply_to else (None,):
             try:
-                await ctx.bot.send_message(chat_id=chat_id, text=text,
-                                           parse_mode=parse_mode,
-                                           reply_to_message_id=rt)
+                sent = await ctx.bot.send_message(chat_id=chat_id, text=text,
+                                                  parse_mode=parse_mode,
+                                                  reply_to_message_id=rt)
+                # Log the pet's own turn so the next transcript is a real
+                # two-sided conversation. Without this the supervisor reads
+                # only the humans and cannot tell what it already said,
+                # already asked, or already decided.
+                await asyncio.to_thread(
+                    db.log_chat_message, chat_id, "tabi", PET_NAME, text,
+                    sent.message_id, "pet")
                 return
             except Exception:
                 continue
