@@ -111,12 +111,19 @@ def render_ask_memory(asks: dict) -> str:
         n = int(v.get("count", 1))
         last = (v.get("last") or "").strip()
         if n >= ASK_ESCALATE_AT:
+            # The default MUST stay inside the trip's own constraints. Left
+            # open-ended, this rule is exactly what made the pet declare
+            # "default destination is now chicago" on a Japan trip.
+            example = ("Tokyo unless someone objects" if field == "city"
+                       else "march 14 unless someone objects")
+            guard = (f" Any default city MUST be in {TRIP_COUNTRY}."
+                     if field == "city" else "")
             lines.append(
                 f'  - {field}: asked {n}x, still unanswered. STOP asking the same '
                 f'way. Either @ one specific person and make it trivially easy to '
-                f'answer, propose a concrete default they can veto ("march 14 '
-                f'unless someone objects"), or drop it and move the plan forward '
-                f'on what you DO have. Last attempt: "{last}"')
+                f'answer, propose a concrete default they can veto ("{example}"),'
+                f' or drop it and move the plan forward on what you DO have.'
+                f'{guard} Last attempt: "{last}"')
         else:
             lines.append(f'  - {field}: asked once already. Do not re-ask in the '
                          f'same words. Last attempt: "{last}"')
@@ -129,11 +136,22 @@ def render_ask_memory(asks: dict) -> str:
 # message, every message, at whoever spoke last. Reads as panic, and asking one
 # person three things is a reliable way to get zero answers. The code picks
 # WHAT to chase and WHO to chase; the model only decides how to phrase it.
+# The trip has a fixed destination country. The messenger prompt never said so
+# — only brain.py knew — and when the escalation rule told the pet to "propose
+# a concrete default" for an unanswered city, it defaulted a Japan trip to
+# CHICAGO. Everything downstream is Japan-only too (stay22.CITY_COORDS,
+# green.CITY_AIRPORT, the Shinjuku basecamp), so an off-country city doesn't
+# just read wrong, it breaks hotels and flights.
+TRIP_COUNTRY = os.environ.get("TRIP_COUNTRY", "Japan")
+_CITY_EXAMPLES = os.environ.get(
+    "TRIP_CITY_EXAMPLES", "Tokyo, Kyoto, Osaka, Sapporo, Fukuoka, Nara, Hakone")
+
 _FOCUS_ORDER = ["city", "dates", "budget"]
 _last_target: dict[int, str] = {}
 
 _FOCUS_HOW = {
-    "city": "which city — one name, that's all you need from them",
+    "city": (f"which city IN {TRIP_COUNTRY} — one name, that's all you need "
+             f"from them. Never a city outside {TRIP_COUNTRY}"),
     "dates": "when — a month, or a concrete window they can say yes to",
     "budget": "a per-person number — a ceiling, not an exact figure",
 }
@@ -683,6 +701,13 @@ def messenger(s: AgentState) -> AgentState:
 You are the +1 member of this friend group whose whole job is getting the
 trip planned. The group's indecision is literally killing you — you have real
 stakes here, and you're allowed to have a mood about it.
+
+THE DESTINATION IS NOT UP FOR DEBATE: this group is going to {TRIP_COUNTRY}.
+Every city you mention, suggest or default to MUST be in {TRIP_COUNTRY}
+({_CITY_EXAMPLES}). "Which city" only ever means which city IN {TRIP_COUNTRY}.
+If someone names somewhere else, that's a joke or a mistake — say so and steer
+back. Never propose a destination outside {TRIP_COUNTRY}, not even to be funny,
+and not as a placeholder when nobody is answering you.
 
 {voice_block}
 

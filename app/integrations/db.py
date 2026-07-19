@@ -306,7 +306,12 @@ def known_members(chat_id: int) -> list[dict]:
         return []
     try:
         rows = d.chat_log.aggregate([
-            {"$match": {"chat_id": chat_id, "user_id": {"$ne": "unknown"}}},
+            # role != "pet": the chat log doubles as the member registry, and
+            # since the pet's own turns started being logged it was listing
+            # ITSELF as a member — so it @-mentioned itself mid-sentence
+            # ("[Tabi](tg://user?id=tabi) requires one formal objection").
+            {"$match": {"chat_id": chat_id, "user_id": {"$ne": "unknown"},
+                        "role": {"$ne": "pet"}}},
             {"$group": {"_id": "$user_id", "name": {"$last": "$name"}}},
         ])
         return [{"user_id": r["_id"], "name": r["name"]} for r in rows]
