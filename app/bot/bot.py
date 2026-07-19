@@ -20,6 +20,7 @@ Mini App button (also one-time, in BotFather):
 Commands (once running):
   /start           hatch the pet, post its image (also wakes a /stop'd pet)
   /health          post the current pet image + numbers
+  /tinder          deal the Tinder-style hotel swipe deck (uses the trip data in Mongo)
   /scrub <0..6>    dev: jump the simulated timeline; watch the bars move
   /silence <ticks> dev: simulate N ignored nudges; watch mental drop
   /commit          both bars full — celebrated 'graduated' pet
@@ -146,6 +147,16 @@ async def open_hotel_cards(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None
         "i'll keep cutting until we all land on one."
     )
     await ctx.bot.send_message(chat_id=chat_id, text=text, reply_markup=kb)
+
+
+async def cmd_tinder(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """/tinder — deal the Tinder-style hotel swipe deck on demand, built from
+    the trip data we already have in Mongo (the group's dates + size) plus live
+    Stay22 hotels. Same deck the supervisor deals at the HOTELS stage and the
+    'map' demo trigger, exposed as a first-class command."""
+    chat_id = update.effective_chat.id
+    await open_hotel_cards(chat_id, ctx)
+    supervisor.note_cards_dealt(chat_id)
 
 
 # How the pet appears in its own transcript lines ("Tabi: ...").
@@ -1086,6 +1097,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("commit", cmd_commit))
     app.add_handler(CommandHandler("end", cmd_end))
     app.add_handler(CommandHandler("open", cmd_open))
+    app.add_handler(CommandHandler("tinder", cmd_tinder))
     app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(CommandHandler("saved", cmd_saved))
     app.add_handler(CommandHandler("itinerary", cmd_itinerary))
