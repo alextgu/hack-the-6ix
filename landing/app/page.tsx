@@ -2,6 +2,7 @@ import Reveal from "@/components/Reveal";
 import Petals from "@/components/Petals";
 import ModelBenchmark from "@/components/ModelBenchmark";
 import PipelineSlideshow from "@/components/PipelineSlideshow";
+import AmbientMusic from "@/components/AmbientMusic";
 
 const BOT_HANDLE = "@PetSamaBot";
 const BOT_URL = `https://t.me/${BOT_HANDLE.replace(/^@/, "")}`;
@@ -152,6 +153,7 @@ function CardGrid({
 export default function Home() {
   return (
     <main style={{ color: "var(--fg)" }}>
+      <AmbientMusic />
       {/* ─── 1. HOOK ──────────────────────────────────────────────────────── */}
       <section className="hero-split relative lg:grid lg:min-h-dvh lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
         <div className="relative flex flex-col justify-center px-6 py-16 sm:px-10 sm:py-20 lg:px-12 lg:py-24 xl:px-16">

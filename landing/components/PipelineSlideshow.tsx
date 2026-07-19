@@ -57,8 +57,9 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
         }}
       >
         {card.mediaType === "demo" ? (
-          /* Slide 0 — the live health-bar simulation, full-card. */
-          <div className="relative overflow-hidden p-7 sm:p-8 lg:min-h-[460px]">
+          /* Slide 0 — the live health-bar simulation, full-card. Compact
+             chrome (padding/caption) so its height matches the media slides. */
+          <div className="relative flex flex-col justify-center overflow-hidden p-5 sm:p-6 lg:min-h-[560px]">
             <span
               aria-hidden
               className="ds-title pointer-events-none absolute -top-4 right-3 select-none leading-none tabular-nums"
@@ -67,7 +68,7 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
               {i + 1}
             </span>
             <p
-              className="mb-6 inline-flex w-fit items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em]"
+              className="mb-4 inline-flex w-fit items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em]"
               style={{ color: "var(--card-coral-ink)" }}
             >
               <span className="inline-block h-2 w-2 rounded-full" style={{ background: "var(--card-coral-ink)" }} />
@@ -75,7 +76,7 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
             </p>
             <SushiDemo />
             {card.steps[0] ? (
-              <p className="mx-auto mt-6 max-w-xl text-center text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
+              <p className="mx-auto mt-4 max-w-xl text-center text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
                 {card.steps[0].body}
               </p>
             ) : null}
@@ -83,7 +84,7 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
         ) : (
         <div className="grid items-stretch lg:grid-cols-[1.55fr_minmax(0,1fr)]">
           <div
-            className={`relative min-h-[300px] overflow-hidden sm:min-h-[360px] lg:min-h-[460px] ${
+            className={`relative min-h-[300px] overflow-hidden sm:min-h-[360px] lg:min-h-[600px] ${
               imageFirst ? "lg:order-1" : "lg:order-2"
             }`}
             style={{ background: "var(--card-peach)" }}
