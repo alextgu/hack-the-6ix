@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 import urllib.error
 import urllib.request
@@ -70,10 +71,48 @@ def _settings_for(mood: Optional[str], physical: Optional[int]) -> dict:
     return _SETTINGS_DYING if is_dying else _SETTINGS_ALIVE
 
 
+# ─── Making text speakable ──────────────────────────────────────────────────
+# Tabi's lines are written for Telegram, so they carry markup a TTS model has
+# no business reading. Observed live: a voice note read the mention
+# "[lucas](tg://user?id=8685072453)-kun" ALOUD — including every digit of the
+# user id. Sanitising happens in _tts, the single choke point every synthesis
+# path funnels through, so no caller can forget it. The CAPTION keeps the
+# markup (it needs to render a real mention); only the spoken audio is cleaned.
+_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\((?:[^)]*)\)")     # [label](anything) -> label
+_URL_RE = re.compile(r"https?://\S+|tg://\S+|www\.\S+")
+_MD_EMPHASIS_RE = re.compile(r"[*_`~]{1,3}")
+_EMOJI_RE = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
+    "\U00002190-\U000021FF\U00002B00-\U00002BFF️‍]+")
+_WS_RE = re.compile(r"[ \t]{2,}")
+
+
+def speakable(text: str) -> str:
+    """Strip anything a voice shouldn't pronounce: mention/link markup, bare
+    URLs, markdown emphasis, emoji. Keeps the human-readable words."""
+    if not text:
+        return ""
+    out = _MD_LINK_RE.sub(r"\1", text)   # keep the label, drop the target
+    out = _URL_RE.sub("", out)           # any surviving bare link
+    out = _MD_EMPHASIS_RE.sub("", out)
+    out = _EMOJI_RE.sub("", out)
+    out = _WS_RE.sub(" ", out)
+    # Tidy punctuation left stranded by removals (" ," / " ." / doubled spaces).
+    out = re.sub(r"\s+([,.!?;:])", r"\1", out)
+    return "\n".join(line.strip() for line in out.splitlines()).strip()
+
+
 def _tts(text: str, voice: str, api_key: str, model_id: str,
          output_format: Optional[str], accept: str,
          settings: Optional[dict] = None) -> Optional[bytes]:
     """One synthesis call. `output_format` None → the API's mp3 default."""
+    spoken = speakable(text)
+    if not spoken:
+        log.warning("nothing speakable left after sanitising %r", text[:80])
+        return None
+    if spoken != text:
+        log.info("sanitised for speech: %r -> %r", text[:70], spoken[:70])
+    text = spoken
     url = ENDPOINT.format(voice_id=voice)
     if output_format:
         url += f"?output_format={output_format}"
