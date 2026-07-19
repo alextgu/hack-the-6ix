@@ -17,7 +17,6 @@ TODO seams:
 """
 from __future__ import annotations
 import os
-from datetime import date
 from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -40,9 +39,9 @@ TRACK_BG = (42, 36, 28, 26)             # rgba(42,36,28,0.1) bar track
 RADIUS = 40      # --radius (28px in the 440-wide webapp, scaled to our canvas)
 RADIUS_SM = 26   # --radius-sm
 
-CANVAS = (640, 1060)
-PAD = 36
-CONTENT_W = CANVAS[0] - 2 * PAD
+CANVAS = (640, 640)   # square, per spec: sprite + bars in one box, no header/caption
+PAD = 28              # canvas edge -> card
+INNER_PAD = 28         # card edge -> content (title / sprite / bars)
 
 FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))), "assets", "fonts")
@@ -170,50 +169,44 @@ def _health_color(val: int) -> tuple[int, int, int]:
     return HEALTH_BAD
 
 
-def _bar_row(img: Image.Image, x: int, y: int, w: int, *, icon_glyph, name: str,
-            val: int) -> int:
-    """Draws one webapp-style bar card (icon chip + name + big value, then a
-    thin pill progress track below). Returns the y just past this row."""
-    h = 150
-    _card(img, (x, y, x + w, y + h), RADIUS_SM)
-    draw = ImageDraw.Draw(img)
+def _bar_minimal(img: Image.Image, x: int, y: int, w: int, *, icon_glyph, val: int,
+                 h: int = 28) -> int:
+    """One health bar, no label/number — an icon chip (visual, not text) plus
+    a colored pill track. Returns the y just past this bar."""
+    icon_size = h + 6
+    _icon_chip(img, x + icon_size // 2, y + h // 2, icon_size, icon_glyph)
 
-    icon_cy = y + 42
-    _icon_chip(img, x + 28 + 27, icon_cy, 54, icon_glyph)
-
-    draw.text((x + 28 + 66, icon_cy), name, fill=FG, font=_display(24), anchor="lm")
-    val_text = str(int(round(val)))
-    draw.text((x + w - 28, icon_cy), val_text, fill=FG, font=_display(48), anchor="rm")
-
-    track_y = y + 96
-    track_h = 16
-    _pill(img, (x + 28, track_y, x + w - 28, track_y + track_h), track_h // 2, TRACK_BG)
-    fill_w = int((w - 56) * max(0, min(100, val)) / 100)
-    if fill_w > track_h:
-        _pill(img, (x + 28, track_y, x + 28 + fill_w, track_y + track_h),
-             track_h // 2, _health_color(val))
+    track_x0 = x + icon_size + 14
+    track_x1 = x + w
+    _pill(img, (track_x0, y, track_x1, y + h), h // 2, TRACK_BG)
+    fill_w = int((track_x1 - track_x0) * max(0, min(100, val)) / 100)
+    if fill_w > h:
+        _pill(img, (track_x0, y, track_x0 + fill_w, y + h), h // 2, _health_color(val))
 
     return y + h
 
 
 # ─── Sushi stage: shadow ellipse + sprite, matches webapp #stage/#pet-shadow
-SPRITE_BOX = 380
-
-
-def _draw_sprite(img: Image.Image, cx: int, cy: int, pet: PetState) -> None:
+def _draw_sprite(img: Image.Image, cx: int, cy: int, pet: PetState, box: int) -> None:
+    """`box` is the max width/height the sprite is scaled into, centered on
+    (cx, cy) — sized by the caller to whatever room is left after the title
+    and bars."""
     sprite = tami.load_sushi_image(pet.physical, pet.mental, pet.feeling)
     if sprite is None:
         _draw_pet_placeholder(ImageDraw.Draw(img), cx, cy, pet)
         return
 
+    shadow_w, shadow_h = box * 0.29, box * 0.09
+    shadow_y = cy + box * 0.39
     shadow_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     ImageDraw.Draw(shadow_layer).ellipse(
-        [cx - 110, cy + 150, cx + 110, cy + 186], fill=(20, 16, 10, 130))
+        [cx - shadow_w, shadow_y, cx + shadow_w, shadow_y + shadow_h],
+        fill=(20, 16, 10, 130))
     shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(8))
     img.paste(shadow_layer, (0, 0), shadow_layer)
 
     w, h = sprite.size
-    scale = min(SPRITE_BOX / w, SPRITE_BOX / h)
+    scale = min(box / w, box / h)
     sprite = sprite.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS)
     sw, sh = sprite.size
     img.paste(sprite, (cx - sw // 2, cy - sh // 2), sprite)
@@ -239,7 +232,7 @@ def _draw_pet_placeholder(draw: ImageDraw.ImageDraw, cx: int, cy: int, pet: PetS
              fill=(26, 26, 34), width=6)
 
 
-# ─── Caption + trip stats (mirrors webapp app.js deriveCaption/renderTripStats)
+# ─── Telegram-caption-only text (never drawn ON the image — see bot.py) ────
 def pet_caption(g: GroupState) -> str:
     p, m = g.pet.physical, g.pet.mental
     mood = g.pet.mood
@@ -264,67 +257,42 @@ def pet_caption(g: GroupState) -> str:
     return "just hanging out. keep talking, keep booking."
 
 
-def _fmt_date(d) -> str:
-    if not d:
-        return ""
-    if isinstance(d, str):
-        try:
-            d = date.fromisoformat(d[:10])
-        except ValueError:
-            return str(d)
-    return f"{d.strftime('%B')} {d.day}, {d.year}"
-
-
-def _trip_stats(g: GroupState) -> str:
-    trip = g.trip
-    bits = []
-    if trip.city:
-        bits.append(str(trip.city))
-    if trip.dates and (trip.dates.start or trip.dates.end):
-        a, b = _fmt_date(trip.dates.start), _fmt_date(trip.dates.end)
-        bits.append(f"{a} – {b}" if a and b else (a or b))
-    if trip.budget_per_person is not None:
-        bits.append(f"${trip.budget_per_person}/pp")
-    if trip.group_size is not None:
-        bits.append(f"{trip.group_size} people")
-    return "   ·   ".join(bits)
-
-
 def render_pet_png(g: GroupState) -> bytes:
+    """Square card: 'Tabi' label, the sprite, then the two health bars
+    stacked below it — all inside one box. No caption, no trip stats, no
+    week chip; the only text anywhere is the word 'Tabi'. (Tabi's chat line
+    still rides as the Telegram message's own caption — see bot.py — this
+    function only controls what's drawn INTO the image.)"""
     img = _tiled_background(CANVAS).convert("RGB")
 
-    # ── header: "Tabi" title + "week N" chip ──
-    draw = ImageDraw.Draw(img)
-    draw.text((PAD, PAD), "Tabi", fill=FG, font=_display(46), anchor="la")
-    week_text = f"week {g.sim_week}"
-    chip_font = _body(20)
-    chip_w = int(draw.textlength(week_text, font=chip_font)) + 44
-    chip_h = 44
-    chip_x1, chip_y1 = PAD + CONTENT_W, PAD + 6
-    _card(img, (chip_x1 - chip_w, chip_y1, chip_x1, chip_y1 + chip_h), chip_h // 2)
-    draw = ImageDraw.Draw(img)
-    draw.text((chip_x1 - chip_w // 2, chip_y1 + chip_h // 2), week_text,
-              fill=FG, font=chip_font, anchor="mm")
-
-    # ── pet card: sprite stage + caption + trip stats ──
-    card_y0 = PAD + 78
-    card_h = 560
-    _card(img, (PAD, card_y0, PAD + CONTENT_W, card_y0 + card_h), RADIUS)
-    _draw_sprite(img, cx=CANVAS[0] // 2, cy=card_y0 + 232, pet=g.pet)
+    card_box = (PAD, PAD, CANVAS[0] - PAD, CANVAS[1] - PAD)
+    _card(img, card_box, RADIUS)
+    inner_x0, inner_y0, inner_x1, inner_y1 = (
+        card_box[0] + INNER_PAD, card_box[1] + INNER_PAD,
+        card_box[2] - INNER_PAD, card_box[3] - INNER_PAD,
+    )
 
     draw = ImageDraw.Draw(img)
-    caption_y = card_y0 + card_h - 96
-    draw.text((PAD + 32, caption_y), pet_caption(g), fill=FG, font=_body(24), anchor="lm")
-    stats = _trip_stats(g)
-    if stats:
-        draw.text((PAD + 32, caption_y + 38), stats, fill=MUTED, font=_body(17), anchor="lm")
+    title_font = _display(34)
+    draw.text((inner_x0, inner_y0), "Tabi", fill=FG, font=title_font, anchor="la")
+    title_bottom = inner_y0 + title_font.getbbox("Tabi")[3] + 20
 
-    # ── health bar cards ──
-    bars_y = card_y0 + card_h + 24
-    bars_y = _bar_row(img, PAD, bars_y, CONTENT_W, icon_glyph=_heart_glyph,
-                      name="Physical", val=g.pet.physical) + 16
-    _bar_row(img, PAD, bars_y, CONTENT_W, icon_glyph=_chat_glyph,
-            name="Mental", val=g.pet.mental)
+    bar_h = 28
+    bars_gap = 14
+    bars_h = bar_h * 2 + bars_gap
+    bars_y0 = inner_y1 - bars_h
+
+    sprite_top = title_bottom
+    sprite_bottom = bars_y0 - 24
+    sprite_box = max(80, min(inner_x1 - inner_x0, sprite_bottom - sprite_top))
+    sprite_cx = (inner_x0 + inner_x1) // 2
+    sprite_cy = sprite_top + (sprite_bottom - sprite_top) // 2
+    _draw_sprite(img, cx=sprite_cx, cy=sprite_cy, pet=g.pet, box=sprite_box)
+
+    bars_y = _bar_minimal(img, inner_x0, bars_y0, inner_x1 - inner_x0,
+                          icon_glyph=_heart_glyph, val=g.pet.physical, h=bar_h) + bars_gap
+    _bar_minimal(img, inner_x0, bars_y, inner_x1 - inner_x0,
+                icon_glyph=_chat_glyph, val=g.pet.mental, h=bar_h)
 
     buf = BytesIO()
     img.save(buf, format="PNG")
