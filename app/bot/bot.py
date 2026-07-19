@@ -21,7 +21,9 @@ Commands (once running):
   /start           hatch the pet, post its image (also wakes a /stop'd pet)
   /health          post the current pet image + numbers
   /scrub <0..6>    dev: jump the simulated timeline; watch the bars move
+  /silence <ticks> dev: simulate N ignored nudges; watch mental drop
   /commit          both bars full — celebrated 'graduated' pet
+  /end             dev: 'we're in Japan' — graduation + Solana coin, no Stay22 needed
   /saved           green ledger: CO2e avoided so far, in human units
   /itinerary       green-routed day-by-day plan (rail > car, savings counted)
   /stop            full mute: no reads, no Gemini calls, heartbeat skips the chat
@@ -41,6 +43,7 @@ import logging
 import os
 import random
 import re
+import time
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -219,8 +222,11 @@ async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, *,
                         caption=caption, parse_mode=parse_mode, reply_to_message_id=rt,
                     )
                     return
-                except Exception:
+                except Exception as e:
+                    log.warning("send_animation failed (chat=%s, parse_mode=%s): %s",
+                               chat_id, parse_mode, e)
                     continue
+        log.warning("gif send exhausted all attempts (chat=%s) — falling back to photo", chat_id)
 
     png_bytes = pet.render_pet_png(g)
     for parse_mode in (ParseMode.MARKDOWN, None):
@@ -244,20 +250,20 @@ async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, *,
 # ─── Voice (ElevenLabs) — gated: deathbed + graduation only ─────────────────
 # The pet speaks aloud only at the two moments that earn it: crossing into
 # critical health (the deathbed plea) and graduating. Never on a normal
-# message. Deduped per chat so each fires at most once; re-armed on /start.
-_spoke_deathbed: set[int] = set()
+# message. Graduation fires at most once per chat (re-armed on /start). The
+# deathbed plea is cooldown-gated instead of one-shot: as long as the chat
+# stays critical, it can plead again every DEATHBED_COOLDOWN_S — a group that
+# ignores the first plea should keep hearing it, not go silent after one try.
+_deathbed_last_spoken: dict[int, float] = {}
 _spoke_graduated: set[int] = set()
 _DEATHBED_PHYSICAL = 20  # physical at/below this counts as the deathbed moment
+DEATHBED_COOLDOWN_S = int(os.environ.get("DEATHBED_COOLDOWN_S", "600"))
 
 # Below this the pet's replies go out as ElevenLabs voice notes instead of text.
 # Defaults to 40 to line up with elevenlabs._DYING_PHYSICAL, the point the
 # strained "dying" voice takes over — so the switch to speech and the switch to
 # the sicker voice happen together rather than at two unrelated moments.
 VOICE_HEALTH_THRESHOLD = int(os.environ.get("VOICE_HEALTH_THRESHOLD", "40"))
-# Recovering this far above the line re-arms the one-shot deathbed plea, so a
-# pet that nearly died, got saved, then slid back can plead again. Hysteresis:
-# without the gap, hovering on the boundary would re-trigger it constantly.
-_DEATHBED_REARM_AT = _DEATHBED_PHYSICAL + 20
 
 
 def _should_voice(g: state.GroupState) -> bool:
@@ -296,21 +302,16 @@ async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
 
 
 async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Speak the deathbed plea the first time the pet crosses into critical
-    health for this chat. Gated + deduped — reads state only, changes nothing."""
+    """Speak the deathbed plea while the pet is critical, at most once every
+    DEATHBED_COOLDOWN_S — a chat that stays critical keeps getting pled at
+    instead of going silent after the first try."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
-    # Recovered well clear of the line → let it plead again if it slides back.
-    # Previously this fired once per chat FOREVER, so a pet that was saved and
-    # then neglected a second time died completely silently.
-    if g.pet.physical >= _DEATHBED_REARM_AT:
-        _spoke_deathbed.discard(chat_id)
     critical = g.pet.mood == "dying" or g.pet.physical <= _DEATHBED_PHYSICAL
-    if not critical or chat_id in _spoke_deathbed:
+    last = _deathbed_last_spoken.get(chat_id, 0.0)
+    if not critical or (time.monotonic() - last) < DEATHBED_COOLDOWN_S:
         return
-    _spoke_deathbed.add(chat_id)
-    # Fires once per chat, but a demo gets reset and re-run all evening — one
-    # fixed line makes the biggest beat in the show land identically every time.
+    _deathbed_last_spoken[chat_id] = time.monotonic()
     await speak_pet(
         chat_id,
         random.choice([
@@ -333,6 +334,30 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
 _TRIP_COIN_IMG = Path(__file__).resolve().parents[2] / "assets" / "trip_coin.jpeg"
 
 
+def _human_since(iso: str | None) -> str:
+    """Rough human duration from an ISO timestamp to now (coin 'time to book').
+    Returns '' on any problem — the field is optional."""
+    if not iso:
+        return ""
+    try:
+        from datetime import datetime, timezone
+        start = datetime.fromisoformat(iso)
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        secs = (datetime.now(timezone.utc) - start).total_seconds()
+        if secs < 3600:
+            n = max(1, int(secs // 60)); unit = "minute"
+        elif secs < 86400:
+            n = int(secs // 3600); unit = "hour"
+        elif secs < 86400 * 14:
+            n = int(secs // 86400); unit = "day"
+        else:
+            n = int(secs // (86400 * 7)); unit = "week"
+        return f"{n} {unit}{'s' if n != 1 else ''}"
+    except Exception:
+        return ""
+
+
 async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
                               ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Mint the devnet souvenir coin, then post the art + Explorer link. Fully
@@ -343,12 +368,55 @@ async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
         name = solana_coin.format_trip_name(
             getattr(trip, "city", None),
             getattr(dates, "start", None), getattr(dates, "end", None))
+        # Souvenir metadata — each field independently fail-open, so a missing
+        # signal just drops that attribute (never blocks the mint).
+        location = getattr(trip, "city", None) or ""
+        try:
+            time_spent = _human_since(await asyncio.to_thread(db.first_message_at, chat_id))
+        except Exception:
+            time_spent = ""
+        try:
+            slacker = await asyncio.to_thread(db.least_active_member, chat_id) or ""
+        except Exception:
+            slacker = ""
+        # Iterations: how many decisions the agents logged before the group booked.
+        try:
+            n = await asyncio.to_thread(db.decision_count, chat_id)
+            iterations = str(n) if n > 0 else ""
+        except Exception:
+            iterations = ""
+        # Green certificate: the CO2e this trip avoided (real ledger, DEFRA/EPA
+        # factors) inscribed on the souvenir. Fail-open — 0/none just omits it.
+        co2e = ""
+        try:
+            kg = (await asyncio.to_thread(green.totals, chat_id)).get("total_kg") or 0
+            if kg > 0:
+                co2e = f"{kg:g} kg CO2e"
+        except Exception:
+            co2e = ""
         result = await asyncio.to_thread(
-            solana_coin.mint_trip_coin, {"name": name, "booking_url": booking_url or ""}, chat_id)
+            solana_coin.mint_trip_coin,
+            {"name": name, "booking_url": booking_url or "",
+             "location": location, "time_spent": time_spent, "slacker": slacker,
+             "iterations": iterations, "co2e_saved": co2e},
+            chat_id)
         if not result:
             return  # skipped/failed silently — booking already complete
         caption = (f"🎉 minted your Japan Trip Coin — {result['name']}\n"
                    f"you actually booked it.\n{result['explorer_url']}")
+        extras = []
+        if result.get("location"):
+            extras.append(f"📍 {result['location']}")
+        if result.get("time_spent"):
+            extras.append(f"⏱️ booked in {result['time_spent']}")
+        if result.get("iterations"):
+            extras.append(f"🔁 {result['iterations']} iterations")
+        if result.get("slacker"):
+            extras.append(f"🛌 did the least: {result['slacker']}")
+        if result.get("co2e_saved"):
+            extras.append(f"🌱 {result['co2e_saved']} avoided")
+        if extras:
+            caption += "\n\n" + "  ·  ".join(extras)
         try:
             if _TRIP_COIN_IMG.exists():
                 await ctx.bot.send_photo(
@@ -517,9 +585,33 @@ _ASK_SAVED_RE = re.compile(
 
 
 # ─── Handlers ────────────────────────────────────────────────────────────────
+# Tabi's setup introduction — she names herself and her goal (stay alive by
+# getting the group to Japan) in character. Scripted (not LLM) so the beat
+# lands every hatch for demos; one is picked at random for replay variety.
+# The kickoff turn right after handles the first planning ask, so these must
+# NOT ask for dates/budget — that would collide with the kickoff line.
+TABI_INTROS = (
+    "i'm tabi 🍣 — the +1 in this chat, and honestly kind of a hostage. my one "
+    "goal is to *stay alive*, and the only way i live is if this group actually "
+    "makes it to japan. so, um. my life is your group project now.",
+
+    "hi. i am tabi, and i would very much like to live. tragically, i only "
+    "survive if this friend group finally books japan. no pressure — but every "
+    "day you stall, a little piece of me goes with it. 🐣",
+
+    "tabi here 🍙. think of me as the friend who *physically rots* every day you "
+    "don't plan this japan trip. my goal is simple: don't die. your goal: get us "
+    "to japan. turns out those are the same goal.",
+
+    "i'm tabi, your trip pet. i exist for exactly one reason — to drag this "
+    "group to japan before i flatline. keep the plan moving and i thrive; let it "
+    "die in the chat and… you'll watch it happen. 🍥",
+)
+
+
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
-    _spoke_deathbed.discard(g.chat_id)   # re-arm voice moments for the fresh pet
+    _deathbed_last_spoken.pop(g.chat_id, None)   # re-arm voice moments for the fresh pet
     _spoke_graduated.discard(g.chat_id)
     # state.reset() only rebuilds the in-memory pet. Without this, /start on a
     # live chat announces a fresh egg while wire still holds the old message
@@ -529,12 +621,15 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     wire.reset_chat(g.chat_id)
     supervisor.reset_chat(g.chat_id)
     voice.forget(g.chat_id)      # a fresh pet shouldn't dodge its past self's lines
+    # A fresh pet must not inherit the previous trip's agreed hotel (deck winner).
+    await asyncio.to_thread(db.update_plan, g.chat_id, {"deck_winner": None})
     await asyncio.to_thread(set_muted, g.chat_id, False)  # /start always wakes
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
-        # Deliberately NOT a greeting: the kickoff turn right below is the pet
-        # introducing itself in character. This used to say "hi. i'm the pet."
-        # and then Tabi immediately said hi again — two hellos, back to back.
+        # Tabi introduces herself + her goal here (scripted, see TABI_INTROS),
+        # then states the stakes. The kickoff turn below does the first planning
+        # ask and no longer re-introduces — so there's exactly one hello.
+        f"{random.choice(TABI_INTROS)}\n\n"
         "every real decision heals me. silence and rising prices kill me.\n"
         "/health any time · dev: /scrub 0..6 to fast-forward, /commit to book.",
         reply_markup=_webapp_keyboard(g.chat_id, ctx.bot.username, label="🐾 open live pet"),
@@ -543,6 +638,9 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # The pet is the +1 member: hatching immediately opens the planning
     # conversation (kickoff bypasses the cooldown, always sends).
     decision = await asyncio.to_thread(supervisor.run_turn, g.chat_id, "kickoff")
+    # The pet card just went out above — never let the kickoff turn post a
+    # second one. Its line still goes out, just as text instead of a photo.
+    decision.show_health = False
     await execute_decision(g.chat_id, decision, ctx)
 
 
@@ -597,8 +695,34 @@ async def cmd_scrub(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await maybe_speak_deathbed(update.effective_chat.id, ctx)
 
 
+async def cmd_silence(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dev: simulate N ignored heartbeat nudges — the same mental hit a real
+    silent chat takes (supervisor.NUDGE_MENTAL_DECAY per unanswered nudge, see
+    supervisor.s_trigger_hurts), without waiting out the real 5m/15m/45m/2h
+    backoff. Only touches mental — physical still needs /scrub or real market."""
+    if not ctx.args:
+        await update.effective_chat.send_message(
+            "usage: /silence <ticks>  — each tick = one ignored nudge, "
+            f"-{supervisor.NUDGE_MENTAL_DECAY} mental")
+        return
+    try:
+        ticks = int(ctx.args[0])
+    except ValueError:
+        await update.effective_chat.send_message("gimme a number")
+        return
+    ticks = max(1, min(20, ticks))
+    g = state.get_or_create(update.effective_chat.id)
+    g.pet.mental = max(0, g.pet.mental - ticks * supervisor.NUDGE_MENTAL_DECAY)
+    g.pet.refresh_mood()
+    await asyncio.to_thread(state.persist_pet, g)
+    log.info("silence chat_id=%s ticks=%d → mental=%d mood=%s",
+              g.chat_id, ticks, g.pet.mental, g.pet.mood)
+    await _send_pet(update, ctx)
+    await maybe_speak_deathbed(update.effective_chat.id, ctx)
+
+
 async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: dict,
-                    guests: int, nights: int) -> None:
+                    guests: int, nights: int, notice: str = "") -> None:
     """The convergence finale. The booking link + summary posts FIRST and
     ALWAYS; green stats, the graduation voice, the itinerary, and the trip coin
     are additive and each swallow their own errors — none can stop the booking
@@ -622,10 +746,17 @@ async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: di
 
     # ── CORE: trip summary + the real Allez button. Posts first and always. ──
     rating = f" · {opts['rating']:.1f}/10" if opts.get("rating") else ""
-    over = "\n(over budget — cheapest that fit)" if opts.get("fallback") else ""
+    fb = opts.get("fallback")
+    if fb == "winner_over_budget":
+        over = "\n(your pick — a little over budget)"
+    elif fb:
+        over = "\n(over budget — cheapest that fit)"
+    else:
+        over = ""
     budget = f" · 💰 ${trip.budget_per_person}/person" if trip.budget_per_person else ""
     summary = (
-        "🎉 we did it — Japan is BOOKED!\n\n"
+        (f"{notice}\n\n" if notice else "")
+        + "🎉 we did it — Japan is BOOKED!\n\n"
         f"📍 {trip.city}\n"
         f"🗓️ {_fmt_date_range(trip.dates.start, trip.dates.end)}\n"
         f"👥 {guests} travelers{budget}\n"
@@ -693,8 +824,27 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     results = await asyncio.to_thread(
         stay22.search_raw, f"{trip.city}, Japan", checkin, checkout, guests
     )
-    chosen = booking.pick_hotel(results or [], trip.budget_per_person, guests, nights) if results else None
-    opts = booking.booking_options(chosen) if chosen else None
+
+    # Prefer the hotel the group agreed on in the swipe deck, if it's still
+    # bookable in the fresh results. ENTIRELY fail-open: a missing/malformed
+    # winner, a Mongo read failure, or ANY error here falls straight through to
+    # today's best-rated-in-budget pick below — no new way to block a booking.
+    opts = None
+    winner_notice = ""
+    try:
+        plan = await asyncio.to_thread(db.get_plan, g.chat_id)  # {} on any Mongo error
+        dw = (plan or {}).get("deck_winner")
+        if dw and results:
+            opts, winner_notice = booking.commit_prefer_winner(
+                results, dw, trip.budget_per_person, guests, nights, trip.city)
+    except Exception as e:
+        log.warning("deck-winner preference skipped (chat=%s): %s", g.chat_id, e)
+        opts, winner_notice = None, ""
+
+    # Fallback / default path — today's behavior, unchanged.
+    if opts is None:
+        chosen = booking.pick_hotel(results or [], trip.budget_per_person, guests, nights) if results else None
+        opts = booking.booking_options(chosen) if chosen else None
 
     if not opts or not opts.get("book_url"):
         budget_note = f" under ${trip.budget_per_person}/person" if trip.budget_per_person else ""
@@ -707,7 +857,38 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # The convergence finale — booking link first + always, everything else
     # additive and fail-safe (see _graduate).
-    await _graduate(g.chat_id, ctx, trip, opts, guests, nights)
+    await _graduate(g.chat_id, ctx, trip, opts, guests, nights, notice=winner_notice)
+
+
+async def cmd_end(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dev/demo: 'we're actually in Japan' — skip the live Stay22 booking
+    search /commit requires and go straight to the graduation capstone, then
+    mint the Solana souvenir coin. For demoing the coin/finale on its own
+    without a real hotel match wired up."""
+    chat_id = update.effective_chat.id
+    g = state.get_or_create(chat_id)
+    trip = g.trip
+    health.commit_trip(g)
+    log.info("end chat=%s → forced graduation (dev)", chat_id)
+
+    await update.effective_chat.send_message(
+        f"🎉 we made it — we're in {trip.city or 'Japan'}!\nminting the souvenir coin now…"
+    )
+    try:
+        await send_pet_card(chat_id, ctx)
+    except Exception as e:
+        log.warning("end pet card skipped (chat=%s): %s", chat_id, e)
+
+    if chat_id not in _spoke_graduated:
+        _spoke_graduated.add(chat_id)
+        try:
+            await speak_pet(chat_id, "we made it. we're actually here. thank you.",
+                            ctx, mood="graduated", physical=g.pet.physical)
+        except Exception as e:
+            log.warning("end voice skipped (chat=%s): %s", chat_id, e)
+
+    # No real booking_url in this dev path — the coin mints off the trip name alone.
+    await _mint_and_post_coin(chat_id, trip, None, ctx)
 
 
 async def cmd_saved(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -901,7 +1082,9 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("health", cmd_health))
     app.add_handler(CommandHandler("scrub", cmd_scrub))
+    app.add_handler(CommandHandler("silence", cmd_silence))
     app.add_handler(CommandHandler("commit", cmd_commit))
+    app.add_handler(CommandHandler("end", cmd_end))
     app.add_handler(CommandHandler("open", cmd_open))
     app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(CommandHandler("saved", cmd_saved))

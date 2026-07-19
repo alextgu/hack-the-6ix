@@ -193,6 +193,7 @@ def record_swipe(chat_id: int, user_id: str, name: str, hotel_id: str,
                      {**(meta or {}), "direction": direction, "round": swipe_round})
     if decided_now:
         _credit_green_winner(snapshot)
+        _persist_deck_winner(snapshot)
     return view
 
 
@@ -221,6 +222,34 @@ def _credit_green_winner(s: dict) -> None:
                              "nights": winner.get("nights")})
     except Exception as e:
         log.warning("green winner credit failed: %s", e)
+
+
+def _persist_deck_winner(s: dict) -> None:
+    """Store the agreed hotel into trip state (trip_plans.deck_winner) so
+    /commit can book the hotel the group actually chose, not a fresh best-rated
+    pick. This is data we already hold on the winning card — the Allez URL is
+    saved VERBATIM as Stay22 returned it, never constructed. Fail-open like the
+    green credit above: any error logs and returns, the deck flow never breaks."""
+    try:
+        w = s["hotels"][s["winner"]]
+        from app.core import state  # late import: state imports db, not cards
+        try:
+            city = state.get_or_create(s["chat_id"]).trip.city or s.get("basecamp")
+        except Exception:
+            city = s.get("basecamp")
+        dw = {
+            "hotel_id": str(w.get("id") or ""),
+            "name": w.get("name") or "",
+            "price_total": w.get("price_total"),
+            "rating": w.get("rating"),
+            "book_url": w.get("url") or "",   # verbatim Allez URL from Stay22
+            "city": city,
+        }
+        db.update_plan(s["chat_id"], {"deck_winner": dw})
+        log.info("deck_winner persisted (chat=%s): %s @id=%s",
+                 s["chat_id"], (dw["name"] or "?")[:40], dw["hotel_id"] or "?")
+    except Exception as e:
+        log.warning("deck_winner persist failed: %s", e)
 
 
 def _maybe_resolve_round(s: dict) -> None:

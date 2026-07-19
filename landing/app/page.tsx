@@ -1,126 +1,108 @@
-import type { ReactNode } from "react";
 import SushiDemo from "@/components/SushiDemo";
 import Reveal from "@/components/Reveal";
 import Petals from "@/components/Petals";
+import ModelBenchmark from "@/components/ModelBenchmark";
+import PipelineSlideshow from "@/components/PipelineSlideshow";
 
-// PLACEHOLDER — swap for the real bot handle.
-const BOT_HANDLE = "@YourBotHandle";
+const BOT_HANDLE = "@PetSamaBot";
 const BOT_URL = `https://t.me/${BOT_HANDLE.replace(/^@/, "")}`;
 
 const SPONSORS = ["Stay22", "Phoebe", "Freesolo", "MongoDB Atlas", "ElevenLabs", "Gemini"];
 
-const MECHANICS = [
+const PIPELINE_CARDS = [
   {
-    icon: "heroicons:chat-bubble-left-right",
-    title: "Listens in chat",
-    body: "Picks up city, dates, budget, and group size from the conversation as the trip takes shape.",
+    phase: "Onboard",
+    media: "/pipeline-tabi-checkin.png",
+    mediaExtra: "/pet/all-avatars-fade.gif",
+    mediaType: "duo" as const,
+    fit: "contain" as const,
+    mediaAlt: "Tabi planning dashboard and avatar states",
+    imageSide: "right" as const,
+    steps: [
+      {
+        title: "Start the Trip",
+        body: "Add Tabi to your group chat.",
+      },
+      {
+        title: "Natural Planning",
+        body: "Chat normally about your trip.",
+      },
+      {
+        title: "Understand Everyone",
+        body: "Tabi extracts destinations, dates, budgets, and preferences from the conversation.",
+      },
+    ],
   },
   {
-    icon: "heroicons:heart",
-    title: "Physical bar",
-    body: "Tied to live Stay22 market pressure. Prices rising and rooms selling off make the pet sick.",
+    phase: "Align",
+    media: "/pipeline-chat.png",
+    mediaExtra: undefined as string | undefined,
+    mediaType: "image" as const,
+    fit: "contain" as const,
+    mediaAlt: "Telegram group chat with Tabi planning Japan",
+    imageSide: "left" as const,
+    steps: [
+      {
+        title: "Build Consensus",
+        body: "Tabi reconciles everyone's responses into one plan, identifies the real blockers, and proposes the next step.",
+      },
+      {
+        title: "Group Decision",
+        body: "The group approves the proposal or continues discussing until everyone is aligned.",
+      },
+    ],
   },
   {
-    icon: "heroicons:user-group",
-    title: "Mental bar",
-    body: "Tracks group engagement. Phoebe targets the keystone whose yes unsticks everyone else.",
-  },
-  {
-    icon: "heroicons:speaker-wave",
-    title: "Voice and booking",
-    body: "When health crashes, it nudges with voice. On commit, Stay22 hands over a finished booking.",
+    phase: "Book",
+    media: "_v7N3bwIQSQ",
+    mediaExtra: undefined as string | undefined,
+    mediaType: "youtube" as const,
+    fit: "cover" as const,
+    mediaAlt: "Hotel swipe deck booking through Stay22",
+    imageSide: "right" as const,
+    steps: [
+      {
+        title: "Make it Real",
+        body: "Tabi books the trip using live Stay22 hotel deals, recommends lower-carbon travel options, and finalizes the itinerary.",
+      },
+      {
+        title: "Celebrate",
+        body: "The pet recovers to full health, the group receives a commemorative trip token, and the trip officially becomes real.",
+      },
+    ],
   },
 ];
 
 const PILLARS = [
   {
-    icon: "heroicons:chat-bubble-left-right",
-    title: "Read",
-    body: "Gemini parses the group chat into trip constraints (city, dates, budget, group size) and reconciles conflicting answers into one plan.",
-  },
-  {
-    icon: "heroicons:currency-dollar",
-    title: "Price",
-    body: "Stay22 feeds live hotel pricing and availability into Physical health. Procrastination shows up as rising prices and rooms selling off.",
-  },
-  {
-    icon: "heroicons:photo",
-    title: "Render",
-    body: "The Telegram Mini App draws the pet's moods and posts the updated face whenever either bar moves, so the group sees the trip's vital signs in chat.",
-  },
-  {
-    icon: "heroicons:speaker-wave",
-    title: "Speak",
-    body: "ElevenLabs gives the pet a voice with real emotional inflection: bright when the trip's alive, weak when a bar bottoms out.",
-  },
-  {
-    icon: "heroicons:megaphone",
-    title: "Pitch",
-    body: "Phoebe diagnoses the one blocker (person, timing, or issue), targets the keystone, and removes the objection. Freesolo trains that agent via GRPO self-play with a turn-level, ground-truth reward.",
-  },
-  {
-    icon: "heroicons:circle-stack",
-    title: "Store",
-    body: "MongoDB Atlas holds group, pet, and preference state: vector search for matching, time-series for health and price history, change streams for live updates.",
-  },
-];
-
-const ACCOMPLISHMENTS = [
-  {
-    icon: "heroicons:user-group",
-    title: "Finding the keystone",
-    body: "Phoebe learns friend roles from behavior (keystone, anchor, flake) and targets the person whose yes unsticks the whole group, instead of broadcasting nags.",
+    icon: "heroicons:microphone",
+    title: "Multimodal intake",
+    body: "Text, voice notes, and images — she reads the whole chat.",
   },
   {
     icon: "heroicons:cpu-chip",
-    title: "Freesolo over a frontier baseline",
-    body: "Our GRPO-trained agent beat a frontier baseline on held-out friend-group scenarios, scored with a verifiable commit reward rather than a hackable LLM judge.",
+    title: "Gemini × LangGraph",
+    body: "A team of Gemini agents, orchestrated on LangGraph.",
   },
   {
-    icon: "heroicons:musical-note",
-    title: "Voice that lands",
-    body: "The ElevenLabs voice is charming when the trip is healthy and heartbreaking when it isn't, with emotional inflection that makes the pet feel like a creature, not a notification.",
-  },
-];
-
-const LEARNINGS = [
-  {
-    icon: "heroicons:circle-stack",
-    title: "MongoDB is the nervous system",
-    body: "One database covered matching (vector search), memory (time-series health/price), and live sync (change streams), not just CRUD.",
+    icon: "heroicons:funnel",
+    title: "The reconciler",
+    body: "Everyone's price, place, and dates → one plan.",
   },
   {
-    icon: "heroicons:heart",
-    title: "Personality beats deep reasoning",
-    body: "Feeling \"alive\" came more from mood, voice, and timely nudges than from longer chain-of-thought. The group reacts to presence.",
+    icon: "heroicons:megaphone",
+    title: "Blocker agent · Freesolo",
+    body: "Qwen 4B, GRPO-tuned to find who's stalling and call them out — 4× a frontier model (0.32 vs 0.08).",
   },
   {
-    icon: "heroicons:shield-check",
-    title: "Self-play needs a hard reward",
-    body: "GRPO only worked once we paired self-play with a verifiable turn-level reward and adversarial tests against reward hacking.",
-  },
-];
-
-const NEXT_STEPS = [
-  {
-    icon: "heroicons:bolt",
-    title: "Live change streams",
-    body: "Push pet updates the instant health moves, with no polling lag between market ticks and the face in chat.",
+    icon: "heroicons:arrow-path",
+    title: "Self-learning flywheel",
+    body: "Every decision logged to MongoDB; she trains on her own data, smarter each trip.",
   },
   {
-    icon: "heroicons:phone",
-    title: "Voice-driven booking",
-    body: "Two-way ElevenLabs in Telegram: reply to the pet and it takes a real action, like holding a room, DMing the holdout, or kicking off onboarding.",
-  },
-  {
-    icon: "heroicons:users",
-    title: "More archetypes",
-    body: "Expand beyond keystone / anchor / flake so Phoebe's targeting covers messier real friend groups.",
-  },
-  {
-    icon: "heroicons:map",
-    title: "A real pilot group",
-    body: "Ship into one stalled Japan trip chat and measure whether the pet actually gets them to book.",
+    icon: "heroicons:gift",
+    title: "Book it, keep it",
+    body: "Live Stay22 hotels via Tinder-style votes, sealed in a Solana trip coin — your Spotify Wrapped.",
   },
 ];
 
@@ -138,28 +120,6 @@ function CTAButton({ large = false }: { large?: boolean }) {
         {BOT_HANDLE}
       </span>
     </a>
-  );
-}
-
-function SectionTitle({
-  children,
-  eyebrow,
-}: {
-  children: ReactNode;
-  eyebrow?: string;
-}) {
-  return (
-    <div className="mb-10 text-center">
-      {eyebrow ? (
-        <p
-          className="mb-3 text-xs uppercase tracking-[0.28em]"
-          style={{ color: "var(--muted)" }}
-        >
-          {eyebrow}
-        </p>
-      ) : null}
-      <h2 className="ds-title text-3xl sm:text-4xl">{children}</h2>
-    </div>
   );
 }
 
@@ -193,21 +153,21 @@ function CardGrid({
 
 export default function Home() {
   return (
-    <main className="min-h-screen" style={{ color: "var(--fg)" }}>
+    <main style={{ color: "var(--fg)" }}>
       {/* ─── 1. Hero ──────────────────────────────────────────────────────── */}
       <section className="hero-split relative lg:grid lg:min-h-dvh lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
         <div className="relative flex flex-col justify-center px-6 py-16 sm:px-10 sm:py-20 lg:px-12 lg:py-24 xl:px-16">
           <Petals />
 
-          <div className="relative mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[34rem]">
+          <div className="relative mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[36rem]">
             <Reveal>
               <p className="ds-chip mb-7" style={{ display: "inline-flex" }}>
                 <iconify-icon icon="heroicons:map-pin" width="14" height="14" />
-                Tama-Go-Chi · Hack the 6ix
+                Tami · Hack the 6ix
               </p>
             </Reveal>
             <Reveal delay={100}>
-              <h1 className="ds-title text-[2.15rem] leading-[1.12] sm:text-5xl lg:text-[3.15rem]">
+              <h1 className="ds-title text-[2.5rem] leading-[1.06] sm:text-6xl lg:text-[3.7rem]">
                 Everyone wants to go to Japan.
                 <br />
                 <span style={{ color: "var(--card-coral-ink)" }}>Nobody books it.</span>
@@ -218,9 +178,8 @@ export default function Home() {
                 className="mt-6 max-w-md text-base leading-relaxed sm:text-lg"
                 style={{ color: "var(--muted)" }}
               >
-                Built at Hack the 6ix: a Telegram pet whose Physical health tracks live
-                hotel data and whose Mental health tracks group engagement. The only way
-                to save it is to actually book the trip.
+                A Telegram pet whose health tracks live hotel prices and group engagement.
+                The only way to save it is to actually book the trip.
               </p>
             </Reveal>
             <Reveal delay={320}>
@@ -243,31 +202,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 2. Problem / Inspiration ─────────────────────────────────────── */}
-      <section className="relative mx-auto max-w-3xl px-6 py-20">
+      {/* ─── 2. Problem line + demo video (merged, condensed) ─────────────── */}
+      <section className="snap-panel relative px-6">
         <Petals />
-        <div className="relative">
+        <div className="relative mx-auto w-full max-w-4xl">
           <Reveal>
-            <SectionTitle eyebrow="Inspiration">The groupchat that never leaves</SectionTitle>
-          </Reveal>
-          <Reveal delay={120}>
-            <p className="text-center text-lg leading-relaxed sm:text-xl" style={{ color: "var(--muted)" }}>
-              Every friend group has the same stalled ritual: someone drops{" "}
-              <span style={{ color: "var(--fg)" }}>&ldquo;let&apos;s go to Japan bro&rdquo;</span>
-              , a few people react, dates get half-discussed, and the thread dies. The trip
-              stays a sentence. Tama-Go-Chi turns that failure mode into a creature whose
-              health declines until someone commits.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ─── 3. Video Demo ────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <Reveal>
-          <SectionTitle eyebrow="Demo">Watch it end-to-end</SectionTitle>
-        </Reveal>
-        <Reveal delay={120}>
           <div
             className="overflow-hidden"
             style={{
@@ -284,114 +223,234 @@ export default function Home() {
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover"
               />
-              <div
-                className="absolute inset-0"
-                style={{ background: "rgba(42, 36, 28, 0.28)" }}
-              />
-              <div className="relative z-[1] flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <div className="absolute inset-0" style={{ background: "rgba(42, 36, 28, 0.30)" }} />
+              <div className="relative z-[1] flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
                 <div
-                  className="flex h-16 w-16 items-center justify-center rounded-full"
-                  style={{
-                    background: "var(--surface)",
-                    boxShadow: "var(--shadow)",
-                    color: "var(--fg)",
-                  }}
+                  className="flex h-20 w-20 items-center justify-center rounded-full"
+                  style={{ background: "var(--surface)", boxShadow: "var(--shadow)", color: "var(--fg)" }}
                   aria-hidden
                 >
-                  <iconify-icon icon="heroicons:play" width="28" height="28" />
+                  <iconify-icon icon="heroicons:play" width="34" height="34" />
                 </div>
-                <p className="ds-title text-base sm:text-lg" style={{ color: "var(--surface)" }}>
+                <p className="ds-title text-lg sm:text-2xl" style={{ color: "var(--surface)" }}>
                   Demo video coming soon
                 </p>
               </div>
             </div>
           </div>
-        </Reveal>
-      </section>
-
-      {/* ─── 4. What It Does (+ interactive demo) ─────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-20">
-        <Reveal>
-          <SectionTitle eyebrow="What it does">A pet that dies if you don&apos;t book</SectionTitle>
-        </Reveal>
-        <Reveal delay={80}>
-          <p
-            className="mx-auto mb-10 max-w-3xl text-center leading-relaxed"
-            style={{ color: "var(--muted)" }}
-          >
-            Drop Tama-Go-Chi in the group. It listens for trip talk, extracts constraints,
-            and maintains two bars:{" "}
-            <span style={{ color: "var(--fg)" }}>Physical</span> (Stay22 hotel
-            pricing and availability) and{" "}
-            <span style={{ color: "var(--fg)" }}>Mental</span> (chat engagement). Silence
-            and rising prices make it sick; real decisions heal it. When a bar bottoms out,
-            it sends an ElevenLabs voice message into the chat. On commit, Stay22
-            returns a finished booking instead of another unfinished plan.
-          </p>
-        </Reveal>
-        <div className="mb-14">
-          <CardGrid items={MECHANICS} cols="sm:grid-cols-2 lg:grid-cols-4" />
-        </div>
-
-        <Reveal delay={160}>
-          <div className="mb-8 text-center">
-            <h3 className="ds-title text-xl sm:text-2xl">Try the scrubber</h3>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
-              Drag weeks forward. Watch Physical and Mental fall as prices climb and the chat
-              goes quiet, then book to revive the pet.
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="mx-auto mt-8 max-w-3xl text-center text-xl leading-snug sm:text-2xl">
+              Someone drops{" "}
+              <span style={{ color: "var(--card-coral-ink)" }}>
+                &ldquo;let&apos;s go to Japan bro.&rdquo;
+              </span>{" "}
+              Everyone&apos;s hyped. Nobody books. So we turned the trip into{" "}
+              <span style={{ color: "var(--card-coral-ink)" }}>
+                a creature that dies if you let it.
+              </span>
             </p>
-          </div>
-        </Reveal>
-        <Reveal delay={200}>
-          <SushiDemo />
-        </Reveal>
+          </Reveal>
+        </div>
       </section>
 
-      {/* ─── 5. How We Built It ───────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-20">
-        <Reveal>
-          <SectionTitle eyebrow="How we built it">Six pillars</SectionTitle>
-        </Reveal>
-        <CardGrid items={PILLARS} cols="sm:grid-cols-2 lg:grid-cols-3" />
-      </section>
-
-      {/* ─── 6. Accomplishments ───────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <Reveal>
-          <SectionTitle eyebrow="Accomplishments">What we&apos;re proud of</SectionTitle>
-        </Reveal>
-        <CardGrid items={ACCOMPLISHMENTS} cols="sm:grid-cols-3" />
-      </section>
-
-      {/* ─── 7. What We Learned ───────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <Reveal>
-          <SectionTitle eyebrow="What we learned">Takeaways</SectionTitle>
-        </Reveal>
-        <CardGrid items={LEARNINGS} cols="sm:grid-cols-3" />
-      </section>
-
-      {/* ─── 8. What's Next ───────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <Reveal>
-          <SectionTitle eyebrow="What's next">Roadmap</SectionTitle>
-        </Reveal>
-        <CardGrid items={NEXT_STEPS} />
-      </section>
-
-      {/* ─── 9. Footer / CTA ──────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden">
-        <Petals />
-        <div className="relative mx-auto max-w-5xl px-6 py-28 text-center">
+      {/* ─── 3. How it works — auto-advancing slideshow of the 3 phases ────── */}
+      <section className="snap-panel px-6 py-24">
+        <div className="mx-auto max-w-5xl">
           <Reveal>
-            <h2 className="ds-title mx-auto max-w-2xl text-3xl leading-snug sm:text-5xl">
+            <p className="kicker mb-8">How it works</p>
+          </Reveal>
+          <Reveal delay={120}>
+            <PipelineSlideshow cards={PIPELINE_CARDS} />
+          </Reveal>
+          <Reveal delay={200}>
+            <p
+              className="mx-auto mt-8 max-w-xl text-center text-sm leading-relaxed"
+              style={{ color: "var(--muted)" }}
+            >
+              ↻ She runs this loop — propose, vote, unblock — over and over until the
+              whole group commits.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 5. The interactive scrubber — the centerpiece, big ───────────── */}
+      <section className="snap-panel px-6">
+        <div className="mx-auto w-full max-w-5xl">
+          <Reveal>
+            <SushiDemo />
+          </Reveal>
+          <Reveal delay={140}>
+            <p
+              className="mx-auto mt-6 max-w-lg text-center text-sm leading-relaxed"
+              style={{ color: "var(--muted)" }}
+            >
+              Drag the weeks forward — watch it rot as prices climb and the chat goes
+              quiet, then book to revive it.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 6. Pillars — cards only ──────────────────────────────────────── */}
+      <section className="snap-panel px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <Reveal>
+            <p className="kicker mb-8">What&apos;s under the hood</p>
+          </Reveal>
+          <CardGrid items={PILLARS} cols="sm:grid-cols-2 lg:grid-cols-3" />
+        </div>
+      </section>
+
+      {/* ─── 7. Proof — the model benchmark ───────────────────────────────── */}
+      <section className="snap-panel px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <Reveal>
+            <div className="flex justify-center">
+              <ModelBenchmark />
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 8. Green by default — the carbon engine ──────────────────────── */}
+      <section className="snap-panel px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <Reveal>
+            <p className="kicker mb-6">Green by default</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2 className="ds-title max-w-3xl text-3xl leading-[1.1] sm:text-4xl lg:text-5xl">
+              Every booking is carbon-scored the moment it&apos;s on the table.
+            </h2>
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="mt-5 max-w-2xl text-base leading-relaxed sm:text-lg" style={{ color: "var(--muted)" }}>
+              Flights, trains, hotels, even the airport transfer — priced in CO₂e from
+              published government factors, computed locally. No API in the loop, so the
+              numbers are <span style={{ color: "var(--fg)" }}>impossible to inflate</span>.
+            </p>
+          </Reveal>
+
+          <div className="mt-10 grid items-stretch gap-4 lg:grid-cols-[1.3fr_minmax(0,1fr)]">
+            {/* the four scored domains */}
+            <Reveal delay={200}>
+              <div className="grid h-full grid-cols-2 gap-3">
+                {[
+                  { e: "✈️", t: "Flights", s: "DEFRA, incl. radiative forcing" },
+                  { e: "🚄", t: "Trains", s: "JR Central — Shinkansen ~17 g/km" },
+                  { e: "🏨", t: "Hotels", s: "CHSB, by class & rooms needed" },
+                  { e: "🚕", t: "Transfers", s: "airport → hotel last mile" },
+                ].map((d) => (
+                  <div key={d.t} className="ds-health-card card-lift">
+                    <div className="text-2xl" aria-hidden>{d.e}</div>
+                    <h3 className="ds-title mt-2 text-base">{d.t}</h3>
+                    <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{d.s}</p>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+
+            {/* the shared ledger — a live-feeling stat */}
+            <Reveal delay={260}>
+              <div
+                className="flex h-full flex-col justify-center rounded-2xl p-7 text-center"
+                style={{ background: "var(--card-peach)", boxShadow: "var(--shadow)" }}
+              >
+                <div className="text-xs uppercase tracking-[0.24em]" style={{ color: "var(--muted)" }}>
+                  the group&apos;s shared ledger
+                </div>
+                <div className="ds-title mt-3 text-5xl leading-none" style={{ color: "var(--card-coral-ink)" }}>
+                  142
+                </div>
+                <div className="mt-2 text-sm" style={{ color: "var(--fg)" }}>
+                  🚗 miles not driven <span style={{ color: "var(--muted)" }}>· ≈ 56 kg CO₂e avoided</span>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+
+          <Reveal delay={320}>
+            <p className="mt-6 text-xs" style={{ color: "var(--muted)" }}>
+              Baseline is the median of your own shortlist — savings only count when your pick
+              beats it. Sources: DEFRA 2024 · EPA · CHSB 2023 · JR Central.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 9. The trip coin — Spotify-Wrapped memory card ───────────────── */}
+      <section className="snap-panel px-6 py-20">
+        <div className="mx-auto grid max-w-5xl items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <Reveal>
+              <p className="kicker mb-6">Your souvenir</p>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2 className="ds-title text-3xl leading-[1.1] sm:text-4xl lg:text-5xl">
+                Book it, and Tabi mints your trip&apos;s Spotify Wrapped.
+              </h2>
+            </Reveal>
+            <Reveal delay={140}>
+              <p className="mt-5 max-w-md text-base leading-relaxed sm:text-lg" style={{ color: "var(--muted)" }}>
+                A custom coin, minted to the group on Solana — a permanent memory card of
+                everything it took to finally go. Immutable. Yours.
+              </p>
+            </Reveal>
+          </div>
+
+          {/* the wrapped card */}
+          <Reveal delay={180}>
+            <div
+              className="mx-auto w-full max-w-sm rounded-3xl p-7 text-left"
+              style={{
+                background: "linear-gradient(160deg, #2a241c 0%, #3a2f26 100%)",
+                boxShadow: "0 24px 60px rgba(42,36,28,0.35)",
+                color: "#f5efe0",
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.24em]" style={{ opacity: 0.6 }}>
+                  Japan Trip Coin
+                </span>
+                <span className="text-xs" style={{ opacity: 0.6 }}>◎ Solana</span>
+              </div>
+              <div className="font-display mt-3 text-2xl">Kyoto · Aug 1–5</div>
+              <div className="mt-6 flex flex-col gap-3 text-sm">
+                {[
+                  ["📍", "Destination", "Kyoto"],
+                  ["🔁", "Iterations to book", "12"],
+                  ["⏱️", "Time to book", "3 days"],
+                  ["🌱", "CO₂e avoided", "56 kg"],
+                ].map(([e, k, v]) => (
+                  <div key={k} className="flex items-center justify-between" style={{ borderTop: "1px solid rgba(245,239,224,0.12)", paddingTop: 10 }}>
+                    <span style={{ opacity: 0.8 }}>{e} {k}</span>
+                    <span className="tabular-nums" style={{ fontWeight: 700 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 text-[0.7rem]" style={{ opacity: 0.5 }}>
+                minted on devnet · immutable · one per group
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 10. Footer / CTA ─────────────────────────────────────────────── */}
+      <section className="snap-panel relative overflow-hidden px-6">
+        <Petals />
+        <div className="relative mx-auto max-w-3xl text-center">
+          <Reveal>
+            <h2 className="ds-title mx-auto text-4xl leading-[1.06] sm:text-6xl">
               Stop letting the trip die in the group chat.
             </h2>
           </Reveal>
           <Reveal delay={150}>
-            <p className="mx-auto mt-5 max-w-xl leading-relaxed" style={{ color: "var(--muted)" }}>
-              Add Tama-Go-Chi. Give your friends something that gets sad when you don&apos;t
-              book, and a spring morning in Kyoto when you do.
+            <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed" style={{ color: "var(--muted)" }}>
+              Give your friends something that gets sad when you don&apos;t book — and a
+              spring morning in Kyoto when you do.
             </p>
           </Reveal>
           <Reveal delay={300}>
@@ -416,7 +475,20 @@ export default function Home() {
             ))}
           </div>
           <div className="ds-title mt-8 text-xs" style={{ color: "var(--muted)" }}>
-            Built at Hack the 6ix · Tama-Go-Chi · いってらっしゃい
+            Built at Hack the 6ix · Tami · いってらっしゃい
+          </div>
+          <div className="mt-12">
+            <div className="text-xs uppercase tracking-[0.3em]" style={{ color: "var(--muted)" }}>
+              the team
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/team.jpg"
+              alt="The team behind Tami at Hack the 6ix"
+              className="mx-auto mt-4 w-full max-w-lg rounded-2xl"
+              style={{ boxShadow: "var(--shadow)" }}
+              loading="lazy"
+            />
           </div>
         </div>
       </footer>

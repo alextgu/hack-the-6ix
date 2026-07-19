@@ -1,4 +1,4 @@
-Sushi-kun's face expressions — overlaid on/composited with the sushi-eaten
+Tabi's face expressions — overlaid on/composited with the sushi-eaten
 body art in `public/pet/sushi/`, displayed above the caption in
 `components/SushiDemo.tsx`.
 

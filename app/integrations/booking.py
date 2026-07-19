@@ -111,6 +111,90 @@ def pick_hotel(
     return None
 
 
+def _norm(s: Optional[str]) -> str:
+    return " ".join((s or "").lower().split())
+
+
+def _match_winner(results: list[dict], dw: dict) -> Optional[dict]:
+    """Find the deck-winner in fresh Stay22 results — by property id if we have
+    one, else by normalized name. Returns the raw result dict or None (gone)."""
+    wid = str(dw.get("hotel_id") or "").strip()
+    if wid:
+        for r in results:
+            if str(r.get("id") or "").strip() == wid:
+                return r
+    wname = _norm(dw.get("name"))
+    if wname:
+        for r in results:
+            if _norm(r.get("name")) == wname:
+                return r
+    return None
+
+
+def commit_prefer_winner(
+    results: list[dict],
+    dw: Optional[dict],
+    budget_per_person: Optional[int],
+    guests: int,
+    nights: int,
+    trip_city: Optional[str] = None,
+) -> tuple[Optional[dict], str]:
+    """Prefer the hotel the group agreed on in the swipe deck, if it's still
+    bookable in the fresh results. Returns (opts, notice):
+
+      (opts, "")            → winner IS the primary booking. Its book_url is the
+                              FRESH Allez URL from this re-query (never the stored
+                              one). Alternates are best-rated-in-budget with the
+                              winner excluded. opts['fallback']='winner_over_budget'
+                              when the winner is now over budget (still primary).
+      (None, sold_out_line) → winner is gone/unpriced now. Caller falls back to
+                              today's best-rated pick and prepends sold_out_line.
+      (None, "")            → deck winner not applicable (absent, or a different
+                              city). Caller uses today's path silently.
+
+    Pure/​additive — pick_hotel and booking_options are unchanged. Any unexpected
+    error propagates to the caller's guard, which runs today's /commit path."""
+    if not dw or not results:
+        return None, ""
+    # Staleness guard: a winner saved for a different city isn't this trip's pick.
+    if trip_city and dw.get("city") and _norm(dw.get("city")) != _norm(trip_city):
+        return None, ""
+
+    r_win = _match_winner(results, dw)
+    name = (dw.get("name") or "your pick").strip()
+    if r_win is None:
+        return None, f"😔 your pick — {name} — sold out. here's the next best:"
+
+    supplier_name, price = _cheapest_supplier(r_win.get("suppliers") or {})
+    if supplier_name is None or price is None:
+        # It's in the list but nobody is quoting a price → not bookable now.
+        return None, f"😔 your pick — {name} — sold out. here's the next best:"
+
+    max_total: Optional[float] = None
+    if budget_per_person and guests and nights:
+        max_total = float(budget_per_person) * int(guests) * int(nights)
+    over = max_total is not None and price > max_total
+
+    chosen = {
+        "result": r_win,
+        "supplier_name": supplier_name,
+        "price_total": price,
+        "rating": _rating(r_win),
+    }
+    # Alternates: today's best-rated logic over the REST (winner excluded).
+    others = [r for r in results if r is not r_win]
+    alt = pick_hotel(others, budget_per_person, guests, nights) if others else None
+    alt_pool: list[dict] = []
+    if alt:
+        alt_pool.append(alt)
+        alt_pool += alt.get("alternates") or []
+    chosen["alternates"] = alt_pool[:2]
+    if over:
+        chosen["fallback"] = "winner_over_budget"
+
+    return booking_options(chosen), ""
+
+
 def booking_options(chosen: dict) -> Optional[dict]:
     """Pull Allez-wrapped URLs straight from the Stay22 response — never
     construct booking URLs manually. STAY22_AID (if set in env when the

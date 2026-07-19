@@ -5,7 +5,7 @@ without touching Read's brain.py. Not yet wired to the bot — standalone
 __main__ exercises the diagnose → decide_action → compose_message flow
 against 3 sample states.
 
-Personality lives here: outreach copy is written in Sushi-kun's voice —
+Personality lives here: outreach copy is written in Tabi's voice —
 playful, needy, "i'm dying here, help me" — via agent_call().
 """
 from __future__ import annotations
@@ -53,7 +53,7 @@ _DEFAULT_MODEL_BY_PROVIDER = {
     # "gemini-flash-latest" tracks whatever the current fast Flash is. Pinned
     # ids rot: the old default here (gemini-2.5-flash) started 404ing with
     # "no longer available to new users", and because compose_message swallows
-    # errors into _canned(), the failure was invisible — Sushi-kun just quietly
+    # errors into _canned(), the failure was invisible — Tabi just quietly
     # served the same canned line forever instead of speaking.
     "gemini":    "gemini-flash-latest",
     "anthropic": "claude-haiku-4-5-20251001",  # fast, cheap default
@@ -295,8 +295,8 @@ def decide_action(blocker: Blocker, state: dict) -> Action:
     return Action(kind="no_action", target="group", rationale="nothing to resolve")
 
 
-# ─── compose_message — Sushi-kun's voice via agent_call ────────────────────
-_SUSHI_VOICE = """You are Sushi-kun, the little pet living in a group chat that's trying to plan a trip to Japan.
+# ─── compose_message — Tabi's voice via agent_call ────────────────────
+_SUSHI_VOICE = """You are Tabi, the little pet living in a group chat that's trying to plan a trip to Japan.
 You are charming, never a sad-sack, and you have real stakes: this group's
 indecision is killing you.
 
@@ -318,11 +318,11 @@ Trip so far:
 
 def compose_message(action: Action, state: dict,
                     chat_id: Optional[int] = None) -> str:
-    """Sushi-kun's outreach in-character. LLM writes it; canned fallback only
+    """Tabi's outreach in-character. LLM writes it; canned fallback only
     when no model is configured at all."""
     from app.agents import voice   # local: keeps the agent seam import-light
     prompt = _SUSHI_VOICE.format(
-        voice_block=voice.persona_block(chat_id=chat_id, name="Sushi-kun"),
+        voice_block=voice.persona_block(chat_id=chat_id, name="Tabi"),
         action_kind=action.kind,
         target=action.target,
         rationale=action.rationale,

@@ -26,6 +26,6 @@ structured_outputs = '{"type":"object","additionalProperties":false,"required":[
 
 # TODO(subagent): the GRPO self-play sim — the Freesolo-track-winning signal.
 # Replace the static dataset with an EnvironmentMultiTurn where scripted
-# friend-group personas respond to Sushi-kun's message and reward = did the
+# friend-group personas respond to Tabi's message and reward = did the
 # sim group COMMIT (ground truth), scored per turn. Beats the LLM-judge
 # everyone else uses. See EnvironmentMultiTurn + "Reward design" in TRAINING.md.

@@ -345,6 +345,42 @@ def last_message_at(chat_id: int) -> Optional[str]:
         return None
 
 
+def first_message_at(chat_id: int) -> Optional[str]:
+    """Earliest HUMAN message ts — the souvenir coin's 'time spent' anchor."""
+    d = _db()
+    if d is None:
+        return None
+    try:
+        row = d.chat_log.find_one({"chat_id": chat_id,
+                                   "role": {"$ne": "pet"}}, sort=[("ts", 1)])
+        return row["ts"] if row else None
+    except Exception as e:
+        log.warning("first_message_at failed: %s", e)
+        return None
+
+
+def least_active_member(chat_id: int) -> Optional[str]:
+    """The human who sent the fewest messages — the coin's 'did the least work'
+    honouree. None if fewer than two humans have spoken (nobody to compare)."""
+    d = _db()
+    if d is None:
+        return None
+    try:
+        rows = list(d.chat_log.aggregate([
+            {"$match": {"chat_id": chat_id, "user_id": {"$ne": "unknown"},
+                        "role": {"$ne": "pet"}}},
+            {"$group": {"_id": "$user_id", "name": {"$last": "$name"},
+                        "n": {"$sum": 1}}},
+            {"$sort": {"n": 1}},
+        ]))
+        if len(rows) < 2:
+            return None
+        return rows[0].get("name")
+    except Exception as e:
+        log.warning("least_active_member failed: %s", e)
+        return None
+
+
 # ─── Trip plan doc (stage, flight lock, decision log) ───────────────────────
 def get_plan(chat_id: int) -> dict:
     d = _db()
@@ -430,6 +466,19 @@ def messenger_records(chat_id: Optional[int] = None,
     except Exception as e:
         log.warning("messenger_records failed: %s", e)
         return []
+
+
+def decision_count(chat_id: int) -> int:
+    """How many decisions the agents logged for this chat — the coin's
+    'iterations' it took to get the group to book. 0 on any error / no Mongo."""
+    d = _db()
+    if d is None:
+        return 0
+    try:
+        return int(d.messenger_records.count_documents({"chat_id": chat_id}))
+    except Exception as e:
+        log.warning("decision_count failed: %s", e)
+        return 0
 
 
 def analytics_summary(chat_id: int) -> dict:

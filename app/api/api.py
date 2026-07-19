@@ -241,6 +241,15 @@ def cards_page() -> FileResponse:
     return FileResponse(str(page))
 
 
+@app.get("/benchmark")
+def benchmark_page() -> FileResponse:
+    # Static eval-results card: our fine-tuned 4B vs a frontier model.
+    page = WEBAPP_DIR / "benchmark.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="webapp/benchmark.html missing")
+    return FileResponse(str(page))
+
+
 @app.get("/api/cards/{group_id}")
 def api_cards_view(group_id: str, user_id: str, name: str = "guest") -> JSONResponse:
     """Deck for one user. Creates the session on first call (so the page works

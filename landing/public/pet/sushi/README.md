@@ -1,4 +1,4 @@
-Sushi-kun's "eaten" stages — physical-health art, replaces the 🍣 emoji
+Tabi's "eaten" stages — physical-health art, replaces the 🍣 emoji
 placeholder in `components/SushiDemo.tsx`.
 
 Drop the 6 images here as:

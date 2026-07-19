@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  output: "export",
+  images: { unoptimized: true },
   // Silence multi-lockfile warning; keep resolution rooted on this app.
   // Shared CSS is imported via ../design-system from landing/.
   turbopack: {
