@@ -412,24 +412,13 @@ export default function Home() {
           {/* supporting evidence — the LIVE /saved output, straight from the bot */}
           <Reveal delay={320}>
             <div className="mt-8 grid items-center gap-6 lg:grid-cols-[auto_minmax(0,1fr)]">
-              <div
-                className="mx-auto w-full max-w-sm rounded-2xl p-5 text-left"
-                style={{ background: "linear-gradient(160deg, #2a241c 0%, #3a2f26 100%)", color: "#f5efe0", boxShadow: "0 20px 48px rgba(42,36,28,0.3)" }}
-              >
-                <div className="text-xs" style={{ opacity: 0.55 }}>
-                  Tabi · <span style={{ fontFamily: "monospace" }}>/saved</span>
-                </div>
-                <div className="mt-2 text-sm leading-relaxed">
-                  🌱 green ledger — this trip has avoided <strong>19.9 kg CO₂e</strong>
-                  <br />🏨 the stay: 19.9 kg <span style={{ opacity: 0.7 }}>(low-carbon pick: Sola Hotel)</span>
-                  <br /><span style={{ opacity: 0.85 }}>that&apos;s like:</span>
-                  <br />🚗 50.5 miles not driven · ⛽ 2.2 gal unburned · 🏠 1.3 days of a US home&apos;s power
-                  <br />📈 <span style={{ opacity: 0.85 }}>× 1,000 groups → 19.9 tonnes CO₂e, a year of power for 3.6 homes</span>
-                </div>
-                <div className="mt-3 text-[0.66rem]" style={{ opacity: 0.5 }}>
-                  sources: DEFRA 2024 · EPA · CHSB 2023 · JR Central
-                </div>
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/japannnn.png"
+                alt="Tabi's live /saved green ledger in the Telegram chat: 19.9 kg CO2e avoided, EPA equivalents, 1,000-group scale-up, and sources (DEFRA, EPA, CHSB, JR Central)"
+                className="framed mx-auto w-full max-w-[260px] rounded-2xl"
+                loading="lazy"
+              />
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.18em]" style={{ color: "var(--card-mint-ink)" }}>
                   Not a slide — the live product
