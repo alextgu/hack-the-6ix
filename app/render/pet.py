@@ -16,6 +16,7 @@ TODO seams:
   - When the pet talks (ElevenLabs later), add a speech-bubble overlay.
 """
 from __future__ import annotations
+import math
 import os
 from io import BytesIO
 
@@ -187,21 +188,26 @@ def _bar_minimal(img: Image.Image, x: int, y: int, w: int, *, icon_glyph, val: i
 
 
 # ─── Sushi stage: shadow ellipse + sprite, matches webapp #stage/#pet-shadow
-def _draw_sprite(img: Image.Image, cx: int, cy: int, pet: PetState, box: int) -> None:
+def _draw_sprite(img: Image.Image, cx: int, cy: int, pet: PetState, box: int, *,
+                 shadow_scale: float = 1.0, shadow_alpha_mult: float = 1.0) -> None:
     """`box` is the max width/height the sprite is scaled into, centered on
     (cx, cy) — sized by the caller to whatever room is left after the title
-    and bars."""
+    and bars. `shadow_scale`/`shadow_alpha_mult` let GIF frames shrink/fade
+    the shadow as the sprite lifts, same grounded effect as the webapp's
+    CSS bob animation."""
     sprite = tami.load_sushi_image(pet.physical, pet.mental, pet.feeling)
     if sprite is None:
         _draw_pet_placeholder(ImageDraw.Draw(img), cx, cy, pet)
         return
 
-    shadow_w, shadow_h = box * 0.29, box * 0.09
+    shadow_w = box * 0.29 * shadow_scale
+    shadow_h = box * 0.09 * shadow_scale
     shadow_y = cy + box * 0.39
+    shadow_alpha = max(0, min(255, int(130 * shadow_alpha_mult)))
     shadow_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     ImageDraw.Draw(shadow_layer).ellipse(
         [cx - shadow_w, shadow_y, cx + shadow_w, shadow_y + shadow_h],
-        fill=(20, 16, 10, 130))
+        fill=(20, 16, 10, shadow_alpha))
     shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(8))
     img.paste(shadow_layer, (0, 0), shadow_layer)
 
@@ -257,12 +263,12 @@ def pet_caption(g: GroupState) -> str:
     return "just hanging out. keep talking, keep booking."
 
 
-def render_pet_png(g: GroupState) -> bytes:
-    """Square card: 'Tabi' label, the sprite, then the two health bars
-    stacked below it — all inside one box. No caption, no trip stats, no
-    week chip; the only text anywhere is the word 'Tabi'. (Tabi's chat line
-    still rides as the Telegram message's own caption — see bot.py — this
-    function only controls what's drawn INTO the image.)"""
+def _render_base(g: GroupState) -> tuple[Image.Image, dict]:
+    """Draws everything EXCEPT the sprite: background, card, 'Tabi' title,
+    both health bars. Returns that base plus where the sprite belongs
+    (cx, cy, box) so callers composite it on a `.copy()` of this base —
+    the static-PNG path draws it once, the GIF path reuses the same base
+    for every frame instead of re-rendering the card/bars/blur per frame."""
     img = _tiled_background(CANVAS).convert("RGB")
 
     card_box = (PAD, PAD, CANVAS[0] - PAD, CANVAS[1] - PAD)
@@ -287,13 +293,57 @@ def render_pet_png(g: GroupState) -> bytes:
     sprite_box = max(80, min(inner_x1 - inner_x0, sprite_bottom - sprite_top))
     sprite_cx = (inner_x0 + inner_x1) // 2
     sprite_cy = sprite_top + (sprite_bottom - sprite_top) // 2
-    _draw_sprite(img, cx=sprite_cx, cy=sprite_cy, pet=g.pet, box=sprite_box)
 
     bars_y = _bar_minimal(img, inner_x0, bars_y0, inner_x1 - inner_x0,
                           icon_glyph=_heart_glyph, val=g.pet.physical, h=bar_h) + bars_gap
     _bar_minimal(img, inner_x0, bars_y, inner_x1 - inner_x0,
                 icon_glyph=_chat_glyph, val=g.pet.mental, h=bar_h)
 
+    return img, {"cx": sprite_cx, "cy": sprite_cy, "box": sprite_box}
+
+
+def render_pet_png(g: GroupState) -> bytes:
+    """Square card: 'Tabi' label, the sprite, then the two health bars
+    stacked below it — all inside one box. No caption, no trip stats, no
+    week chip; the only text anywhere is the word 'Tabi'. (Tabi's chat line
+    still rides as the Telegram message's own caption — see bot.py — this
+    function only controls what's drawn INTO the image.)"""
+    base, sp = _render_base(g)
+    img = base.copy()
+    _draw_sprite(img, cx=sp["cx"], cy=sp["cy"], pet=g.pet, box=sp["box"])
     buf = BytesIO()
     img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def render_pet_gif(g: GroupState, *, frames: int = 18, frame_ms: int = 90,
+                   amplitude: int = 10) -> bytes:
+    """Same square card as render_pet_png, but the sprite bobs up and down —
+    a raised-cosine bounce (0 -> -amplitude at the midpoint -> 0), matching
+    the webapp's `tami-float` CSS animation, with the shadow shrinking/
+    fading on the up-beat for a grounded feel. Card/bars/title are drawn
+    once and reused for every frame; only the sprite+shadow are redrawn.
+    Send via bot.send_animation, NOT send_photo (Telegram won't animate a
+    GIF sent as a photo)."""
+    base, sp = _render_base(g)
+    pal_frames = []
+    ref_palette = None
+    for i in range(frames):
+        phase = i / frames
+        bump = (1 - math.cos(2 * math.pi * phase)) / 2  # 0 → 1 → 0, eased
+        frame = base.copy()
+        _draw_sprite(frame, cx=sp["cx"], cy=sp["cy"] - round(amplitude * bump),
+                    pet=g.pet, box=sp["box"],
+                    shadow_scale=1 - 0.2 * bump, shadow_alpha_mult=1 - 0.4 * bump)
+        if ref_palette is None:
+            ref_palette = frame.convert("P", palette=Image.ADAPTIVE, colors=255)
+            pal_frames.append(ref_palette)
+        else:
+            pal_frames.append(frame.quantize(palette=ref_palette, dither=Image.FLOYDSTEINBERG))
+
+    buf = BytesIO()
+    pal_frames[0].save(
+        buf, format="GIF", save_all=True, append_images=pal_frames[1:],
+        duration=frame_ms, loop=0, disposal=2,
+    )
     return buf.getvalue()
