@@ -118,26 +118,71 @@ def pet_sprite_png(physical: int = 100, mental: int = 100, feeling: str = "mid")
     return Response(content=buf.getvalue(), media_type="image/png")
 
 
+_SPRITE_NAMES = (
+    "Full_Happy", "Full_Mid", "Full_Sad",
+    "Mid_Happy", "Mid_Mid", "Mid_Sad",
+    "Low_Happy", "Low_Mid", "Low_Sad",
+    "Rotten_Full_Happy", "Rotten_Full_Mid", "Rotten_Full_Sad",
+    "Rotten_Mid_Happy", "Rotten_Mid_Mid", "Rotten_Mid_Sad",
+    "Rotten_Low_Happy", "Rotten_Low_Mid", "Rotten_Low_Sad",
+)
+
+
+@app.get("/api/pet/asset/{name}")
+def pet_asset_file(name: str) -> FileResponse:
+    """Serve a named sprite from assets/tami (preview / debug only)."""
+    stem = name.removesuffix(".png")
+    if stem not in _SPRITE_NAMES:
+        raise HTTPException(status_code=404, detail="unknown sprite")
+    path = os.path.join(tami.TAMI_DIR, f"{stem}.png")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"missing asset: {stem}.png")
+    return FileResponse(path, media_type="image/png")
+
+
 @app.get("/api/preview")
 def preview_gallery() -> HTMLResponse:
-    """All 18 size × mold × feeling combos at a glance, each linking to the
-    full chat-card render and flagging any asset file that's still missing."""
-    reps = {"full": 90, "half": 55, "small": 10}
-    mold_reps = {"clean": 90, "moldy": 10}
+    """All 18 physical × expression × rotten combos at a glance."""
+    # Reachable (physical, mental) samples; unreachable cells still show art.
+    samples = {
+        "Full_Happy": (90, 90),
+        "Full_Mid": (90, 55),
+        "Mid_Happy": (55, 90),
+        "Mid_Mid": (55, 55),
+        "Low_Happy": (20, 90),
+        "Low_Mid": (20, 55),
+        "Rotten_Full_Mid": (90, 45),
+        "Rotten_Full_Sad": (90, 20),
+        "Rotten_Mid_Mid": (55, 45),
+        "Rotten_Mid_Sad": (55, 20),
+        "Rotten_Low_Mid": (20, 45),
+        "Rotten_Low_Sad": (20, 20),
+    }
     cells = []
-    for size, physical in reps.items():
-        for mold, mental in mold_reps.items():
-            for feeling in tami.FEELINGS:
-                fname = tami.sushi_filename(physical, mental, feeling)
-                exists = os.path.exists(tami.sushi_path(physical, mental, feeling))
-                cells.append(f'''
-                  <a class="cell" href="/api/preview/pet.png?physical={physical}&mental={mental}&feeling={feeling}"
-                     target="_blank">
-                    <img src="/api/pet/sprite.png?physical={physical}&mental={mental}&feeling={feeling}"
-                         onerror="this.closest('.cell').classList.add('missing')" />
-                    <div class="label">{size} · {mold} · {feeling}</div>
-                    <div class="file">{fname}{'' if exists else ' — MISSING'}</div>
-                  </a>''')
+    for stem in _SPRITE_NAMES:
+        fname = f"{stem}.png"
+        exists = os.path.exists(os.path.join(tami.TAMI_DIR, fname))
+        sample = samples.get(stem)
+        if sample is not None:
+            physical, mental = sample
+            img_src = f"/api/pet/sprite.png?physical={physical}&mental={mental}"
+            href = f"/api/preview/pet.png?physical={physical}&mental={mental}"
+            label = (
+                f"{tami.physical_tier(physical)} · "
+                f"{tami.expression_tier(mental)} · "
+                f"{'rotten' if tami.is_rotten(mental) else 'fresh'}"
+            )
+        else:
+            img_src = f"/api/pet/asset/{fname}"
+            href = img_src
+            label = "art only"
+        cells.append(f'''
+          <a class="cell" href="{href}" target="_blank">
+            <img src="{img_src}"
+                 onerror="this.closest('.cell').classList.add('missing')" />
+            <div class="label">{label}</div>
+            <div class="file">{fname}{'' if exists else ' — MISSING'}</div>
+          </a>''')
     html = f'''<!doctype html><html><head><meta charset="utf-8">
     <title>tami preview</title>
     <style>
@@ -150,7 +195,12 @@ def preview_gallery() -> HTMLResponse:
       .label {{ font-size:12px; margin-top:6px; color:#8a92a5; }}
       .file {{ font-size:10px; color:#5c6273; margin-top:2px; word-break:break-all; }}
     </style></head><body>
-    <h2>tami — 18 states (click a tile for the full chat-card render)</h2>
+    <h2>tami — sprites (physical × mental × rotten)</h2>
+    <p style="color:#8a92a5;font-size:13px">
+      Physical &gt;70 Full / 40–70 Mid / &lt;40 Low ·
+      Mental &gt;70 Happy / 40–70 Mid / &lt;40 Sad ·
+      Mental &lt;50 Rotten_
+    </p>
     <div class="grid">{''.join(cells)}</div>
     </body></html>'''
     return HTMLResponse(html)

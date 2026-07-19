@@ -83,6 +83,11 @@
       z-index: 1;
       margin-bottom: 8%;
       animation: tami-float 3.2s ease-in-out infinite;
+      opacity: 1;
+      transition: opacity 0.5s ease;
+    }
+    #pet-sprite.is-fading {
+      opacity: 0;
     }
     #pet-shadow {
       position: absolute;
@@ -106,6 +111,7 @@
     }
     @media (prefers-reduced-motion: reduce) {
       #pet-sprite, #pet-shadow { animation: none; }
+      #pet-sprite { transition: none; }
     }
 
     #pet-footer {

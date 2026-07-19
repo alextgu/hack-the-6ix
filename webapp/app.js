@@ -202,12 +202,47 @@
     );
   }
 
+  var spriteUrl = "";
+  var spriteFadeTimer = null;
+  var SPRITE_FADE_MS = 500;
+
   function updateSprite(physical, mental, feeling) {
     // Same tami art the Telegram chat card + bot avatar use — the server
     // owns the size/mold bucket thresholds (app/render/tami.py), so the
     // client just forwards the 3 raw numbers.
-    petSpriteEl.src = "/api/pet/sprite.png?physical=" + Math.round(physical) +
+    var url = "/api/pet/sprite.png?physical=" + Math.round(physical) +
       "&mental=" + Math.round(mental) + "&feeling=" + encodeURIComponent(feeling);
+    if (url === spriteUrl) return;
+    spriteUrl = url;
+
+    if (spriteFadeTimer) {
+      clearTimeout(spriteFadeTimer);
+      spriteFadeTimer = null;
+    }
+
+    // First paint: no fade.
+    if (!petSpriteEl.getAttribute("src")) {
+      petSpriteEl.src = url;
+      return;
+    }
+
+    petSpriteEl.classList.add("is-fading");
+    spriteFadeTimer = setTimeout(function () {
+      petSpriteEl.onload = function () {
+        petSpriteEl.onload = null;
+        // Force reflow so the fade-in transition runs after opacity was 0.
+        void petSpriteEl.offsetWidth;
+        petSpriteEl.classList.remove("is-fading");
+      };
+      petSpriteEl.src = url;
+      // Cached images may skip onload.
+      if (petSpriteEl.complete) {
+        petSpriteEl.onload = null;
+        void petSpriteEl.offsetWidth;
+        petSpriteEl.classList.remove("is-fading");
+      }
+      spriteFadeTimer = null;
+    }, SPRITE_FADE_MS);
   }
 
   function deriveMood(phys, ment) {

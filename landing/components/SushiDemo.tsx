@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   MAX_WEEK,
   MOOD_COLOR,
@@ -10,20 +10,7 @@ import {
   stateAtWeek,
 } from "@/lib/petModel";
 
-// Manual per-face position/size tuning — percentages of the art box.
-// Key = art.faceKey ("{Amount}_{Expression}", e.g. "Full_Happy").
-const DEFAULT_FACE_OFFSET = { width: 55, height: 55, top: 10, left: 50 };
-const FACE_OFFSETS: Record<string, typeof DEFAULT_FACE_OFFSET> = {
-  Full_Happy: { width: 55, height: 55, top: 40, left: 40 },
-  Full_Mid: { width: 55, height: 55, top: 40, left: 45 },
-  Full_Sad: { width: 55, height: 55, top: 10, left: 50 },
-  Half_Happy: { width: 55, height: 55, top: 10, left: 50 },
-  Half_Mid: { width: 55, height: 55, top: 40, left: 45 },
-  Half_Sad: { width: 55, height: 55, top: 40, left: 50 },
-  Low_Happy: { width: 55, height: 55, top: 10, left: 50 },
-  Low_Mid: { width: 55, height: 55, top: 10, left: 50 },
-  Low_Sad: { width: 28, height: 28, top: 53, left: 48 },
-};
+const AVATAR_FADE_MS = 500;
 
 const HEALTH_INFO = {
   Physical: {
@@ -122,7 +109,45 @@ export default function SushiDemo() {
   const pet = useMemo(() => (booked ? committedState() : stateAtWeek(week)), [week, booked]);
   const glow = MOOD_COLOR[pet.mood];
   const art = useMemo(() => petArt(pet.physical, pet.mental), [pet]);
-  const faceOffset = FACE_OFFSETS[art.faceKey] ?? DEFAULT_FACE_OFFSET;
+
+  // Crossfade when the sprite key changes (0.5s).
+  const [shownSrc, setShownSrc] = useState(art.src);
+  const [outgoingSrc, setOutgoingSrc] = useState<string | null>(null);
+  const [fadeIn, setFadeIn] = useState(true);
+  const shownRef = useRef({ key: art.key, src: art.src });
+  const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (art.key === shownRef.current.key) return;
+
+    const prevSrc = shownRef.current.src;
+    shownRef.current = { key: art.key, src: art.src };
+
+    if (fadeTimer.current) clearTimeout(fadeTimer.current);
+
+    setOutgoingSrc(prevSrc);
+    setShownSrc(art.src);
+    setFadeIn(false);
+
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setFadeIn(true));
+    });
+    fadeTimer.current = setTimeout(() => {
+      setOutgoingSrc(null);
+      fadeTimer.current = null;
+    }, AVATAR_FADE_MS);
+
+    return () => {
+      cancelAnimationFrame(raf);
+    };
+  }, [art.key, art.src]);
+
+  // Clear fade timer on unmount only.
+  useEffect(() => {
+    return () => {
+      if (fadeTimer.current) clearTimeout(fadeTimer.current);
+    };
+  }, []);
 
   return (
     <div className="mx-auto grid w-full max-w-3xl items-stretch gap-4 lg:grid-cols-2">
@@ -146,29 +171,35 @@ export default function SushiDemo() {
 
           <div
             key={booked ? "booked" : "alive"}
-            className={`relative h-32 w-32 select-none transition-all duration-500 sm:h-36 sm:w-36 ${
+            className={`relative h-32 w-32 select-none sm:h-36 sm:w-36 ${
               booked ? "animate-pop" : pet.mood === "dying" ? "" : "animate-floaty"
             }`}
             role="img"
-            aria-label={`Sushi-kun looking ${pet.mood}`}
+            aria-label={`Tama-Go-Chi looking ${pet.mood}`}
           >
+            {outgoingSrc && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={outgoingSrc}
+                alt=""
+                aria-hidden
+                className="absolute inset-0 h-full w-full object-contain"
+                style={{
+                  opacity: fadeIn ? 0 : 1,
+                  transition: `opacity ${AVATAR_FADE_MS}ms ease`,
+                }}
+              />
+            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={art.sushiSrc}
+              src={shownSrc}
               alt=""
-              aria-hidden
               className="absolute inset-0 h-full w-full object-contain"
-            />
-            <img
-              src={art.faceSrc}
-              alt=""
-              aria-hidden
-              className="absolute z-10 object-contain"
               style={{
-                width: `${faceOffset.width}%`,
-                height: `${faceOffset.height}%`,
-                top: `${faceOffset.top}%`,
-                left: `${faceOffset.left}%`,
-                transform: "translateX(-50%)",
+                opacity: outgoingSrc ? (fadeIn ? 1 : 0) : 1,
+                transition: outgoingSrc
+                  ? `opacity ${AVATAR_FADE_MS}ms ease`
+                  : undefined,
               }}
             />
           </div>
