@@ -16,6 +16,21 @@ const SPONSORS = ["Stay22", "Phoebe", "Freesolo", "MongoDB Atlas", "ElevenLabs",
 
 const PIPELINE_CARDS = [
   {
+    phase: "Meet Tabi",
+    media: "",
+    mediaExtra: undefined as string | undefined,
+    mediaType: "demo" as const,
+    fit: "contain" as const,
+    mediaAlt: "Interactive health-bar simulation of Tabi the sushi pet",
+    imageSide: "left" as const,
+    steps: [
+      {
+        title: "Try it",
+        body: "Drag the weeks forward — prices climb, the chat goes quiet, and Tabi rots. Book to revive her.",
+      },
+    ],
+  },
+  {
     phase: "Onboard",
     media: "/pipeline-tabi-checkin.png",
     mediaExtra: "/pet/all-avatars-fade.gif",
@@ -510,8 +525,9 @@ export default function Home() {
             </Reveal>
             <Reveal delay={140}>
               <p className="mt-5 max-w-md text-base leading-relaxed sm:text-lg" style={{ color: "var(--muted)" }}>
-                A Solana trip coin, minted to the group — a permanent memory card of the destination, how many
-                iterations and how long it took to book, and the carbon you avoided. Immutable. Yours.
+                A permanent memory card for the group — the destination, how many iterations and how
+                long it took to book, and the carbon you avoided. Minted once on Solana, so it&apos;s
+                immutable. Yours.
               </p>
             </Reveal>
           </div>
@@ -528,30 +544,41 @@ export default function Home() {
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs uppercase tracking-[0.24em]" style={{ opacity: 0.6 }}>
-                  Japan Trip Coin
+                  Trip Wrapped
                 </span>
-                <span className="text-xs" style={{ opacity: 0.6 }}>◎ Solana devnet</span>
+                <span className="text-xs" style={{ opacity: 0.6 }}>2026</span>
               </div>
-              <div className="font-display mt-3 text-3xl">Kyoto</div>
-              <div className="mt-6 rounded-xl p-4" style={{ background: "rgba(245,239,224,0.08)" }}>
-                <div className="text-xs uppercase tracking-[0.18em]" style={{ opacity: 0.6 }}>
-                  🌱 carbon avoided
-                </div>
-                <div className="mt-1 text-xl" style={{ fontWeight: 700 }}>142 miles not driven</div>
+              <div className="font-display mt-3 text-2xl">Kyoto · Aug 1–5</div>
+              <div className="mt-6 flex flex-col gap-3 text-sm">
+                {[
+                  ["📍", "Destination", "Kyoto"],
+                  ["🔁", "Iterations to book", "12"],
+                  ["⏱️", "Time to book", "3 days"],
+                  ["🌱", "Carbon avoided", "142 mi not driven"],
+                ].map(([e, k, v]) => (
+                  <div
+                    key={k}
+                    className="flex items-center justify-between gap-4"
+                    style={{ borderTop: "1px solid rgba(245,239,224,0.12)", paddingTop: 10 }}
+                  >
+                    <span style={{ opacity: 0.8 }}>{e} {k}</span>
+                    <span className="tabular-nums" style={{ fontWeight: 700 }}>{v}</span>
+                  </div>
+                ))}
               </div>
-              <div className="mt-4 text-xs leading-relaxed" style={{ opacity: 0.7 }}>
-                📍 destination · 🔁 iterations to book · ⏱️ time to book — all recorded on-chain.
+              <div className="mt-6 flex items-center justify-between gap-3 text-[0.7rem]" style={{ opacity: 0.6 }}>
+                <span>minted on Solana devnet · immutable · one per group</span>
+                <a
+                  href={MINT_EXPLORER}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 underline underline-offset-2"
+                  style={{ color: "#f5efe0", opacity: 0.9 }}
+                >
+                  verify
+                  <iconify-icon icon="heroicons:arrow-top-right-on-square" width="12" height="12" />
+                </a>
               </div>
-              <a
-                href={MINT_EXPLORER}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-5 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
-                style={{ background: "#f5efe0", color: "#2a241c" }}
-              >
-                View the mint on Solana Explorer
-                <iconify-icon icon="heroicons:arrow-top-right-on-square" width="15" height="15" />
-              </a>
             </div>
           </Reveal>
         </div>

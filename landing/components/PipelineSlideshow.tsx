@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import PipelineYouTube from "@/components/PipelineYouTube";
+import SushiDemo from "@/components/SushiDemo";
 
 type Step = { title: string; body: string };
 export type PipelineCard = {
   phase: string;
   media: string;
   mediaExtra?: string;
-  mediaType: "duo" | "image" | "youtube";
+  mediaType: "duo" | "image" | "youtube" | "demo";
   fit: "contain" | "cover";
   mediaAlt: string;
   imageSide: "left" | "right";
@@ -55,6 +56,31 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
           boxShadow: "var(--sheen), var(--shadow)",
         }}
       >
+        {card.mediaType === "demo" ? (
+          /* Slide 0 — the live health-bar simulation, full-card. */
+          <div className="relative overflow-hidden p-7 sm:p-8 lg:min-h-[460px]">
+            <span
+              aria-hidden
+              className="ds-title pointer-events-none absolute -top-4 right-3 select-none leading-none tabular-nums"
+              style={{ fontSize: "8rem", color: "var(--fg)", opacity: 0.05 }}
+            >
+              {i + 1}
+            </span>
+            <p
+              className="mb-6 inline-flex w-fit items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em]"
+              style={{ color: "var(--card-coral-ink)" }}
+            >
+              <span className="inline-block h-2 w-2 rounded-full" style={{ background: "var(--card-coral-ink)" }} />
+              Phase {i + 1} · {card.phase}
+            </p>
+            <SushiDemo />
+            {card.steps[0] ? (
+              <p className="mx-auto mt-6 max-w-xl text-center text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
+                {card.steps[0].body}
+              </p>
+            ) : null}
+          </div>
+        ) : (
         <div className="grid items-stretch lg:grid-cols-[1.55fr_minmax(0,1fr)]">
           <div
             className={`relative min-h-[300px] overflow-hidden sm:min-h-[360px] lg:min-h-[460px] ${
@@ -134,6 +160,7 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
             </ul>
           </div>
         </div>
+        )}
       </article>
 
       {/* Arrows — overlap the card edges, vertically centered. */}
