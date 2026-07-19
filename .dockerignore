@@ -11,3 +11,4 @@ venv/
 .ruff_cache/
 mock.html
 kamagachi/
+_graveyard/
