@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tabi · our model vs a frontier model</title>
+  <link rel="stylesheet" href="/webapp/ds.css" />
+  <style>
+    /* Held-out eval, our fine-tuned 4B vs a frontier model (zero-shot).
+       Three metrics on different scales -> small-multiple bar pairs, each its
+       own scale (never one dual-axis chart). Palette validated (dataviz):
+       Ours #b5472a (persimmon) vs Frontier #3b5bc0 (indigo), CVD dE 23.6.
+       Identity = legend + direct labels, never color alone. */
+    :root { --ours: #b5472a; --frontier: #3b5bc0; }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 20px 16px 40px; }
+    figure {
+      margin: 0; background: var(--surface); border-radius: var(--radius, 20px);
+      box-shadow: var(--shadow, 0 8px 30px rgba(42,36,28,0.10));
+      padding: 24px 22px 20px;
+    }
+    .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ours); font-weight: 700; }
+    figure h1 { font-family: var(--font-display, var(--font-body)); font-size: 21px; margin: 4px 0 2px; color: var(--fg); font-weight: 700; }
+    .caption { font-size: 13px; color: var(--muted); }
+    .legend { display: flex; gap: 18px; margin: 14px 0 18px; font-size: 12.5px; }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .legend .k { color: var(--fg); font-weight: 700; }
+    .legend .k .sub { color: var(--muted); font-weight: 400; }
+    .legend .f { color: var(--muted); }
+    .swatch { width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
+    .metrics { display: flex; flex-direction: column; gap: 18px; }
+    .m-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; margin-bottom: 8px; }
+    .m-head .name { font-size: 14.5px; font-weight: 700; color: var(--fg); }
+    .m-head .sub { font-size: 12px; color: var(--muted); margin-left: auto; }
+    .bars { display: flex; flex-direction: column; gap: 6px; }
+    .bar { display: flex; align-items: center; gap: 10px; }
+    .bar .lbl { width: 66px; flex: 0 0 auto; font-size: 12.5px; color: var(--muted); text-align: right; }
+    .track { position: relative; flex: 1; height: 16px; border-radius: 9999px; background: rgba(42,36,28,0.06); }
+    .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 9999px; min-width: 4px; }
+    .bar .val { width: 52px; flex: 0 0 auto; font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; }
+    .val.strong { font-weight: 700; }
+    .val.plain { color: var(--fg); font-weight: 500; }
+    .foot { margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(42,36,28,0.1); font-size: 13.5px; color: var(--fg); line-height: 1.5; }
+    .foot .hot { color: var(--ours); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <figure>
+      <figcaption>
+        <div class="eyebrow">We trained the pet&rsquo;s brain ourselves</div>
+        <h1>Our 4B model vs. a frontier model</h1>
+        <div class="caption">held-out eval &middot; 50 examples &middot; higher is better</div>
+      </figcaption>
+
+      <div class="legend">
+        <span class="k"><span class="swatch" style="background:var(--ours)"></span>Our 4B <span class="sub">(live)</span></span>
+        <span class="f"><span class="swatch" style="background:var(--frontier)"></span>Frontier (zero-shot)</span>
+      </div>
+
+      <div class="metrics">
+        <!-- Gold-F1 — scale max 0.4 -->
+        <div>
+          <div class="m-head"><span class="name">Gold-F1</span><span class="sub">closeness to the ideal reply</span></div>
+          <div class="bars">
+            <div class="bar"><span class="lbl">Our 4B</span><span class="track"><span class="fill" style="width:82.5%;background:var(--ours);box-shadow:0 1px 8px #b5472a55"></span></span><span class="val strong" style="color:var(--ours)">0.330</span></div>
+            <div class="bar"><span class="lbl">Frontier</span><span class="track"><span class="fill" style="width:21.5%;background:var(--frontier)"></span></span><span class="val plain">0.086</span></div>
+          </div>
+        </div>
+        <!-- In-voice — scale max 100 -->
+        <div>
+          <div class="m-head"><span class="name">In-voice</span><span class="sub">sounds like the pet, not an assistant</span></div>
+          <div class="bars">
+            <div class="bar"><span class="lbl">Our 4B</span><span class="track"><span class="fill" style="width:96%;background:var(--ours);box-shadow:0 1px 8px #b5472a55"></span></span><span class="val strong" style="color:var(--ours)">96%</span></div>
+            <div class="bar"><span class="lbl">Frontier</span><span class="track"><span class="fill" style="width:0%;background:var(--frontier)"></span></span><span class="val plain">0%</span></div>
+          </div>
+        </div>
+        <!-- Valid JSON — scale max 100 -->
+        <div>
+          <div class="m-head"><span class="name">Valid JSON</span><span class="sub">parseable structured output</span></div>
+          <div class="bars">
+            <div class="bar"><span class="lbl">Our 4B</span><span class="track"><span class="fill" style="width:100%;background:var(--ours);box-shadow:0 1px 8px #b5472a55"></span></span><span class="val strong" style="color:var(--ours)">100%</span></div>
+            <div class="bar"><span class="lbl">Frontier</span><span class="track"><span class="fill" style="width:92%;background:var(--frontier)"></span></span><span class="val plain">92%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <span class="hot"><strong>&asymp;4&times; the frontier&rsquo;s Gold-F1</strong></span> and <strong>0 &rarr; 96% in-voice</strong> &mdash;
+        trained on data the product generated about itself (SFT &rarr; distillation &rarr; GRPO on Qwen&nbsp;3.5-4B), and the live pet runs on it right now.
+      </div>
+    </figure>
+  </div>
+</body>
+</html>

@@ -3,6 +3,7 @@ import SushiDemo from "@/components/SushiDemo";
 import Reveal from "@/components/Reveal";
 import Petals from "@/components/Petals";
 import PipelineYouTube from "@/components/PipelineYouTube";
+import ModelBenchmark from "@/components/ModelBenchmark";
 
 const BOT_HANDLE = "@PetSamaBot";
 const BOT_URL = `https://t.me/${BOT_HANDLE.replace(/^@/, "")}`;
@@ -494,6 +495,11 @@ export default function Home() {
           <SectionTitle eyebrow="Accomplishments">What we&apos;re proud of</SectionTitle>
         </Reveal>
         <CardGrid items={ACCOMPLISHMENTS} cols="sm:grid-cols-3" />
+        <Reveal delay={220}>
+          <div className="mt-10 flex justify-center">
+            <ModelBenchmark />
+          </div>
+        </Reveal>
       </section>
 
       {/* ─── 7. What We Learned ───────────────────────────────────────────── */}
