@@ -33,7 +33,10 @@ except ImportError:
 
 
 # ─── ONE place the model is called ──────────────────────────────────────────
-MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-exp")
+# "gemini-flash-latest" tracks the current fast Flash. Pinned ids rot:
+# gemini-2.0-flash-exp is retired and 404s, so this default only ever
+# worked because GEMINI_MODEL happened to be set in the environment.
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
 
 
 def call_model(parts: list) -> str:
