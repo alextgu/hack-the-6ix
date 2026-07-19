@@ -42,6 +42,7 @@ import os
 import re
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 
 from dotenv import load_dotenv
 from telegram import (
@@ -65,6 +66,7 @@ from app.integrations import flights
 from app.integrations import elevenlabs
 from app.integrations import telegram_avatar
 from app.integrations import green
+from app.integrations import solana_coin
 from app.agents import supervisor
 from app.agents import greenplanner
 from app.agents import face
@@ -236,6 +238,40 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
         "please — just book something.",
         ctx, mood="dying", physical=g.pet.physical,
     )
+
+
+# ─── Souvenir: Solana "Japan Trip Coin" (devnet, post-commit only) ──────────
+_TRIP_COIN_IMG = Path(__file__).resolve().parents[2] / "assets" / "trip_coin.jpeg"
+
+
+async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
+                              ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Mint the devnet souvenir coin, then post the art + Explorer link. Fully
+    guarded and fire-and-forget — a failure here can NEVER affect the booking
+    that already posted. Skips silently if config/treasury is missing."""
+    try:
+        dates = getattr(trip, "dates", None)
+        name = solana_coin.format_trip_name(
+            getattr(trip, "city", None),
+            getattr(dates, "start", None), getattr(dates, "end", None))
+        result = await asyncio.to_thread(
+            solana_coin.mint_trip_coin, {"name": name, "booking_url": booking_url or ""}, chat_id)
+        if not result:
+            return  # skipped/failed silently — booking already complete
+        caption = (f"🎉 minted your Japan Trip Coin — {result['name']}\n"
+                   f"you actually booked it.\n{result['explorer_url']}")
+        try:
+            if _TRIP_COIN_IMG.exists():
+                await ctx.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=InputFile(BytesIO(_TRIP_COIN_IMG.read_bytes()), filename="trip_coin.jpeg"),
+                    caption=caption)
+            else:
+                await ctx.bot.send_message(chat_id=chat_id, text=caption)
+        except Exception as e:
+            log.warning("trip coin post failed (chat=%s): %s", chat_id, e)
+    except Exception as e:
+        log.warning("trip coin task failed (chat=%s): %s", chat_id, e)
 
 
 # ─── /stop mute state (memory cache over the persisted plan flag) ───────────
@@ -521,6 +557,9 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await speak_pet(g.chat_id,
                         "we did it — i'm free! pack your bags, we're going to japan.",
                         ctx, mood="graduated", physical=g.pet.physical)
+    # Souvenir: mint the devnet Japan Trip Coin. Fire-and-forget + fully guarded
+    # (see _mint_and_post_coin) — never blocks or breaks the booking above.
+    asyncio.create_task(_mint_and_post_coin(g.chat_id, trip, opts.get("book_url"), ctx))
 
 
 async def cmd_saved(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
