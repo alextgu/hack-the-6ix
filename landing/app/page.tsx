@@ -75,34 +75,34 @@ const PIPELINE_CARDS = [
 
 const PILLARS = [
   {
-    icon: "heroicons:chat-bubble-left-right",
-    title: "Understand",
-    body: "Gemini reads your group chat like another friend, extracting destinations, dates, budgets, group size, and preferences before reconciling everyone's conflicting answers into one realistic trip plan.",
+    icon: "heroicons:microphone",
+    title: "Multimodal intake",
+    body: "Text, voice notes, and images — she reads the whole chat.",
   },
   {
-    icon: "heroicons:currency-dollar",
-    title: "Track",
-    body: "Stay22 continuously monitors live hotel prices and availability. As deals disappear or prices increase, Tabi's physical health drops, turning procrastination into something the entire group can see.",
+    icon: "heroicons:cpu-chip",
+    title: "Gemini × LangGraph",
+    body: "A team of Gemini agents, orchestrated on LangGraph.",
   },
   {
-    icon: "heroicons:photo",
-    title: "Express",
-    body: "The Telegram Mini App brings Tabi to life through animated expressions and health bars. Every major planning update changes the pet's appearance, making the trip's progress instantly visible inside the chat.",
-  },
-  {
-    icon: "heroicons:speaker-wave",
-    title: "Communicate",
-    body: "ElevenLabs gives Tabi an expressive voice that changes with its mood. Voice messages are transcribed, processed through the same planning pipeline, and answered naturally with emotional speech.",
+    icon: "heroicons:funnel",
+    title: "The reconciler",
+    body: "Everyone's price, place, and dates → one plan.",
   },
   {
     icon: "heroicons:megaphone",
-    title: "Coordinate",
-    body: "Phoebe identifies the single biggest blocker preventing the trip from happening, whether it's a person, scheduling conflict, or budget concern, and generates personalized nudges to move the group forward. Freesolo strengthens these conversations through GRPO-trained reinforcement learning.",
+    title: "Blocker agent · Freesolo",
+    body: "Qwen 4B, GRPO-tuned to find who's stalling and call them out — 4× a frontier model (0.32 vs 0.08).",
   },
   {
-    icon: "heroicons:circle-stack",
-    title: "Remember",
-    body: "MongoDB Atlas stores every group's trip state, member preferences, pet health, hotel price history, and AI decisions. It powers vector search, live synchronization, and provides the training data that continually improves Tabi.",
+    icon: "heroicons:arrow-path",
+    title: "Self-learning flywheel",
+    body: "Every decision logged to MongoDB; she trains on her own data, smarter each trip.",
+  },
+  {
+    icon: "heroicons:gift",
+    title: "Book it, keep it",
+    body: "Live Stay22 hotels via Tinder-style votes, sealed in a Solana trip coin — your Spotify Wrapped.",
   },
 ];
 
