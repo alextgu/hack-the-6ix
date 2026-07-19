@@ -3,65 +3,93 @@ import SushiDemo from "@/components/SushiDemo";
 import Reveal from "@/components/Reveal";
 import Petals from "@/components/Petals";
 
-// PLACEHOLDER — swap for the real bot handle.
-const BOT_HANDLE = "@YourBotHandle";
+const BOT_HANDLE = "@PetSamaBot";
 const BOT_URL = `https://t.me/${BOT_HANDLE.replace(/^@/, "")}`;
 
 const SPONSORS = ["Stay22", "Phoebe", "Freesolo", "MongoDB Atlas", "ElevenLabs", "Gemini"];
 
-const MECHANICS = [
+const PIPELINE_CARDS = [
   {
-    icon: "heroicons:chat-bubble-left-right",
-    title: "Listens in chat",
-    body: "Picks up city, dates, budget, and group size from the conversation as the trip takes shape.",
+    image: "/tokyo-poster.png",
+    imageAlt: "Planning dashboard / chat analysis",
+    imageSide: "right" as const,
+    steps: [
+      {
+        title: "Start the Trip",
+        body: "Add Tabi to your group chat.",
+      },
+      {
+        title: "Natural Planning",
+        body: "Chat normally about your trip.",
+      },
+      {
+        title: "Understand Everyone",
+        body: "Tabi extracts destinations, dates, budgets, and preferences from the conversation.",
+      },
+    ],
   },
   {
-    icon: "heroicons:heart",
-    title: "Physical bar",
-    body: "Tied to live Stay22 market pressure. Prices rising and rooms selling off make the pet sick.",
+    image: "/shibuya-stream-hotel.png",
+    imageAlt: "Group deciding on a hotel and trip plan",
+    imageSide: "left" as const,
+    steps: [
+      {
+        title: "Build Consensus",
+        body: "Tabi reconciles everyone's responses into one plan, identifies the real blockers, and proposes the next step.",
+      },
+      {
+        title: "Group Decision",
+        body: "The group approves the proposal or continues discussing until everyone is aligned.",
+      },
+    ],
   },
   {
-    icon: "heroicons:user-group",
-    title: "Mental bar",
-    body: "Tracks group engagement. Phoebe targets the keystone whose yes unsticks everyone else.",
-  },
-  {
-    icon: "heroicons:speaker-wave",
-    title: "Voice and booking",
-    body: "When health crashes, it nudges with voice. On commit, Stay22 hands over a finished booking.",
+    image: "/pet/Full_Happy.png",
+    imageAlt: "Tabi healthy after the trip is booked",
+    imageSide: "right" as const,
+    steps: [
+      {
+        title: "Make it Real",
+        body: "Tabi books the trip using live Stay22 hotel deals, recommends lower-carbon travel options, and finalizes the itinerary.",
+      },
+      {
+        title: "Celebrate",
+        body: "The pet recovers to full health, the group receives a commemorative trip token, and the trip officially becomes real.",
+      },
+    ],
   },
 ];
 
 const PILLARS = [
   {
     icon: "heroicons:chat-bubble-left-right",
-    title: "Read",
-    body: "Gemini parses the group chat into trip constraints (city, dates, budget, group size) and reconciles conflicting answers into one plan.",
+    title: "Understand",
+    body: "Gemini reads your group chat like another friend, extracting destinations, dates, budgets, group size, and preferences before reconciling everyone's conflicting answers into one realistic trip plan.",
   },
   {
     icon: "heroicons:currency-dollar",
-    title: "Price",
-    body: "Stay22 feeds live hotel pricing and availability into Physical health. Procrastination shows up as rising prices and rooms selling off.",
+    title: "Track",
+    body: "Stay22 continuously monitors live hotel prices and availability. As deals disappear or prices increase, Tabi's physical health drops, turning procrastination into something the entire group can see.",
   },
   {
     icon: "heroicons:photo",
-    title: "Render",
-    body: "The Telegram Mini App draws the pet's moods and posts the updated face whenever either bar moves, so the group sees the trip's vital signs in chat.",
+    title: "Express",
+    body: "The Telegram Mini App brings Tabi to life through animated expressions and health bars. Every major planning update changes the pet's appearance, making the trip's progress instantly visible inside the chat.",
   },
   {
     icon: "heroicons:speaker-wave",
-    title: "Speak",
-    body: "ElevenLabs gives the pet a voice with real emotional inflection: bright when the trip's alive, weak when a bar bottoms out.",
+    title: "Communicate",
+    body: "ElevenLabs gives Tabi an expressive voice that changes with its mood. Voice messages are transcribed, processed through the same planning pipeline, and answered naturally with emotional speech.",
   },
   {
     icon: "heroicons:megaphone",
-    title: "Pitch",
-    body: "Phoebe diagnoses the one blocker (person, timing, or issue), targets the keystone, and removes the objection. Freesolo trains that agent via GRPO self-play with a turn-level, ground-truth reward.",
+    title: "Coordinate",
+    body: "Phoebe identifies the single biggest blocker preventing the trip from happening, whether it's a person, scheduling conflict, or budget concern, and generates personalized nudges to move the group forward. Freesolo strengthens these conversations through GRPO-trained reinforcement learning.",
   },
   {
     icon: "heroicons:circle-stack",
-    title: "Store",
-    body: "MongoDB Atlas holds group, pet, and preference state: vector search for matching, time-series for health and price history, change streams for live updates.",
+    title: "Remember",
+    body: "MongoDB Atlas stores every group's trip state, member preferences, pet health, hotel price history, and AI decisions. It powers vector search, live synchronization, and provides the training data that continually improves Tabi.",
   },
 ];
 
@@ -69,12 +97,12 @@ const ACCOMPLISHMENTS = [
   {
     icon: "heroicons:user-group",
     title: "Finding the keystone",
-    body: "Phoebe learns friend roles from behavior (keystone, anchor, flake) and targets the person whose yes unsticks the whole group, instead of broadcasting nags.",
+    body: "An agent that finds the one person blocking the trip and nudges just them, by name, instead of spamming the whole chat. Phoebe learns roles from behavior (keystone, anchor, flake) so the nudge lands where it unsticks everyone else.",
   },
   {
     icon: "heroicons:cpu-chip",
     title: "Freesolo over a frontier baseline",
-    body: "Our GRPO-trained agent beat a frontier baseline on held-out friend-group scenarios, scored with a verifiable commit reward rather than a hackable LLM judge.",
+    body: "A 4B model trained on data our own product generated about itself beats a frontier model ~4× on held-out data (0.33 vs 0.086 gold-F1, 96% vs 0% pet-voice) and runs the live pet right now.",
   },
   {
     icon: "heroicons:musical-note",
@@ -86,13 +114,13 @@ const ACCOMPLISHMENTS = [
 const LEARNINGS = [
   {
     icon: "heroicons:circle-stack",
-    title: "MongoDB is the nervous system",
-    body: "One database covered matching (vector search), memory (time-series health/price), and live sync (change streams), not just CRUD.",
+    title: "Best data is home-grown",
+    body: "The best training data isn't scraped. Logging every decision with its candidates, scores, and real outcome gave us a labelled dataset no one else has, on top of MongoDB covering matching, memory, and live sync.",
   },
   {
     icon: "heroicons:heart",
     title: "Personality beats deep reasoning",
-    body: "Feeling \"alive\" came more from mood, voice, and timely nudges than from longer chain-of-thought. The group reacts to presence.",
+    body: "Simple conversational logic with a strong personality reads as more \"alive\" to users than deeper reasoning would. Mood, voice, and timely nudges beat longer chain-of-thought.",
   },
   {
     icon: "heroicons:shield-check",
@@ -105,17 +133,17 @@ const NEXT_STEPS = [
   {
     icon: "heroicons:bolt",
     title: "Live change streams",
-    body: "Push pet updates the instant health moves, with no polling lag between market ticks and the face in chat.",
+    body: "Make pet updates fully live with MongoDB change streams instead of polling, so the face in chat moves the instant health does.",
   },
   {
     icon: "heroicons:phone",
     title: "Voice-driven booking",
-    body: "Two-way ElevenLabs in Telegram: reply to the pet and it takes a real action, like holding a room, DMing the holdout, or kicking off onboarding.",
+    body: "Expand tool-calling into a full voice-driven booking flow: reply to Tabi and it holds a room, DMs the holdout, or kicks off onboarding.",
   },
   {
     icon: "heroicons:users",
-    title: "More archetypes",
-    body: "Expand beyond keystone / anchor / flake so Phoebe's targeting covers messier real friend groups.",
+    title: "Self-play friend group",
+    body: "Build a simulated friend group with keystone, anchor, and flake personas as a proper self-play training environment for Freesolo.",
   },
   {
     icon: "heroicons:map",
@@ -187,6 +215,106 @@ function CardGrid({
           </div>
         </Reveal>
       ))}
+    </div>
+  );
+}
+
+function PipelineCards() {
+  let stepNo = 0;
+  return (
+    <div className="mb-14 flex flex-col gap-4">
+      {PIPELINE_CARDS.map((card, i) => {
+        const steps = card.steps.map((step) => {
+          stepNo += 1;
+          return { ...step, n: stepNo };
+        });
+        const imageFirst = card.imageSide === "left";
+        return (
+          <div key={card.imageAlt}>
+            {i > 0 ? (
+              <div
+                className="mb-4 text-center text-lg leading-none"
+                style={{ color: "var(--muted)" }}
+                aria-hidden
+              >
+                ↓
+              </div>
+            ) : null}
+            <Reveal delay={i * 100}>
+              <div
+                className="overflow-hidden"
+                style={{
+                  borderRadius: "var(--radius)",
+                  background: "var(--surface)",
+                  boxShadow: "var(--shadow)",
+                }}
+              >
+                <div className="grid items-stretch lg:grid-cols-2">
+                  <div
+                    className={`relative min-h-[220px] overflow-hidden ${
+                      imageFirst ? "lg:order-1" : "lg:order-2"
+                    }`}
+                    style={{
+                      background: card.image.includes("/pet/")
+                        ? "var(--card-peach)"
+                        : "var(--bg)",
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={card.image}
+                      alt={card.imageAlt}
+                      className={
+                        card.image.includes("/pet/")
+                          ? "absolute inset-0 m-auto h-[70%] w-[70%] object-contain"
+                          : "absolute inset-0 h-full w-full object-cover"
+                      }
+                    />
+                  </div>
+                  <div
+                    className={`flex flex-col justify-center p-6 sm:p-8 ${
+                      imageFirst ? "lg:order-2" : "lg:order-1"
+                    }`}
+                  >
+                    {steps.map((step, si) => (
+                      <div key={step.n}>
+                        <div className="flex gap-3">
+                          <span
+                            className="ds-title shrink-0 tabular-nums"
+                            style={{ color: "var(--fg)", minWidth: "1.75rem" }}
+                          >
+                            {step.n}.
+                          </span>
+                          <div>
+                            <h3 className="ds-title text-base sm:text-lg">
+                              {step.title}
+                            </h3>
+                            <p
+                              className="mt-1 text-sm leading-relaxed"
+                              style={{ color: "var(--muted)" }}
+                            >
+                              {step.body}
+                            </p>
+                          </div>
+                        </div>
+                        {si < steps.length - 1 ? (
+                          <div
+                            className="my-3 pl-1 text-lg leading-none"
+                            style={{ color: "var(--muted)" }}
+                            aria-hidden
+                          >
+                            ↓
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -329,9 +457,7 @@ export default function Home() {
             returns a finished booking instead of another unfinished plan.
           </p>
         </Reveal>
-        <div className="mb-14">
-          <CardGrid items={MECHANICS} cols="sm:grid-cols-2 lg:grid-cols-4" />
-        </div>
+        <PipelineCards />
 
         <Reveal delay={160}>
           <div className="mb-8 text-center">
@@ -350,7 +476,7 @@ export default function Home() {
       {/* ─── 5. How We Built It ───────────────────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-6 py-20">
         <Reveal>
-          <SectionTitle eyebrow="How we built it">Six pillars</SectionTitle>
+          <SectionTitle eyebrow="How we built it">Six Pillars</SectionTitle>
         </Reveal>
         <CardGrid items={PILLARS} cols="sm:grid-cols-2 lg:grid-cols-3" />
       </section>
