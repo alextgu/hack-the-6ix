@@ -11,8 +11,8 @@ Fallback chain (so the demo never dies on stage):
   live Stay22 call → data/japan_hotels.json (cached real response)
                    → sample_response.json (older cached real response)
 
-Reuses stay22.py's module-level throttle so the keyless 5 req/min budget is
-shared with wire.py's price polls.
+Reuses stay22.py's module-level throttle so the Stay22 rate budget is shared
+with wire.py's price polls (5 req/min keyless, 150 req/min authenticated).
 """
 from __future__ import annotations
 import json
@@ -46,23 +46,42 @@ def default_dates() -> tuple[str, str]:
     return fri.isoformat(), (fri + timedelta(days=2)).isoformat()
 
 
-def _fetch_raw(query: str, checkin: str, checkout: str, guests: int) -> Optional[dict]:
+def _fetch_raw(query: str, checkin: str, checkout: str, guests: int,
+               chat_id: Optional[int] = None) -> Optional[dict]:
     """One full accommodations call (we need the result objects, not the
-    aggregates stay22.get_stay() returns)."""
+    aggregates stay22.get_stay() returns).
+
+    Location goes through stay22._location_params so we send coordinates for
+    known places — `address=` misplaces Japanese cities (see stay22.CITY_COORDS).
+
+    Clustering: `cluster=top` returns the best-rated stay per H3 cell, so the
+    deck spreads across neighbourhoods instead of stacking one block. Set
+    STAY22_CLUSTER=off to fall back to a flat list at the venue — `cluster=true`
+    504'd when probed, so only `top` is used here."""
+    mode = os.environ.get("STAY22_CLUSTER", "top").strip().lower()
+    clustering = mode == "top"
     params: dict[str, object] = {
-        "address": query,
+        # Clustering needs a bbox: center+radius is a structural blocker that
+        # silently degrades to a flat list.
+        **stay22._location_params(query, as_bbox=clustering),
         "checkin": checkin,
         "checkout": checkout,
         "adults": max(1, guests),
         "rooms": max(1, guests // 2 or 1),
-        "currency": "USD",
+        "currency": stay22.currency(),
         "pageSize": 30,
         "page": 1,
     }
-    aid = os.environ.get("STAY22_AID", "").strip()
-    if aid:
-        params["aid"] = aid
-        params["campaign"] = "trippet_cards"
+    if clustering:
+        params["cluster"] = "top"
+        params["precision"] = int(os.environ.get("STAY22_CLUSTER_PRECISION", "7"))
+        # cluster=top elects the BEST-RATED stay per cell, which without a floor
+        # means a 4-review rental wins every hexagon — and those are single
+        # supplier, so the cross-supplier saving disappears. Requiring a real
+        # review count elects actual hotels instead: probed 2026-07-18, this
+        # moved multi-supplier results from 0/30 to 16/30 at the same spread.
+        params["minratingcount"] = int(os.environ.get("STAY22_MIN_REVIEWS", "100"))
+    params.update(stay22.attribution_params("trippet-cards", chat_id))
 
     stay22._throttle()  # shared 12s keyless-tier budget
     url = f"{stay22.ENDPOINT}?{urllib.parse.urlencode(params)}"
@@ -80,18 +99,34 @@ def _normalize(raw: dict) -> list[dict]:
     photo, a price, and a rating — cards must be swipeable at a glance."""
     meta = raw.get("meta") or {}
     nights = int(meta.get("nights") or 2)
+    # The response is the authority on currency: a supplier that can't natively
+    # price the requested one falls back, so never assume the request value.
+    cur = (meta.get("currency") or "USD").upper()
     cards: list[dict] = []
     seen_names: set[str] = set()
 
     for r in raw.get("results") or []:
-        price = None
-        link = None
-        for s in (r.get("suppliers") or {}).values():
+        # Stay22 fronts booking / expedia / hotelscom / vrbo for the SAME
+        # property and their quotes genuinely differ — probed 2026-07-18, 17 of
+        # 50 Shinjuku properties differed, up to $568 (Keio Plaza: $1566 on
+        # booking vs $998 on expedia). Taking the first supplier that quotes
+        # was quietly overcharging the group, so take the cheapest and keep the
+        # rest to show what we beat.
+        quotes = []
+        for sname, s in (r.get("suppliers") or {}).items():
+            # price None = supplier pricing outage (availability unknown, NOT
+            # sold out); absent = no quote on a healthy request. Neither is $0.
             p = (s.get("price") or {}).get("total")
             if p:
-                price = float(p)
-                link = s.get("link") or r.get("url")
-                break
+                quotes.append({
+                    "supplier": sname,
+                    "price": float(p),
+                    "link": s.get("link") or r.get("url"),
+                    "logo": (s.get("media") or {}).get("logoSquare"),
+                })
+        quotes.sort(key=lambda q: q["price"])
+        price = quotes[0]["price"] if quotes else None
+        link = quotes[0]["link"] if quotes else None
         thumb = (r.get("media") or {}).get("thumbnail")
         rating = (r.get("rating") or {})
         name = (r.get("name") or "").strip()
@@ -109,6 +144,7 @@ def _normalize(raw: dict) -> list[dict]:
             "name": name,
             "type": r.get("type") or "Hotel",
             "price_total": round(price),
+            "currency": cur,
             "nights": nights,
             "price_per_night": round(price / max(1, nights)),
             "rating": rating.get("value"),
@@ -116,12 +152,25 @@ def _normalize(raw: dict) -> list[dict]:
             "stars": rating.get("hotelStars"),
             "guests": cap.get("guests"),
             "beds": cap.get("beds"),
+            "bedrooms": cap.get("bedrooms"),
+            "bathrooms": cap.get("bathrooms"),
             "free_cancellation": bool(pol.get("freeCancellation")),
+            "instant_book": bool(pol.get("instantBook")),
+            # Booked-through brand + what the alternatives quoted, so the card
+            # can show real inventory provenance and a defensible saving.
+            "supplier": quotes[0]["supplier"],
+            "supplier_logo": quotes[0]["logo"],
+            "quotes": quotes,
+            "beats_by": (round(quotes[-1]["price"] - quotes[0]["price"])
+                         if len(quotes) > 1 else 0),
             "address": loc.get("address") or "",
             "lat": (loc.get("coordinates") or {}).get("lat"),
             "lng": (loc.get("coordinates") or {}).get("lng"),
             "thumbnail": thumb,
             "url": link or r.get("url"),
+            # H3 cell from cluster=top — one card per cell, so this is a stable
+            # "which part of town" key for neighbourhood grouping.
+            "cell": r.get("cellId"),
         })
     return cards
 
@@ -152,12 +201,13 @@ def _pick_deck(cards: list[dict], n: int) -> list[dict]:
 
 def fetch_hotel_cards(max_cards: int = 5, guests: int = 4,
                       checkin: Optional[str] = None,
-                      checkout: Optional[str] = None) -> dict:
+                      checkout: Optional[str] = None,
+                      chat_id: Optional[int] = None) -> dict:
     """→ {basecamp, checkin, checkout, source, cards:[...max 5]}. Never raises;
     always returns a playable deck via the fallback chain."""
     ci, co = (checkin, checkout) if (checkin and checkout) else default_dates()
 
-    raw = _fetch_raw(BASECAMP_QUERY, ci, co, guests)
+    raw = _fetch_raw(BASECAMP_QUERY, ci, co, guests, chat_id)
     source = "stay22_live"
     cards = _normalize(raw) if raw else []
 
@@ -176,7 +226,9 @@ def fetch_hotel_cards(max_cards: int = 5, guests: int = 4,
     _tag_green_pick(deck, guests)
     log.info("hotel deck ready: %d cards (source=%s)", len(deck), source)
     return {"basecamp": BASECAMP_NAME, "checkin": ci, "checkout": co,
-            "source": source, "group_size": guests, "cards": deck}
+            "source": source, "group_size": guests,
+            "currency": (deck[0].get("currency") if deck else stay22.currency()),
+            "cards": deck}
 
 
 def _tag_green_pick(deck: list[dict], group_size: int) -> None:
@@ -194,6 +246,10 @@ def _tag_green_pick(deck: list[dict], group_size: int) -> None:
             c.get("price_per_night"), median)
         c["est_stay_kg"] = green.stay_footprint_kg(c, group_size,
                                                    c.get("nights") or 2, median)
+        # Airport→hotel transfer, off the coordinates Stay22 already returns.
+        c["transfer_km"] = green.transfer_km(c.get("lat"), c.get("lng"), BASECAMP_NAME)
+        c["transfer_saving_kg"] = green.transfer_delta_kg(
+            c, deck, BASECAMP_NAME, group_size=group_size)
         c["green_pick"] = False
     best = min(deck, key=lambda c: c["est_stay_kg"])
     best["green_pick"] = True

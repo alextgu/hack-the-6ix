@@ -351,6 +351,13 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
     _spoke_deathbed.discard(g.chat_id)   # re-arm voice moments for the fresh pet
     _spoke_graduated.discard(g.chat_id)
+    # state.reset() only rebuilds the in-memory pet. Without this, /start on a
+    # live chat announces a fresh egg while wire still holds the old message
+    # buffer and last-reconciled trip — so the "new" pet re-derives the previous
+    # trip on its first turn. Persisted records (deck votes, green ledger, chat
+    # history) deliberately survive: wiping those is /reset's job, not /start's.
+    wire.reset_chat(g.chat_id)
+    supervisor.reset_chat(g.chat_id)
     await asyncio.to_thread(set_muted, g.chat_id, False)  # /start always wakes
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
@@ -459,7 +466,8 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     caption = (
         f"🎉 booked. graduating the pet.\n"
         f"{opts['name']}{rating_str}\n"
-        f"${opts['price_total']:.0f} total · {guests} guests · {nights} night(s) in {trip.city}"
+        f"{stay22.fmt_money(opts['price_total'])} total · {guests} guests · "
+        f"{nights} night(s) in {trip.city}"
         f"{fallback_note}"
     )
     buttons: list[list[InlineKeyboardButton]] = [
@@ -467,7 +475,7 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     for alt in (opts.get("alternates") or [])[:2]:
         buttons.append([InlineKeyboardButton(
-            text=f"or: {alt['name']} — ${alt['price_total']:.0f}",
+            text=f"or: {alt['name']} — {stay22.fmt_money(alt['price_total'])}",
             url=alt["book_url"],
         )])
     await update.effective_chat.send_message(
