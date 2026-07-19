@@ -1,13 +1,14 @@
-"""Placeholder pet renderer — Pillow PNG.
+"""Tami pet renderer — Pillow PNG.
 
-Simple blob creature whose face changes with mood, plus two labelled bars
-(physical / mental) and a status caption. Designer replaces the art later.
-The image is composed fresh on every state change and returned as bytes so
-`bot.py` can call `send_photo(chat_id, InputFile(bytes))` — the safe visual
-path (not a link preview) per PROJECT.md.
+Real sushi art (app/render/tami.py — 18 PNGs keyed by size × mold × feeling)
+composited onto the canvas, plus two labelled bars (physical / mental) and a
+status caption. Falls back to a drawn placeholder blob if an asset file is
+missing, so an incomplete art drop never breaks the chat flow. The image is
+composed fresh on every state change and returned as bytes so `bot.py` can
+call `send_photo(chat_id, InputFile(bytes))` — the safe visual path (not a
+link preview) per PROJECT.md.
 
 TODO seams:
-  - Swap the shape drawing for the designer's real sprites (5 mood tiers).
   - When the pet talks (ElevenLabs later), add a speech-bubble overlay.
 """
 from __future__ import annotations
@@ -16,6 +17,7 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 
 from app.core.state import GroupState, PetState
+from app.render import tami
 
 
 CANVAS = (600, 640)
@@ -59,8 +61,26 @@ def _draw_bar(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int, pct: in
     draw.text((x + w - 44, y - 26), f"{pct}%", fill=INK, font=font_val, anchor="la")
 
 
-def _draw_pet(draw: ImageDraw.ImageDraw, cx: int, cy: int, pet: PetState) -> None:
-    """Simple blob with face — placeholder for real sprites."""
+SPRITE_BOX = 340  # max width/height the sushi art is scaled into, centered on (cx, cy)
+
+
+def _draw_pet(img: Image.Image, draw: ImageDraw.ImageDraw, cx: int, cy: int,
+             pet: PetState) -> None:
+    """Paste the real sushi sprite for this state; fall back to the drawn
+    placeholder blob if the asset file isn't there yet."""
+    sprite = tami.load_sushi_image(pet.physical, pet.mental, pet.feeling)
+    if sprite is None:
+        _draw_pet_placeholder(draw, cx, cy, pet)
+        return
+    w, h = sprite.size
+    scale = min(SPRITE_BOX / w, SPRITE_BOX / h)
+    sprite = sprite.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS)
+    sw, sh = sprite.size
+    img.paste(sprite, (cx - sw // 2, cy - sh // 2), sprite)
+
+
+def _draw_pet_placeholder(draw: ImageDraw.ImageDraw, cx: int, cy: int, pet: PetState) -> None:
+    """Simple blob with face — used only if a tami asset file is missing."""
     color = MOOD_COLORS.get(pet.mood, MOOD_COLORS["happy"])
     # body (ellipse)
     body_w, body_h = 260, 220
@@ -140,7 +160,7 @@ def render_pet_png(g: GroupState) -> bytes:
     draw.text((28, 20), f"trippet — week {g.sim_week} — {g.pet.mood}",
               fill=DIM, font=font_title)
 
-    _draw_pet(draw, cx=CANVAS[0] // 2, cy=280, pet=g.pet)
+    _draw_pet(img, draw, cx=CANVAS[0] // 2, cy=280, pet=g.pet)
 
     # bars
     bar_x, bar_w, bar_h = 40, CANVAS[0] - 80, 22

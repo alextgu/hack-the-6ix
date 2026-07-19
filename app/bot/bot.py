@@ -67,6 +67,7 @@ from app.integrations import telegram_avatar
 from app.integrations import green
 from app.agents import supervisor
 from app.agents import greenplanner
+from app.agents import face
 
 
 def _encode_start_param(chat_id: int) -> str:
@@ -156,23 +157,25 @@ async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
                 continue
 
 
-async def _sync_avatar(mood: str, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Best-effort: swap the bot's own profile photo to match `mood`. Deduped
-    inside telegram_avatar (no-ops if this mood is already set), so it's safe
-    to call on every mood refresh. Never raises — a Telegram hiccup here must
-    not break the chat flow. NOTE: this is the bot ACCOUNT's avatar, shared
+async def _sync_avatar(g: state.GroupState, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Best-effort: swap the bot's own profile photo to match the exact tami
+    sprite (size/mold/feeling) currently shown in-chat. Deduped inside
+    telegram_avatar (no-ops if this sprite is already set), so it's safe to
+    call on every render. Never raises — a Telegram hiccup here must not
+    break the chat flow. NOTE: this is the bot ACCOUNT's avatar, shared
     across every chat it's in (see telegram_avatar.py)."""
     try:
-        await asyncio.to_thread(telegram_avatar.set_avatar_for_mood, ctx.bot.token, mood)
+        await asyncio.to_thread(telegram_avatar.set_avatar_for_state, ctx.bot.token,
+                                g.pet.physical, g.pet.mental, g.pet.feeling)
     except Exception as e:
-        log.warning("avatar sync failed (mood=%s): %s", mood, e)
+        log.warning("avatar sync failed (chat=%s): %s", g.chat_id, e)
 
 
 async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Post the pet health PNG to a chat (guilt-trip visual)."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
-    asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
+    asyncio.create_task(_sync_avatar(g, ctx))
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
@@ -283,6 +286,17 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
     place that decides; this just has hands."""
     if not d.send or _mute_cache.get(chat_id):
         return
+    g = state.get_or_create(chat_id)
+    if d.message:
+        # Gemini reads the feeling of THIS message (isolated seam, always
+        # Gemini even when the message itself came from Freesolo) so the
+        # face/avatar match how the line actually reads.
+        feeling = await asyncio.to_thread(face.classify_feeling, d.message)
+        g.pet.set_feeling(feeling)
+        await asyncio.to_thread(state.persist_pet, g)
+        # Profile photo must track feeling on EVERY send, not just turns that
+        # also show the health card — otherwise the avatar barely ever moves.
+        asyncio.create_task(_sync_avatar(g, ctx))
     if d.action == "deal_cards":
         if d.message:
             await _say(chat_id, d.message, ctx)
@@ -290,7 +304,6 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         supervisor.note_cards_dealt(chat_id)
         return
     if d.action == "post_flights":
-        g = state.get_or_create(chat_id)
         opts = await asyncio.to_thread(flights.get_options, chat_id,
                                        g.trip.city, g.trip.budget_per_person)
         text = (d.message + "\n\n" if d.message else "") + flights.render_options(opts)
@@ -354,7 +367,7 @@ async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
     await asyncio.to_thread(state.persist_pet, g)
-    asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
+    asyncio.create_task(_sync_avatar(g, ctx))
     png_bytes = pet.render_pet_png(g)
     caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
     await ctx.bot.send_photo(
@@ -601,7 +614,7 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         g = state.get_or_create(chat_id)
         g.pet.refresh_mood()
         await asyncio.to_thread(state.persist_pet, g)
-        asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
+        asyncio.create_task(_sync_avatar(g, ctx))
         # If live prices just pushed the pet to death's door, let it speak once.
         await maybe_speak_deathbed(chat_id, ctx)
 

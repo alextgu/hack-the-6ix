@@ -176,14 +176,16 @@ def green_events(chat_id: int) -> list[dict]:
 
 
 # ─── Pet persistence (pet survives deploys) ─────────────────────────────────
-def save_pet(chat_id: int, physical: int, mental: int, mood: str, sim_week: int) -> None:
+def save_pet(chat_id: int, physical: int, mental: int, mood: str, sim_week: int,
+             feeling: str = "mid") -> None:
     d = _db()
     if d is None:
         return
     try:
         d.pets.replace_one({"chat_id": chat_id}, {
             "chat_id": chat_id, "physical": physical, "mental": mental,
-            "mood": mood, "sim_week": sim_week, "updated_at": _utcnow(),
+            "mood": mood, "sim_week": sim_week, "feeling": feeling,
+            "updated_at": _utcnow(),
         }, upsert=True)
     except Exception as e:
         log.warning("save_pet failed: %s", e)
