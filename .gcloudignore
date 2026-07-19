@@ -1,0 +1,48 @@
+# What NOT to upload to Cloud Build. The container is the Python bot + Mini App
+# (see Dockerfile: COPY . .), so anything the runtime doesn't import is dead
+# weight in every deploy.
+#
+# NOTE: the moment this file exists, gcloud STOPS falling back to .gitignore —
+# so everything that needs excluding must be listed here, including the
+# node_modules rule .gitignore was quietly providing.
+#
+# This exists because a deploy crashed outright:
+#   ERROR: gcloud crashed (PermissionError): 'landing\.next\dev\lock'
+# A Next.js dev server had left a lock file in landing/.next, .gitignore
+# covered node_modules but not .next, and gcloud tried to read it.
+
+.git/
+.gitignore
+
+# The landing page is a separate Next.js site (Netlify, see netlify.toml) and
+# is never served from this container.
+landing/
+
+# JS build + dependency output
+node_modules/
+.next/
+out/
+build/
+.vercel/
+.netlify/
+
+# Python cruft
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.venv-flash/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local env + secrets (Cloud Run gets these as service env vars)
+.env
+.env.*
+!.env.example
+
+# Scratch / editor
+*.log
+.DS_Store
+.idea/
+.vscode/
