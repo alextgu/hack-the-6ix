@@ -215,30 +215,18 @@ export default function Home() {
               padding: 10,
             }}
           >
-            {/* Swap this block for <video controls poster=… src=…> when the demo file is ready */}
             <div
               className="relative w-full overflow-hidden"
               style={{ aspectRatio: "16 / 9", borderRadius: "calc(var(--radius) - 12px)", boxShadow: "inset 0 0 0 1px rgba(42,36,28,0.06)" }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/tokyo-poster.png"
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
+              <iframe
+                src="https://www.youtube.com/embed/t1_Amtt9RSQ?start=6&rel=0&modestbranding=1"
+                title="Tami demo video"
+                className="absolute inset-0 h-full w-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
               />
-              <div className="absolute inset-0" style={{ background: "rgba(42, 36, 28, 0.30)" }} />
-              <div className="relative z-[1] flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-                <div
-                  className="flex h-20 w-20 items-center justify-center rounded-full"
-                  style={{ background: "var(--surface)", boxShadow: "var(--shadow)", color: "var(--fg)" }}
-                  aria-hidden
-                >
-                  <iconify-icon icon="heroicons:play" width="34" height="34" />
-                </div>
-                <p className="ds-title text-lg sm:text-2xl" style={{ color: "var(--surface)" }}>
-                  Demo video coming soon
-                </p>
-              </div>
             </div>
           </div>
           </Reveal>
