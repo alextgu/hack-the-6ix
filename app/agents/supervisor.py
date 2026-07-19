@@ -31,6 +31,7 @@ from typing import Optional, TypedDict
 from langgraph.graph import StateGraph, END
 
 from app.agents import voice
+from app.agents import guard
 from app.integrations import db
 from app.integrations import flights
 from app.integrations import green
@@ -116,14 +117,15 @@ def render_ask_memory(asks: dict) -> str:
             # "default destination is now chicago" on a Japan trip.
             example = ("Tokyo unless someone objects" if field == "city"
                        else "march 14 unless someone objects")
-            guard = (f" Any default city MUST be in {TRIP_COUNTRY}."
-                     if field == "city" else "")
+            # NB: not `guard` — that's the imported module (app.agents.guard).
+            city_rule = (f" Any default city MUST be in {TRIP_COUNTRY}."
+                         if field == "city" else "")
             lines.append(
                 f'  - {field}: asked {n}x, still unanswered. STOP asking the same '
                 f'way. Either @ one specific person and make it trivially easy to '
                 f'answer, propose a concrete default they can veto ("{example}"),'
                 f' or drop it and move the plan forward on what you DO have.'
-                f'{guard} Last attempt: "{last}"')
+                f'{city_rule} Last attempt: "{last}"')
         else:
             lines.append(f'  - {field}: asked once already. Do not re-ask in the '
                          f'same words. Last attempt: "{last}"')
@@ -770,6 +772,18 @@ Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
     out = out or {"candidates": [], "action": "none"}
     cands = sorted((c for c in out.get("candidates", []) if c.get("text")),
                    key=lambda c: -(c.get("motivation") or 0))
+    # Drop any candidate that puts an off-country destination on the table
+    # before ranking, so a violating line is never even eligible. We already
+    # generate several alternatives; this just makes the pool honest.
+    kept = []
+    for c in cands:
+        bad, why = guard.violates_destination(c.get("text") or "")
+        if bad:
+            log.warning("guard dropped candidate (chat=%s): %s | %r",
+                        s["chat_id"], why, (c.get("text") or "")[:120])
+            continue
+        kept.append(c)
+    cands = kept
     best = cands[0] if cands else None
     # Only kickoff and genuine urgency bypass the motivation bar. Heartbeats
     # used to be in here, which meant a quiet chat got a message every tick no
@@ -836,6 +850,16 @@ def _gate(chat_id: int, d: Decision, urgent: bool = False) -> Decision:
         return Decision()
     if d.send and not (d.message or d.action != "none"):
         return Decision()
+    # Last line of defence. messenger() already filters its candidate pool, but
+    # canned fallbacks and hardcoded beats don't come from there. Fail CLOSED:
+    # staying quiet is always safer than telling the group we're going to
+    # Chicago on a trip whose hotels, airports and basecamp are all Japan.
+    if d.send and d.message:
+        bad, why = guard.violates_destination(d.message)
+        if bad:
+            log.error("guard BLOCKED outgoing message (chat=%s): %s | %r",
+                      chat_id, why, d.message[:160])
+            return Decision()
     if d.send:
         _last_sent_at[chat_id] = now
         if d.message:
