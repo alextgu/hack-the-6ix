@@ -42,6 +42,7 @@ import os
 import re
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 
 from dotenv import load_dotenv
 from telegram import (
@@ -65,8 +66,10 @@ from app.integrations import flights
 from app.integrations import elevenlabs
 from app.integrations import telegram_avatar
 from app.integrations import green
+from app.integrations import solana_coin
 from app.agents import supervisor
 from app.agents import greenplanner
+from app.agents import face
 
 
 def _encode_start_param(chat_id: int) -> str:
@@ -156,30 +159,52 @@ async def _say(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
                 continue
 
 
-async def _sync_avatar(mood: str, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Best-effort: swap the bot's own profile photo to match `mood`. Deduped
-    inside telegram_avatar (no-ops if this mood is already set), so it's safe
-    to call on every mood refresh. Never raises — a Telegram hiccup here must
-    not break the chat flow. NOTE: this is the bot ACCOUNT's avatar, shared
+async def _sync_avatar(g: state.GroupState, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Best-effort: swap the bot's own profile photo to match the exact tami
+    sprite (size/mold/feeling) currently shown in-chat. Deduped inside
+    telegram_avatar (no-ops if this sprite is already set), so it's safe to
+    call on every render. Never raises — a Telegram hiccup here must not
+    break the chat flow. NOTE: this is the bot ACCOUNT's avatar, shared
     across every chat it's in (see telegram_avatar.py)."""
     try:
-        await asyncio.to_thread(telegram_avatar.set_avatar_for_mood, ctx.bot.token, mood)
+        await asyncio.to_thread(telegram_avatar.set_avatar_for_state, ctx.bot.token,
+                                g.pet.physical, g.pet.mental, g.pet.feeling)
     except Exception as e:
-        log.warning("avatar sync failed (mood=%s): %s", mood, e)
+        log.warning("avatar sync failed (chat=%s): %s", g.chat_id, e)
 
 
-async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Post the pet health PNG to a chat (guilt-trip visual)."""
+async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, *,
+                        message: str | None = None, reply_to: int | None = None) -> None:
+    """Post the pet card PNG to a chat. Tabi's line (if any) rides as the
+    photo's OWN caption — one Telegram message, not a text message followed
+    by a separate photo. Falls back to the card's own mood caption when
+    there's no Tabi line (plain /health-style checks). If every caption
+    attempt fails (e.g. an unusually long line blowing past Telegram's
+    1024-char photo-caption cap), degrades to a bare photo + a separate text
+    send rather than silently dropping the turn."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
-    asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
+    await asyncio.to_thread(state.persist_pet, g)
+    asyncio.create_task(_sync_avatar(g, ctx))
     png_bytes = pet.render_pet_png(g)
-    caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
-    await ctx.bot.send_photo(
-        chat_id=chat_id,
-        photo=InputFile(BytesIO(png_bytes), filename="trippet.png"),
-        caption=caption,
-    )
+    caption = message or pet.pet_caption(g)
+
+    for parse_mode in (ParseMode.MARKDOWN, None):
+        for rt in (reply_to, None) if reply_to else (None,):
+            try:
+                await ctx.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=InputFile(BytesIO(png_bytes), filename="trippet.png"),
+                    caption=caption, parse_mode=parse_mode, reply_to_message_id=rt,
+                )
+                return
+            except Exception:
+                continue
+
+    await ctx.bot.send_photo(chat_id=chat_id,
+                             photo=InputFile(BytesIO(png_bytes), filename="trippet.png"))
+    if message:
+        await _say(chat_id, message, ctx, reply_to=reply_to)
 
 
 # ─── Voice (ElevenLabs) — gated: deathbed + graduation only ─────────────────
@@ -235,6 +260,40 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
+# ─── Souvenir: Solana "Japan Trip Coin" (devnet, post-commit only) ──────────
+_TRIP_COIN_IMG = Path(__file__).resolve().parents[2] / "assets" / "trip_coin.jpeg"
+
+
+async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
+                              ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Mint the devnet souvenir coin, then post the art + Explorer link. Fully
+    guarded and fire-and-forget — a failure here can NEVER affect the booking
+    that already posted. Skips silently if config/treasury is missing."""
+    try:
+        dates = getattr(trip, "dates", None)
+        name = solana_coin.format_trip_name(
+            getattr(trip, "city", None),
+            getattr(dates, "start", None), getattr(dates, "end", None))
+        result = await asyncio.to_thread(
+            solana_coin.mint_trip_coin, {"name": name, "booking_url": booking_url or ""}, chat_id)
+        if not result:
+            return  # skipped/failed silently — booking already complete
+        caption = (f"🎉 minted your Japan Trip Coin — {result['name']}\n"
+                   f"you actually booked it.\n{result['explorer_url']}")
+        try:
+            if _TRIP_COIN_IMG.exists():
+                await ctx.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=InputFile(BytesIO(_TRIP_COIN_IMG.read_bytes()), filename="trip_coin.jpeg"),
+                    caption=caption)
+            else:
+                await ctx.bot.send_message(chat_id=chat_id, text=caption)
+        except Exception as e:
+            log.warning("trip coin post failed (chat=%s): %s", chat_id, e)
+    except Exception as e:
+        log.warning("trip coin task failed (chat=%s): %s", chat_id, e)
+
+
 # ─── /stop mute state (memory cache over the persisted plan flag) ───────────
 # One mechanism, checked everywhere the bot can act: message ingestion,
 # execute_decision, and the run.py heartbeat. Persisted (trip_plans.muted) so
@@ -283,6 +342,17 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
     place that decides; this just has hands."""
     if not d.send or _mute_cache.get(chat_id):
         return
+    g = state.get_or_create(chat_id)
+    if d.message:
+        # Gemini reads the feeling of THIS message (isolated seam, always
+        # Gemini even when the message itself came from Freesolo) so the
+        # face/avatar match how the line actually reads.
+        feeling = await asyncio.to_thread(face.classify_feeling, d.message)
+        g.pet.set_feeling(feeling)
+        await asyncio.to_thread(state.persist_pet, g)
+        # Profile photo must track feeling on EVERY send, not just turns that
+        # also show the health card — otherwise the avatar barely ever moves.
+        asyncio.create_task(_sync_avatar(g, ctx))
     if d.action == "deal_cards":
         if d.message:
             await _say(chat_id, d.message, ctx)
@@ -290,7 +360,6 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         supervisor.note_cards_dealt(chat_id)
         return
     if d.action == "post_flights":
-        g = state.get_or_create(chat_id)
         opts = await asyncio.to_thread(flights.get_options, chat_id,
                                        g.trip.city, g.trip.budget_per_person)
         text = (d.message + "\n\n" if d.message else "") + flights.render_options(opts)
@@ -306,10 +375,39 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         supervisor.note_itinerary_posted(chat_id)
         await _green_react(ctx, chat_id, msg.message_id)
         return
-    if d.message:
-        await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
     if d.show_health:
-        await send_pet_card(chat_id, ctx)
+        # Tabi's line rides as the photo's caption — one message, not two.
+        await send_pet_card(chat_id, ctx, message=d.message, reply_to=d.reply_to)
+    elif d.message:
+        await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
+    # Flywheel: after a messenger line goes out, watch the chat for a window and
+    # back-fill the ground-truth outcome. Fire-and-forget; no-ops without Mongo.
+    if d.harvest_id:
+        _schedule_outcome(chat_id, d.harvest_id)
+
+
+# Window to watch a chat after a messenger send before scoring the outcome.
+OUTCOME_WINDOW_S = int(os.environ.get("OUTCOME_WINDOW_S", "600"))
+
+
+def _schedule_outcome(chat_id: int, harvest_id: str) -> None:
+    """Snapshot progress now + after OUTCOME_WINDOW_S, then back-fill the
+    harvested record's ground-truth outcome. Best-effort background task."""
+    async def _run() -> None:
+        try:
+            before = await asyncio.to_thread(supervisor.progress_snapshot, chat_id)
+            await asyncio.sleep(OUTCOME_WINDOW_S)
+            after = await asyncio.to_thread(supervisor.progress_snapshot, chat_id)
+            outcome = supervisor.diff_progress(before, after)
+            await asyncio.to_thread(db.backfill_messenger_outcome, harvest_id, outcome)
+            log.info("outcome chat=%s record=%s progressed=%s reasons=%s", chat_id,
+                     harvest_id, outcome.get("progressed"), outcome.get("reasons"))
+        except Exception as e:
+            log.info("outcome backfill skipped (chat=%s): %s", chat_id, e)
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
+        pass  # no running loop — skip silently
 
 
 load_dotenv()
@@ -322,18 +420,7 @@ log = logging.getLogger("trippet")
 
 # ─── Rendering helper ────────────────────────────────────────────────────────
 async def _send_pet(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    g = state.get_or_create(chat_id)
-    g.pet.refresh_mood()
-    await asyncio.to_thread(state.persist_pet, g)
-    asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
-    png_bytes = pet.render_pet_png(g)
-    caption = f"physical {g.pet.physical}% · mental {g.pet.mental}% · {g.pet.mood}"
-    await ctx.bot.send_photo(
-        chat_id=chat_id,
-        photo=InputFile(BytesIO(png_bytes), filename="trippet.png"),
-        caption=caption,
-    )
+    await send_pet_card(update.effective_chat.id, ctx)
 
 
 # Natural-language route into the green ledger. Deliberately narrow: it must
@@ -424,6 +511,77 @@ async def cmd_scrub(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await maybe_speak_deathbed(update.effective_chat.id, ctx)
 
 
+async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: dict,
+                    guests: int, nights: int) -> None:
+    """The convergence finale. The booking link + summary posts FIRST and
+    ALWAYS; green stats, the graduation voice, the itinerary, and the trip coin
+    are additive and each swallow their own errors — none can stop the booking
+    link from posting. Reusable from /commit or a future convergence trigger."""
+    g = state.get_or_create(chat_id)
+    health.commit_trip(g)
+    log.info("graduate chat=%s → booked %s @ $%.0f",
+             chat_id, opts.get("name"), opts.get("price_total") or 0)
+
+    # Green booking stats — CALL the existing green module (never rebuilt).
+    # Bounded + guarded so it can never delay or block the booking link.
+    green_line = ""
+    try:
+        t = await asyncio.wait_for(asyncio.to_thread(green.totals, chat_id), timeout=4)
+        kg = t.get("total_kg") or 0
+        if kg > 0:
+            eq = green.fun_equivalents(kg)
+            green_line = f"\n🌱 {kg:g} kg CO2e avoided" + (f" — like {eq[0]}" if eq else "") + " · /saved"
+    except Exception as e:
+        log.warning("graduation green stats skipped (chat=%s): %s", chat_id, e)
+
+    # ── CORE: trip summary + the real Allez button. Posts first and always. ──
+    rating = f" · {opts['rating']:.1f}/10" if opts.get("rating") else ""
+    over = "\n(over budget — cheapest that fit)" if opts.get("fallback") else ""
+    budget = f" · 💰 ${trip.budget_per_person}/person" if trip.budget_per_person else ""
+    summary = (
+        "🎉 we did it — Japan is BOOKED!\n\n"
+        f"📍 {trip.city}\n"
+        f"🗓️ {_fmt_date_range(trip.dates.start, trip.dates.end)}\n"
+        f"👥 {guests} travelers{budget}\n"
+        f"🏨 {opts['name']}{rating} — {stay22.fmt_money(opts['price_total'])} total, "
+        f"{nights} night(s){over}"
+        f"{green_line}"
+    )
+    buttons: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton("🎉 Book your trip →", url=opts["book_url"])]
+    ]
+    for alt in (opts.get("alternates") or [])[:2]:
+        buttons.append([InlineKeyboardButton(
+            f"or: {alt['name']} — {stay22.fmt_money(alt['price_total'])}",
+            url=alt["book_url"])])
+    await ctx.bot.send_message(chat_id=chat_id, text=summary,
+                               reply_markup=InlineKeyboardMarkup(buttons))
+
+    # ── Additive finale — each self-guarded; a failure never affects the rest ──
+    try:
+        await send_pet_card(chat_id, ctx)
+    except Exception as e:
+        log.warning("graduation pet card skipped (chat=%s): %s", chat_id, e)
+
+    if chat_id not in _spoke_graduated:          # bright graduation voice, once
+        _spoke_graduated.add(chat_id)
+        try:
+            await speak_pet(chat_id, "we did it — we're actually going to Japan!",
+                            ctx, mood="graduated", physical=g.pet.physical)
+        except Exception as e:
+            log.warning("graduation voice skipped (chat=%s): %s", chat_id, e)
+
+    try:                                          # itinerary — existing greenplanner (optional)
+        itin = await asyncio.to_thread(greenplanner.build_itinerary, chat_id)
+        if itin:
+            await ctx.bot.send_message(chat_id=chat_id, text=itin)
+    except Exception as e:
+        log.warning("graduation itinerary skipped (chat=%s): %s", chat_id, e)
+
+    # Japan Trip Coin — fire-and-forget capstone (already fully fail-safe).
+    asyncio.create_task(_mint_and_post_coin(chat_id, trip, opts.get("book_url"), ctx))
+
+
 async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Graduation path: query Stay22, pick a hotel, post the Allez book link.
     Falls back gracefully if the trip isn't locked or nothing fits the budget."""
@@ -456,38 +614,9 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # graduate (existing pet logic)
-    health.commit_trip(g)
-    log.info("commit chat_id=%s → graduated (booked: %s @ $%.0f)",
-             g.chat_id, opts["name"], opts["price_total"])
-
-    rating_str = f" · {opts['rating']:.1f}/10" if opts.get("rating") else ""
-    fallback_note = "\n(over budget — cheapest we could find)" if opts.get("fallback") else ""
-    caption = (
-        f"🎉 booked. graduating the pet.\n"
-        f"{opts['name']}{rating_str}\n"
-        f"{stay22.fmt_money(opts['price_total'])} total · {guests} guests · "
-        f"{nights} night(s) in {trip.city}"
-        f"{fallback_note}"
-    )
-    buttons: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="🎉 Book your trip →", url=opts["book_url"])]
-    ]
-    for alt in (opts.get("alternates") or [])[:2]:
-        buttons.append([InlineKeyboardButton(
-            text=f"or: {alt['name']} — {stay22.fmt_money(alt['price_total'])}",
-            url=alt["book_url"],
-        )])
-    await update.effective_chat.send_message(
-        caption, reply_markup=InlineKeyboardMarkup(buttons)
-    )
-    await _send_pet(update, ctx)
-    # Graduation moment — the pet speaks its send-off (once per chat).
-    if g.chat_id not in _spoke_graduated:
-        _spoke_graduated.add(g.chat_id)
-        await speak_pet(g.chat_id,
-                        "we did it — i'm free! pack your bags, we're going to japan.",
-                        ctx, mood="graduated", physical=g.pet.physical)
+    # The convergence finale — booking link first + always, everything else
+    # additive and fail-safe (see _graduate).
+    await _graduate(g.chat_id, ctx, trip, opts, guests, nights)
 
 
 async def cmd_saved(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -581,7 +710,7 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         g = state.get_or_create(chat_id)
         g.pet.refresh_mood()
         await asyncio.to_thread(state.persist_pet, g)
-        asyncio.create_task(_sync_avatar(g.pet.mood, ctx))
+        asyncio.create_task(_sync_avatar(g, ctx))
         # If live prices just pushed the pet to death's door, let it speak once.
         await maybe_speak_deathbed(chat_id, ctx)
 
@@ -593,6 +722,66 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if supervisor.can_speak(chat_id) or urgent:
         decision = await asyncio.to_thread(supervisor.run_turn, chat_id,
                                            "message", urgent)
+        await execute_decision(chat_id, decision, ctx)
+
+
+# ─── Two-way voice: voice-in → transcribe → live loop → voice-out ───────────
+async def on_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """A group voice message: download it, transcribe with ElevenLabs Scribe,
+    then feed the transcript into the SAME pipeline as a text message (wire +
+    supervisor, same send-gate/cooldown). A plain-message reply is spoken back
+    as a voice note (voice-in → voice-out); actions/decks go through the normal
+    text path. Any STT/TTS failure degrades to text — never crashes the loop."""
+    if not update.message or not update.message.voice:
+        return
+    chat_id = update.effective_chat.id
+    if await asyncio.to_thread(is_muted, chat_id):
+        return  # /stop means stopped — no reads, no reply
+    speaker = (update.effective_user.first_name if update.effective_user else "someone") or "someone"
+    user_id = str(update.effective_user.id) if update.effective_user else "unknown"
+
+    # 1. Download the OGG/Opus voice note.
+    try:
+        tg_file = await update.message.voice.get_file()
+        audio = bytes(await tg_file.download_as_bytearray())
+    except Exception as e:
+        log.warning("voice download failed (chat=%s): %s", chat_id, e)
+        return
+
+    # 2. Scribe STT. Failure → text fallback, never crash.
+    transcript = await asyncio.to_thread(elevenlabs.transcribe, audio, "audio/ogg")
+    if not transcript:
+        try:
+            await update.effective_chat.send_message("couldn't quite catch that — mind typing it?")
+        except Exception:
+            pass
+        return
+    log.info("voice chat=%s from=%s → %r", chat_id, speaker, transcript[:200])
+
+    # 3. Feed the transcript in exactly like a text message.
+    await asyncio.to_thread(db.log_chat_message, chat_id, user_id, speaker,
+                            transcript, update.message.message_id)
+    wire.note_message(chat_id, speaker, transcript)
+    reconciled = await wire.maybe_process(chat_id)
+    if reconciled is not None:
+        g = state.get_or_create(chat_id)
+        g.pet.refresh_mood()
+        await asyncio.to_thread(state.persist_pet, g)
+        asyncio.create_task(_sync_avatar(g, ctx))
+        await maybe_speak_deathbed(chat_id, ctx)
+
+    # 4. Same send-gate + cooldown as text. Speak the reply back as a voice note.
+    urgent = supervisor.is_urgent(transcript)
+    if not (supervisor.can_speak(chat_id) or urgent):
+        return
+    decision = await asyncio.to_thread(supervisor.run_turn, chat_id, "message", urgent)
+    if decision.send and decision.message and decision.action == "none":
+        g = state.get_or_create(chat_id)
+        await speak_pet(chat_id, decision.message, ctx, mood=g.pet.mood, physical=g.pet.physical)
+        if decision.harvest_id:  # keep the flywheel outcome parity with execute_decision
+            _schedule_outcome(chat_id, decision.harvest_id)
+    else:
+        # actions (deck/flights/itinerary) or a swallowed send → normal path.
         await execute_decision(chat_id, decision, ctx)
 
 
@@ -628,6 +817,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("resume", cmd_resume))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))
+    app.add_handler(MessageHandler(filters.VOICE, on_voice))
     app.add_error_handler(on_error)
     return app
 

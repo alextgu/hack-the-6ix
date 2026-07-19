@@ -118,6 +118,47 @@ def synthesize_voice_note(
     return to_ogg_opus(mp3)
 
 
+STT_ENDPOINT = "https://api.elevenlabs.io/v1/speech-to-text"
+
+
+def transcribe(audio_bytes: bytes, mime: str = "audio/ogg",
+               model_id: str = "scribe_v1") -> Optional[str]:
+    """Speech-to-text via ElevenLabs Scribe. Telegram voice notes are OGG/Opus.
+    Returns the transcript, or None on any failure (missing key, network, empty
+    result) so the caller can fall back to a text reply. Never raises."""
+    api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    if not (api_key and audio_bytes):
+        return None
+
+    boundary = "----trippetvoiceboundary7a1b2c3d"
+    pre = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="model_id"\r\n\r\n{model_id}\r\n'
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="audio.ogg"\r\n'
+        f"Content-Type: {mime}\r\n\r\n"
+    ).encode("utf-8")
+    body = pre + audio_bytes + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    req = urllib.request.Request(
+        STT_ENDPOINT,
+        data=body,
+        method="POST",
+        headers={
+            "xi-api-key": api_key,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        log.warning("transcribe failed: %s: %s", type(e).__name__, e)
+        return None
+    return (str(data.get("text") or "").strip()) or None
+
+
 if __name__ == "__main__":
     # Standalone check: generate one clip in each voice so you can play them
     # and confirm the dying vs alive voices sound different. Saves local files;

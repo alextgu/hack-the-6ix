@@ -16,9 +16,9 @@ const unbounded = Unbounded({
 });
 
 export const metadata: Metadata = {
-  title: "Plan That Trip to Japan — meet Sushi-kun",
+  title: "Tama-Go-Chi — Plan That Trip to Japan",
   description:
-    "A Telegram bot that turns your stalled group chat into a pet whose health is live hotel data. The only way to save it is to actually book the trip.",
+    "Built at Hack the 6ix: a Telegram pet whose Physical health tracks live hotel data and whose Mental health tracks group engagement. The only way to save it is to book.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

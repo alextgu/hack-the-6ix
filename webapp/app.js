@@ -3,6 +3,7 @@
 
   var POLL_MS = 3000;
   var MOODS = ["happy", "worried", "sick", "dying", "graduated"];
+  var FEELINGS = ["happy", "mid", "sad"];
 
   var tg = (typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp) || null;
   if (tg) {
@@ -20,6 +21,7 @@
   var previewMood = params.get("mood");
   var previewPhys = params.get("physical");
   var previewMent = params.get("mental");
+  var previewFeeling = params.get("feeling");
 
   var captionEl = document.getElementById("caption");
   var weekLabelEl = document.getElementById("week-label");
@@ -50,10 +52,9 @@
     return;
   }
 
-  var lottieContainer = document.getElementById("lottie");
+  var petSpriteEl = document.getElementById("pet-sprite");
   var stageEl = document.getElementById("stage");
   var currentMood = null;
-  var currentAnim = null;
   var reconnecting = false;
   var currentCaption = "";
   var isSpeaking = false; // guards against overlapping playback on rapid clicks
@@ -63,7 +64,7 @@
     speak(currentCaption);
   });
 
-  loadMood("happy");
+  updateSprite(100, 100, "happy"); // placeholder until the first real state lands
 
   if (previewMood || previewPhys != null || previewMent != null) {
     render({
@@ -71,6 +72,7 @@
         mood: previewMood || "happy",
         physical: previewPhys != null ? Number(previewPhys) : 100,
         mental: previewMent != null ? Number(previewMent) : 100,
+        feeling: previewFeeling || "mid",
       },
       sim_week: Number(params.get("week") || 0),
       trip: {
@@ -105,6 +107,7 @@
     var phys = clamp(num(pet.physical, 0), 0, 100);
     var ment = clamp(num(pet.mental, 0), 0, 100);
     var mood = MOODS.indexOf(pet.mood) >= 0 ? pet.mood : deriveMood(phys, ment);
+    var feeling = FEELINGS.indexOf(pet.feeling) >= 0 ? pet.feeling : "mid";
 
     setBar(physRow, phys);
     setBar(mentRow, ment);
@@ -113,10 +116,8 @@
     if (weekLabelEl) weekLabelEl.textContent = "week " + num(state.sim_week, 0);
     renderTripStats(state.trip);
 
-    if (mood !== currentMood) {
-      currentMood = mood;
-      loadMood(mood);
-    }
+    currentMood = mood; // still used for the voice mood param in speak()
+    updateSprite(phys, ment, feeling);
   }
 
   function healthColor(val) {
@@ -201,20 +202,47 @@
     );
   }
 
-  function loadMood(mood) {
-    if (!window.lottie) return;
-    if (currentAnim) {
-      try { currentAnim.destroy(); } catch (e) { /* ignore */ }
-      currentAnim = null;
+  var spriteUrl = "";
+  var spriteFadeTimer = null;
+  var SPRITE_FADE_MS = 500;
+
+  function updateSprite(physical, mental, feeling) {
+    // Same tami art the Telegram chat card + bot avatar use — the server
+    // owns the size/mold bucket thresholds (app/render/tami.py), so the
+    // client just forwards the 3 raw numbers.
+    var url = "/api/pet/sprite.png?physical=" + Math.round(physical) +
+      "&mental=" + Math.round(mental) + "&feeling=" + encodeURIComponent(feeling);
+    if (url === spriteUrl) return;
+    spriteUrl = url;
+
+    if (spriteFadeTimer) {
+      clearTimeout(spriteFadeTimer);
+      spriteFadeTimer = null;
     }
-    lottieContainer.innerHTML = "";
-    currentAnim = window.lottie.loadAnimation({
-      container: lottieContainer,
-      renderer: "svg",
-      loop: true,
-      autoplay: true,
-      path: "/webapp/animations/" + mood + ".json",
-    });
+
+    // First paint: no fade.
+    if (!petSpriteEl.getAttribute("src")) {
+      petSpriteEl.src = url;
+      return;
+    }
+
+    petSpriteEl.classList.add("is-fading");
+    spriteFadeTimer = setTimeout(function () {
+      petSpriteEl.onload = function () {
+        petSpriteEl.onload = null;
+        // Force reflow so the fade-in transition runs after opacity was 0.
+        void petSpriteEl.offsetWidth;
+        petSpriteEl.classList.remove("is-fading");
+      };
+      petSpriteEl.src = url;
+      // Cached images may skip onload.
+      if (petSpriteEl.complete) {
+        petSpriteEl.onload = null;
+        void petSpriteEl.offsetWidth;
+        petSpriteEl.classList.remove("is-fading");
+      }
+      spriteFadeTimer = null;
+    }, SPRITE_FADE_MS);
   }
 
   function deriveMood(phys, ment) {

@@ -135,7 +135,7 @@ export function caption(physical: number, mental: number, mood: Mood): string {
     if (physical > 80 && mental > 80) return "pet is thriving. keep going.";
     return "pet is stable.";
   }
-  return lines.join(" — ");
+  return lines.join(", ");
 }
 
 // Mood chip colors — aligned with Tabi DS health palette.
@@ -160,43 +160,46 @@ export function healthLevel(val: number): "good" | "warn" | "bad" {
   return "bad";
 }
 
-// Real art (public/pet/…) replacing the 🍣 emoji placeholder — two layers,
-// face on top of the sushi body.
-//
-// - amount (Full/Half/Low) comes from `physical` ALONE, and is shared by
-//   both layers — the face's amount always matches the sushi body's, so
-//   e.g. "full happy" only ever pairs with a full sushi.
-// - condition (Health/Rotten) comes from `mental` alone.
-// - expression (Happy/Mid/Sad) comes from the AVERAGE of physical + mental.
-function amountBucket(physical: number): "Full" | "Half" | "Low" {
+// Real art (public/pet/…) — 18 fully-baked sprites.
+// Physical >70 Full, 40–70 Mid, <40 Low.
+// Mental >70 Happy, 40–70 Mid, <40 Sad; mental <50 → Rotten_ prefix.
+export type PhysicalTier = "Full" | "Mid" | "Low";
+export type ExpressionTier = "Happy" | "Mid" | "Sad";
+
+function physicalTier(physical: number): PhysicalTier {
   if (physical > 70) return "Full";
-  if (physical < 30) return "Low";
-  return "Half";
+  if (physical >= 40) return "Mid";
+  return "Low";
 }
 
-function expressionBucket(avg: number): "Happy" | "Mid" | "Sad" {
-  if (avg > 70) return "Happy";
-  if (avg < 40) return "Sad";
-  return "Mid";
-}
-
-function conditionBucket(mental: number): "Health" | "Rotten" {
-  return mental < 50 ? "Rotten" : "Health";
+function expressionTier(mental: number): ExpressionTier {
+  if (mental > 70) return "Happy";
+  if (mental >= 40) return "Mid";
+  return "Sad";
 }
 
 export interface PetArt {
-  sushiSrc: string; // bottom layer — public/pet/sushi/{Amount}_{Health|Rotten}_Sushi.png
-  faceSrc: string;  // top layer — public/pet/faces/{Amount}_Sushi_{Expression}_Face.png
-  faceKey: string;  // "{Amount}_{Expression}" — look up per-face position tuning by this
+  /** Single fully-baked sprite under public/pet/ */
+  src: string;
+  /** "{Rotten_?}{Full|Mid|Low}_{Happy|Mid|Sad}" for debugging / keys */
+  key: string;
+  /** @deprecated dual-layer API — kept so old call sites don't crash */
+  sushiSrc: string;
+  faceSrc: string;
+  faceKey: string;
 }
 
 export function petArt(physical: number, mental: number): PetArt {
-  const amount = amountBucket(physical);
-  const avg = (physical + mental) / 2;
-  const expression = expressionBucket(avg);
+  const phys = physicalTier(physical);
+  const expr = expressionTier(mental);
+  const rotten = mental < 50;
+  const key = rotten ? `Rotten_${phys}_${expr}` : `${phys}_${expr}`;
+  const src = `/pet/${key}.png`;
   return {
-    sushiSrc: `/pet/sushi/${amount}_${conditionBucket(mental)}_Sushi.png`,
-    faceSrc: `/pet/faces/${amount}_Sushi_${expression}_Face.png`,
-    faceKey: `${amount}_${expression}`,
+    src,
+    key,
+    sushiSrc: src,
+    faceSrc: src,
+    faceKey: `${phys}_${expr}`,
   };
 }
