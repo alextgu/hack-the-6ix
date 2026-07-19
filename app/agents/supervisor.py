@@ -472,7 +472,7 @@ _PHASE_ORDER = {PHASE_HATCH: 0, PHASE_GATHER: 1, PHASE_PROPOSE: 2,
 # What the pet should be doing in each phase — fed to the messenger so its
 # message matches the phase (group-only; the call-out is public, never a DM).
 PHASE_INTENT = {
-    PHASE_HATCH:   "you just hatched — introduce yourself in one line, then kick off the plan.",
+    PHASE_HATCH:   "you already introduced yourself in the message right above — do NOT say your name again; kick straight into the plan (ask for city/dates/budget).",
     PHASE_GATHER:  "collect each person's city/dates/budget; @ whoever hasn't answered yet.",
     PHASE_PROPOSE: "constraints are in — propose ONE concrete trip (city + dates + a Stay22-backed pick) for the group to react to.",
     PHASE_REACT:   "a proposal is on the table — invite reactions (love it / too pricey / not my vibe) and read the room.",
@@ -663,9 +663,10 @@ def messenger(s: AgentState) -> AgentState:
                   "GREEN LEDGER: nothing saved yet — when flights appear, gently "
                   "root for the 🌱 lowest-carbon option (never nag).")
     trigger_line = {
-        "kickoff": "you JUST hatched — introduce yourself in one line, then "
-                   "immediately start the plan: ask everyone for their dates, "
-                   "budget and city. mention people by name.",
+        "kickoff": "you JUST hatched and already introduced yourself in the "
+                   "message right above — do NOT introduce yourself or say your "
+                   "name again. immediately start the plan: ask everyone for "
+                   "their dates, budget and city. mention people by name.",
         "heartbeat": "the chat has gone quiet and the plan is NOT done — push. "
                      "pick the most-missing field, @ the person who owes an "
                      "answer (or everyone), and guilt-trip with your health.",

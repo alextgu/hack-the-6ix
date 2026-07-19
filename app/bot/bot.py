@@ -495,6 +495,30 @@ _ASK_SAVED_RE = re.compile(
 
 
 # ─── Handlers ────────────────────────────────────────────────────────────────
+# Tabi's setup introduction — she names herself and her goal (stay alive by
+# getting the group to Japan) in character. Scripted (not LLM) so the beat
+# lands every hatch for demos; one is picked at random for replay variety.
+# The kickoff turn right after handles the first planning ask, so these must
+# NOT ask for dates/budget — that would collide with the kickoff line.
+TABI_INTROS = (
+    "i'm tabi 🍣 — the +1 in this chat, and honestly kind of a hostage. my one "
+    "goal is to *stay alive*, and the only way i live is if this group actually "
+    "makes it to japan. so, um. my life is your group project now.",
+
+    "hi. i am tabi, and i would very much like to live. tragically, i only "
+    "survive if this friend group finally books japan. no pressure — but every "
+    "day you stall, a little piece of me goes with it. 🐣",
+
+    "tabi here 🍙. think of me as the friend who *physically rots* every day you "
+    "don't plan this japan trip. my goal is simple: don't die. your goal: get us "
+    "to japan. turns out those are the same goal.",
+
+    "i'm tabi, your trip pet. i exist for exactly one reason — to drag this "
+    "group to japan before i flatline. keep the plan moving and i thrive; let it "
+    "die in the chat and… you'll watch it happen. 🍥",
+)
+
+
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
     _deathbed_last_spoken.pop(g.chat_id, None)   # re-arm voice moments for the fresh pet
@@ -510,9 +534,10 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await asyncio.to_thread(set_muted, g.chat_id, False)  # /start always wakes
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
-        # Deliberately NOT a greeting: the kickoff turn right below is the pet
-        # introducing itself in character. This used to say "hi. i'm the pet."
-        # and then Tabi immediately said hi again — two hellos, back to back.
+        # Tabi introduces herself + her goal here (scripted, see TABI_INTROS),
+        # then states the stakes. The kickoff turn below does the first planning
+        # ask and no longer re-introduces — so there's exactly one hello.
+        f"{random.choice(TABI_INTROS)}\n\n"
         "every real decision heals me. silence and rising prices kill me.\n"
         "/health any time · dev: /scrub 0..6 to fast-forward, /commit to book.",
         reply_markup=_webapp_keyboard(g.chat_id, ctx.bot.username, label="🐾 open live pet"),
