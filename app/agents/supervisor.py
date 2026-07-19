@@ -157,7 +157,8 @@ class AgentState(TypedDict, total=False):
     profiles: list
     trip: dict
     plan: dict
-    stage: str            # GATHER | FLIGHTS | HOTELS | BOOK
+    stage: str            # GATHER | FLIGHTS | HOTELS | BOOK (drives actions)
+    phase: str            # HATCH | GATHER | PROPOSE | REACT | FLAG_RESOLVE | COMMIT
     missing: list
     done: list            # worker names that have run
     send: bool
@@ -270,9 +271,53 @@ def diff_progress(before: dict, after: dict) -> dict:
             "reasons": reasons}
 
 
+# ─── Phase cycle (additive over the stage machine) ───────────────────────────
+# The user-facing narrative cycle:
+#   0 Hatch → 1 Gather → 2 Propose → 3 React → 4 Flag&resolve → (loop to 2) → 6 Commit
+# `phase` is DERIVED from the same signals the live stage machine already uses,
+# so it's a label on top of GATHER/FLIGHTS/HOTELS/BOOK — the working
+# stage-driven actions, send-gate, and cooldowns are untouched. Group-only.
+PHASE_HATCH, PHASE_GATHER, PHASE_PROPOSE = "HATCH", "GATHER", "PROPOSE"
+PHASE_REACT, PHASE_FLAG, PHASE_COMMIT = "REACT", "FLAG_RESOLVE", "COMMIT"
+_PHASE_ORDER = {PHASE_HATCH: 0, PHASE_GATHER: 1, PHASE_PROPOSE: 2,
+                PHASE_REACT: 3, PHASE_FLAG: 4, PHASE_COMMIT: 5}
+
+# What the pet should be doing in each phase — fed to the messenger so its
+# message matches the phase (group-only; the call-out is public, never a DM).
+PHASE_INTENT = {
+    PHASE_HATCH:   "you just hatched — introduce yourself in one line, then kick off the plan.",
+    PHASE_GATHER:  "collect each person's city/dates/budget; @ whoever hasn't answered yet.",
+    PHASE_PROPOSE: "constraints are in — propose ONE concrete trip (city + dates + a Stay22-backed pick) for the group to react to.",
+    PHASE_REACT:   "a proposal is on the table — invite reactions (love it / too pricey / not my vibe) and read the room.",
+    PHASE_FLAG:    "there's a blocker — name the top issue, publicly call out the clear holdout in the GROUP (never DM), steer to a fix, then re-propose.",
+    PHASE_COMMIT:  "the group converged — celebrate and push the one-tap booking.",
+}
+
+
+def derive_phase(plan: dict, blockers: list, missing: list,
+                 committed: bool, trigger: str) -> str:
+    """Map the live signals to the target cycle phase. Reuses existing plan
+    flags (flights_posted / cards_dealt_stage) as 'a proposal was made' and
+    wire blockers as 'issues to resolve'. No new UI, no DMs. The 4→2 loop is
+    implicit: a blocker returns FLAG_RESOLVE; clearing it returns PROPOSE/REACT."""
+    if trigger == "kickoff":
+        return PHASE_HATCH
+    if committed:
+        return PHASE_COMMIT
+    if missing:
+        return PHASE_GATHER
+    if blockers:                       # active issue → resolve, then loop back
+        return PHASE_FLAG
+    proposal_made = bool(plan.get("flights_posted") or plan.get("cards_dealt_stage")
+                         or plan.get("proposal_posted"))
+    return PHASE_REACT if proposal_made else PHASE_PROPOSE
+
+
 # ─── Workers ─────────────────────────────────────────────────────────────────
 def stage_tracker(s: AgentState) -> AgentState:
-    """Deterministic: where is the plan? (LLMs don't get to do this math.)"""
+    """Deterministic: where is the plan? (LLMs don't get to do this math.)
+    Emits both the domain `stage` (GATHER/FLIGHTS/HOTELS/BOOK — drives actions)
+    and the narrative `phase` (the Hatch→…→Commit cycle — drives the message)."""
     g = state.get_or_create(s["chat_id"])
     trip = g.trip
     plan = s["plan"]
@@ -292,9 +337,21 @@ def stage_tracker(s: AgentState) -> AgentState:
         session = cards.get_session(s["chat_id"]) or db.load_session(s["chat_id"])
         stage = "BOOK" if (session and session.get("winner")) else "HOTELS"
 
+    committed = stage == "BOOK" or bool(plan.get("itinerary_posted")) or g.pet.mood == "graduated"
+    phase = derive_phase(plan, _get_blockers(s["chat_id"]), missing,
+                         committed, s.get("trigger", "message"))
+
+    updates: dict = {}
     if plan.get("stage") != stage:
-        db.update_plan(s["chat_id"], {"stage": stage})
-    return {**s, "stage": stage, "missing": missing, "done": s["done"] + ["stage"]}
+        updates["stage"] = stage
+    if plan.get("phase") != phase:
+        log.info("phase chat=%s %s → %s (stage=%s)", s["chat_id"],
+                 plan.get("phase") or "∅", phase, stage)
+        updates["phase"] = phase
+    if updates:
+        db.update_plan(s["chat_id"], updates)
+    return {**s, "stage": stage, "phase": phase, "missing": missing,
+            "done": s["done"] + ["stage"]}
 
 
 def profile_tracker(s: AgentState) -> AgentState:
@@ -368,6 +425,7 @@ Stages: GATHER (lock city+dates+budget — the first 50%) → FLIGHTS (pick a
 mock flight) → HOTELS (swipe the card deck) → BOOK.
 
 Current stage: {s['stage']}. Missing fields: {s['missing']}.
+Current phase: {s.get('phase', PHASE_GATHER)} — {PHASE_INTENT.get(s.get('phase'), '')}
 Pet health: physical {g.pet.physical}, mental {g.pet.mental} ({g.pet.mood}).
 {green_line}
 Trigger: {trigger_line}
@@ -502,6 +560,7 @@ def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> De
             "plan": plan,
             "pending": list(plan.get("pending", [])),
             "stage": "GATHER",
+            "phase": PHASE_HATCH,
             "missing": [],
             "done": [],
             "send": False,
