@@ -310,6 +310,34 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
     if d.show_health:
         await send_pet_card(chat_id, ctx)
+    # Flywheel: after a messenger line goes out, watch the chat for a window and
+    # back-fill the ground-truth outcome. Fire-and-forget; no-ops without Mongo.
+    if d.harvest_id:
+        _schedule_outcome(chat_id, d.harvest_id)
+
+
+# Window to watch a chat after a messenger send before scoring the outcome.
+OUTCOME_WINDOW_S = int(os.environ.get("OUTCOME_WINDOW_S", "600"))
+
+
+def _schedule_outcome(chat_id: int, harvest_id: str) -> None:
+    """Snapshot progress now + after OUTCOME_WINDOW_S, then back-fill the
+    harvested record's ground-truth outcome. Best-effort background task."""
+    async def _run() -> None:
+        try:
+            before = await asyncio.to_thread(supervisor.progress_snapshot, chat_id)
+            await asyncio.sleep(OUTCOME_WINDOW_S)
+            after = await asyncio.to_thread(supervisor.progress_snapshot, chat_id)
+            outcome = supervisor.diff_progress(before, after)
+            await asyncio.to_thread(db.backfill_messenger_outcome, harvest_id, outcome)
+            log.info("outcome chat=%s record=%s progressed=%s reasons=%s", chat_id,
+                     harvest_id, outcome.get("progressed"), outcome.get("reasons"))
+        except Exception as e:
+            log.info("outcome backfill skipped (chat=%s): %s", chat_id, e)
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
+        pass  # no running loop — skip silently
 
 
 load_dotenv()

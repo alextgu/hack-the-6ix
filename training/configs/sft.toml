@@ -10,6 +10,6 @@ id = "thesix/phoebe-agent"
 
 [train]
 epochs = 1
-max_examples = 3                  # starter dataset has 3 rows; raise as the generator grows
+max_examples = 2                  # starter dataset has 3 rows; raise as the generator grows
 lora_rank = 32
 lora_alpha = 64

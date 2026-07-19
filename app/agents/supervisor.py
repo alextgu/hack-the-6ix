@@ -70,7 +70,12 @@ def is_urgent(text: str) -> bool:
     return bool(_URGENT_RE.search(text or ""))
 
 
-# ─── LLM (lazy; one client per process) ──────────────────────────────────────
+# ─── LLM seam (lazy; one client per process) ─────────────────────────────────
+# The MESSENGER call is Freesolo-swappable: if FREESOLO_AGENT_BASE_URL is set,
+# the messenger's turn runs on the trained Freesolo model (OpenAI-compatible
+# endpoint); ANY error or unparseable reply falls back to Gemini. With the env
+# var unset (today), the path is byte-for-byte the current Gemini behavior.
+# profile_tracker stays on Gemini (a messenger model can't do fact extraction).
 _llm = None
 
 
@@ -86,15 +91,59 @@ def _get_llm():
     return _llm
 
 
-def _llm_json(prompt: str) -> Optional[dict]:
-    """One model call → parsed JSON dict (None on any failure)."""
+def _gemini_complete(prompt: str) -> str:
+    raw = _get_llm().invoke(prompt).content
+    if isinstance(raw, list):  # newer langchain: list of content blocks
+        raw = "".join(p.get("text", "") if isinstance(p, dict) else str(p)
+                      for p in raw)
+    return raw or ""
+
+
+def _freesolo_complete(prompt: str, base_url: str, api_key: str) -> str:
+    """OpenAI-compatible call to a deployed Freesolo adapter (same client shape
+    as the retired phoebe._call_freesolo). Only used when FREESOLO_AGENT_BASE_URL
+    is set; raises on any error so _llm_json falls back to Gemini."""
+    from openai import OpenAI
+    client = OpenAI(base_url=base_url.rstrip("/"), api_key=api_key, timeout=20)
+    resp = client.chat.completions.create(
+        model=os.environ.get("FREESOLO_AGENT_MODEL", "phoebe-agent-v1"),
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.6,
+        max_tokens=512,
+    )
+    return (resp.choices[0].message.content or "").strip()
+
+
+def _extract_json(raw: str) -> Optional[dict]:
+    m = re.search(r"\{.*\}", raw or "", re.DOTALL)
+    if not m:
+        return None
     try:
-        raw = _get_llm().invoke(prompt).content
-        if isinstance(raw, list):  # newer langchain: list of content blocks
-            raw = "".join(p.get("text", "") if isinstance(p, dict) else str(p)
-                          for p in raw)
-        m = re.search(r"\{.*\}", raw, re.DOTALL)
-        return json.loads(m.group(0)) if m else None
+        return json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None
+
+
+def _llm_json(prompt: str, prefer_freesolo: bool = False) -> Optional[dict]:
+    """One model call → parsed JSON dict (None on any failure).
+
+    When prefer_freesolo and FREESOLO_AGENT_BASE_URL is set, try the trained
+    Freesolo model first; on ANY error or unparseable reply, fall back to
+    Gemini. profile_tracker leaves prefer_freesolo=False (always Gemini)."""
+    if prefer_freesolo:
+        base = os.environ.get("FREESOLO_AGENT_BASE_URL", "").strip()
+        key = os.environ.get("FREESOLO_API_KEY", "").strip()
+        if base and key:
+            try:
+                data = _extract_json(_freesolo_complete(prompt, base, key))
+                if data is not None:
+                    return data
+                log.warning("freesolo reply unparseable — falling back to gemini")
+            except Exception as e:
+                log.warning("freesolo call failed (%s) — falling back to gemini", e)
+    # Gemini path — unchanged behavior when Freesolo is unset/unused.
+    try:
+        return _extract_json(_gemini_complete(prompt))
     except Exception as e:
         log.warning("llm_json failed: %s", e)
         return None
@@ -117,6 +166,7 @@ class AgentState(TypedDict, total=False):
     show_health: bool     # attach the pet health card (guilt trip)
     reply_to: Optional[int]  # telegram message_id to thread the reply onto
     pending: list         # unacknowledged contributions (from trip_plans)
+    harvest_id: Optional[str]  # id of the logged messenger record (flywheel)
 
 
 @dataclass
@@ -126,10 +176,98 @@ class Decision:
     action: str = "none"
     show_health: bool = False
     reply_to: Optional[int] = None
+    harvest_id: Optional[str] = None   # messenger record to back-fill an outcome onto
 
 # minimum motivation (1-5) a candidate thought needs before Tabi speaks on a
 # normal message turn; kickoff/heartbeat/urgent turns take the best regardless
 MOTIVATION_THRESHOLD = 3.5
+
+
+# ─── Harvest (the training flywheel) ─────────────────────────────────────────
+def _get_blockers(chat_id: int) -> list[str]:
+    """Blocker flags stashed by wire.py (lazy import to avoid an import cycle)."""
+    try:
+        from app.bot import wire
+        return list(wire.get_blockers(chat_id))
+    except Exception:
+        return []
+
+
+def _harvest(s: AgentState, candidates: list[dict], best: dict) -> Optional[str]:
+    """Log the messenger's full decision (context + candidates + chosen) to
+    Mongo for training. Best-effort — never raises, no-ops without Mongo."""
+    try:
+        chat_id = s["chat_id"]
+        g = state.get_or_create(chat_id)
+        trip = g.trip
+        trip_state = {
+            "city": trip.city,
+            "dates": {
+                "start": trip.dates.start.isoformat() if trip.dates and trip.dates.start else None,
+                "end": trip.dates.end.isoformat() if trip.dates and trip.dates.end else None,
+            },
+            "budget_per_person": trip.budget_per_person,
+            "group_size": trip.group_size,
+            "stage": s.get("stage"),
+            "missing": s.get("missing", []),
+            "physical": g.pet.physical,
+            "mental": g.pet.mental,
+        }
+        context = {
+            "trip_state": trip_state,
+            "blocker_flags": _get_blockers(chat_id),
+            "recent_chat": [{"name": m.get("name"), "text": m.get("text")}
+                            for m in s["transcript"][-25:]],
+        }
+        cand_rows = [{"text": c.get("text"), "motivation_score": c.get("motivation"),
+                      "kind": c.get("kind")} for c in candidates if c.get("text")]
+        chosen = {"text": best.get("text"), "motivation_score": best.get("motivation"),
+                  "kind": best.get("kind")}
+        return db.log_messenger_record(chat_id, context, cand_rows, chosen)
+    except Exception as e:
+        log.warning("harvest failed (chat=%s): %s", s.get("chat_id"), e)
+        return None
+
+
+_STAGE_ORDER = {"GATHER": 0, "FLIGHTS": 1, "HOTELS": 2, "BOOK": 3}
+
+
+def progress_snapshot(chat_id: int) -> dict:
+    """A cheap snapshot of "how far along" a chat is — compared before/after the
+    outcome window to derive the ground-truth reward. Reads state only."""
+    g = state.get_or_create(chat_id)
+    trip = g.trip
+    plan = db.get_plan(chat_id)
+    session = cards.get_session(chat_id) or db.load_session(chat_id) or {}
+    return {
+        "blockers": sorted(_get_blockers(chat_id)),
+        "committed": (g.pet.mood == "graduated"
+                      or bool(session.get("winner"))
+                      or bool(plan.get("itinerary_posted"))),
+        "has_city": bool(trip.city),
+        "has_dates": bool(trip.dates and trip.dates.start),
+        "has_budget": trip.budget_per_person is not None,
+        "flight_locked": bool(plan.get("flight_locked")),
+        "stage": plan.get("stage"),
+    }
+
+
+def diff_progress(before: dict, after: dict) -> dict:
+    """Ground-truth outcome: did the group PROGRESS between the two snapshots?
+    Returns {progressed: bool, committed: bool, reasons: [...]}."""
+    reasons: list[str] = []
+    if after.get("committed") and not before.get("committed"):
+        reasons.append("commit")
+    for f in ("has_city", "has_dates", "has_budget", "flight_locked"):
+        if after.get(f) and not before.get(f):
+            reasons.append(f"locked:{f.replace('has_', '')}")
+    if set(before.get("blockers", [])) - set(after.get("blockers", [])):
+        reasons.append("blocker_resolved")
+    if _STAGE_ORDER.get(after.get("stage"), -1) > _STAGE_ORDER.get(before.get("stage"), -1):
+        reasons.append("stage_advanced")
+    return {"progressed": bool(reasons),
+            "committed": bool(after.get("committed") and not before.get("committed")),
+            "reasons": reasons}
 
 
 # ─── Workers ─────────────────────────────────────────────────────────────────
@@ -254,7 +392,8 @@ answers in "acknowledges".
 
 Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
 "kind": str, "reply_to": int|null, "acknowledges": [str]}}],
-"action": "none"|"post_flights"|"deal_cards", "show_health": bool, "why": str}}""")
+"action": "none"|"post_flights"|"deal_cards", "show_health": bool, "why": str}}""",
+                    prefer_freesolo=True)  # trained messenger model when FREESOLO set; else Gemini
 
     out = out or {"candidates": [], "action": "none"}
     cands = sorted((c for c in out.get("candidates", []) if c.get("text")),
@@ -285,9 +424,12 @@ Return ONLY JSON: {{"candidates": [{{"text": str, "motivation": number,
              s["chat_id"], s["stage"], send, action,
              (best or {}).get("kind"), float((best or {}).get("motivation") or 0),
              str(out.get("why", ""))[:100])
+    # Flywheel: log the full decision (context + all candidates + chosen) when a
+    # messenger line was picked. Best-effort; no-ops without Mongo.
+    harvest_id = _harvest(s, out.get("candidates", []), best) if (best and message) else None
     return {**s, "send": send, "message": message, "action": action,
             "reply_to": reply_to, "show_health": bool(out.get("show_health")),
-            "done": s["done"] + ["messenger"]}
+            "harvest_id": harvest_id, "done": s["done"] + ["messenger"]}
 
 
 # ─── Supervisor (routing + the only send-gate) ───────────────────────────────
@@ -380,7 +522,8 @@ def run_turn(chat_id: int, trigger: str = "message", urgent: bool = False) -> De
                                        message=out.get("message"),
                                        action=out.get("action", "none"),
                                        show_health=bool(out.get("show_health")),
-                                       reply_to=out.get("reply_to")),
+                                       reply_to=out.get("reply_to"),
+                                       harvest_id=out.get("harvest_id")),
                      urgent=urgent or trigger == "kickoff")
     except Exception as e:
         log.warning("run_turn failed (chat=%s): %s", chat_id, e)
