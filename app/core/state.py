@@ -47,6 +47,9 @@ class TripState:
 
 # ─── Pet state (PROJECT.md §1, §5 — two health bars) ─────────────────────────
 Mood = str  # "happy" | "worried" | "sick" | "dying" | "graduated"
+Feeling = str  # "happy" | "mid" | "sad" — face expression, Gemini-classified
+              # from Tabi's last outgoing message (app/agents/face.py)
+VALID_FEELINGS = ("happy", "mid", "sad")
 
 
 @dataclass
@@ -54,9 +57,13 @@ class PetState:
     physical: int = 100
     mental: int = 100
     mood: Mood = "happy"
+    feeling: Feeling = "mid"
 
     def refresh_mood(self) -> None:
         self.mood = derive_mood(self.physical, self.mental)
+
+    def set_feeling(self, feeling: Feeling | None) -> None:
+        self.feeling = feeling if feeling in VALID_FEELINGS else "mid"
 
 
 def derive_mood(physical: int, mental: int) -> Mood:
@@ -115,6 +122,7 @@ def _hydrate_pet(g: GroupState) -> None:
         g.pet.physical = int(doc.get("physical", 100))
         g.pet.mental = int(doc.get("mental", 100))
         g.sim_week = int(doc.get("sim_week", 0))
+        g.pet.set_feeling(doc.get("feeling"))
         g.pet.refresh_mood()
 
 
@@ -122,4 +130,5 @@ def persist_pet(g: GroupState) -> None:
     """Call after any health mutation. Blocking Mongo write — callers on the
     event loop should wrap in asyncio.to_thread."""
     from app.integrations import db
-    db.save_pet(g.chat_id, g.pet.physical, g.pet.mental, g.pet.mood, g.sim_week)
+    db.save_pet(g.chat_id, g.pet.physical, g.pet.mental, g.pet.mood,
+               g.sim_week, g.pet.feeling)

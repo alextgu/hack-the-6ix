@@ -11,7 +11,6 @@
   <link rel="stylesheet" href="/webapp/ds.css" />
   <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
   <style>
     html, body { width: 100%; min-height: 100vh; overflow-x: hidden; }
     #app {
@@ -76,12 +75,37 @@
       flex: 0 0 auto;
       cursor: pointer;
     }
-    #lottie {
+    #pet-sprite {
       width: 78%;
       height: 78%;
+      object-fit: contain;
       position: relative;
       z-index: 1;
       margin-bottom: 8%;
+      animation: tami-float 3.2s ease-in-out infinite;
+    }
+    #pet-shadow {
+      position: absolute;
+      bottom: 13%;
+      width: 42%;
+      aspect-ratio: 3.4 / 1;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at center, rgba(20, 16, 10, 0.32) 0%, rgba(20, 16, 10, 0) 72%);
+      z-index: 0;
+      pointer-events: none;
+      animation: tami-shadow 3.2s ease-in-out infinite;
+    }
+
+    @keyframes tami-float {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-10px); }
+    }
+    @keyframes tami-shadow {
+      0%, 100% { transform: scaleX(1); opacity: 1; }
+      50%      { transform: scaleX(0.8); opacity: 0.6; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #pet-sprite, #pet-shadow { animation: none; }
     }
 
     #pet-footer {
@@ -209,7 +233,8 @@
 
     <div id="pet-card">
       <div id="stage">
-        <div id="lottie"></div>
+        <div id="pet-shadow"></div>
+        <img id="pet-sprite" alt="tami" />
       </div>
       <div id="pet-footer">
         <div id="caption">waking up…</div>
