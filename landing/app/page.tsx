@@ -106,65 +106,6 @@ const PILLARS = [
   },
 ];
 
-const ACCOMPLISHMENTS = [
-  {
-    icon: "heroicons:user-group",
-    title: "Finding the keystone",
-    body: "An agent that finds the one person blocking the trip and nudges just them, by name, instead of spamming the whole chat. Phoebe learns roles from behavior (keystone, anchor, flake) so the nudge lands where it unsticks everyone else.",
-  },
-  {
-    icon: "heroicons:cpu-chip",
-    title: "Freesolo over a frontier baseline",
-    body: "A 4B model trained on data our own product generated about itself beats a frontier model ~4× on held-out data (0.317 vs 0.078 gold-F1, 98% vs 0% pet-voice) and runs the live pet right now.",
-  },
-  {
-    icon: "heroicons:musical-note",
-    title: "Voice that lands",
-    body: "The ElevenLabs voice is charming when the trip is healthy and heartbreaking when it isn't, with emotional inflection that makes the pet feel like a creature, not a notification.",
-  },
-];
-
-const LEARNINGS = [
-  {
-    icon: "heroicons:circle-stack",
-    title: "Best data is home-grown",
-    body: "The best training data isn't scraped. Logging every decision with its candidates, scores, and real outcome gave us a labelled dataset no one else has, on top of MongoDB covering matching, memory, and live sync.",
-  },
-  {
-    icon: "heroicons:heart",
-    title: "Personality beats deep reasoning",
-    body: "Simple conversational logic with a strong personality reads as more \"alive\" to users than deeper reasoning would. Mood, voice, and timely nudges beat longer chain-of-thought.",
-  },
-  {
-    icon: "heroicons:shield-check",
-    title: "Self-play needs a hard reward",
-    body: "GRPO only worked once we paired self-play with a verifiable turn-level reward and adversarial tests against reward hacking.",
-  },
-];
-
-const NEXT_STEPS = [
-  {
-    icon: "heroicons:bolt",
-    title: "Live change streams",
-    body: "Make pet updates fully live with MongoDB change streams instead of polling, so the face in chat moves the instant health does.",
-  },
-  {
-    icon: "heroicons:phone",
-    title: "Voice-driven booking",
-    body: "Expand tool-calling into a full voice-driven booking flow: reply to Tabi and it holds a room, DMs the holdout, or kicks off onboarding.",
-  },
-  {
-    icon: "heroicons:users",
-    title: "Self-play friend group",
-    body: "Build a simulated friend group with keystone, anchor, and flake personas as a proper self-play training environment for Freesolo.",
-  },
-  {
-    icon: "heroicons:map",
-    title: "A real pilot group",
-    body: "Ship into one stalled Japan trip chat and measure whether the pet actually gets them to book.",
-  },
-];
-
 function CTAButton({ large = false }: { large?: boolean }) {
   return (
     <a href={BOT_URL} className={large ? "ds-cta hero-cta" : "ds-cta"}>
@@ -222,7 +163,7 @@ export default function Home() {
             <Reveal>
               <p className="ds-chip mb-7" style={{ display: "inline-flex" }}>
                 <iconify-icon icon="heroicons:map-pin" width="14" height="14" />
-                Tama-Go-Chi · Hack the 6ix
+                Tami · Hack the 6ix
               </p>
             </Reveal>
             <Reveal delay={100}>
@@ -264,18 +205,8 @@ export default function Home() {
       {/* ─── 2. Problem line + demo video (merged, condensed) ─────────────── */}
       <section className="snap-panel relative px-6">
         <Petals />
-        <div className="relative mx-auto w-full max-w-6xl">
+        <div className="relative mx-auto w-full max-w-4xl">
           <Reveal>
-            <p className="mx-auto mb-8 max-w-3xl text-center text-xl leading-snug sm:text-2xl">
-              Someone drops{" "}
-              <span style={{ color: "var(--card-coral-ink)" }}>
-                &ldquo;let&apos;s go to Japan bro.&rdquo;
-              </span>{" "}
-              Nobody books it — so we made it{" "}
-              <span style={{ color: "var(--card-coral-ink)" }}>a creature that dies with it.</span>
-            </p>
-          </Reveal>
-          <Reveal delay={140}>
           <div
             className="overflow-hidden"
             style={{
@@ -307,6 +238,18 @@ export default function Home() {
               </div>
             </div>
           </div>
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="mx-auto mt-8 max-w-3xl text-center text-xl leading-snug sm:text-2xl">
+              Someone drops{" "}
+              <span style={{ color: "var(--card-coral-ink)" }}>
+                &ldquo;let&apos;s go to Japan bro.&rdquo;
+              </span>{" "}
+              Everyone&apos;s hyped. Nobody books. So we turned the trip into{" "}
+              <span style={{ color: "var(--card-coral-ink)" }}>
+                a creature that dies if you let it.
+              </span>
+            </p>
           </Reveal>
         </div>
       </section>
@@ -351,37 +294,18 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 7. Proof — the benchmark leads, accomplishments support ──────── */}
+      {/* ─── 7. Proof — the model benchmark ───────────────────────────────── */}
       <section className="snap-panel px-6 py-20">
         <div className="mx-auto max-w-5xl">
           <Reveal>
-            <div className="mb-10 flex justify-center">
+            <div className="flex justify-center">
               <ModelBenchmark />
             </div>
           </Reveal>
-          <CardGrid items={ACCOMPLISHMENTS} cols="sm:grid-cols-3" />
         </div>
       </section>
 
-      {/* ─── 8. Learned + next — de-titled, small kickers only ────────────── */}
-      <section className="px-6 py-24">
-        <div className="mx-auto max-w-5xl space-y-16">
-          <div>
-            <Reveal>
-              <p className="kicker mb-6">What we learned</p>
-            </Reveal>
-            <CardGrid items={LEARNINGS} cols="sm:grid-cols-3" />
-          </div>
-          <div>
-            <Reveal>
-              <p className="kicker mb-6">Where it goes next</p>
-            </Reveal>
-            <CardGrid items={NEXT_STEPS} />
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 9. Footer / CTA ──────────────────────────────────────────────── */}
+      {/* ─── 8. Footer / CTA ──────────────────────────────────────────────── */}
       <section className="snap-panel relative overflow-hidden px-6">
         <Petals />
         <div className="relative mx-auto max-w-3xl text-center">
@@ -418,7 +342,7 @@ export default function Home() {
             ))}
           </div>
           <div className="ds-title mt-8 text-xs" style={{ color: "var(--muted)" }}>
-            Built at Hack the 6ix · Tama-Go-Chi · いってらっしゃい
+            Built at Hack the 6ix · Tami · いってらっしゃい
           </div>
         </div>
       </footer>
