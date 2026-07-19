@@ -1,6 +1,18 @@
+# Secrets — ignore EVERY .env variant (.env, .env.local, .env.prod, .env.backup…)
+# except the committed placeholder template.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Other secret material (defensive — never commit key/credential files)
+*.pem
+*.key
+*-keypair.json
+*_keypair.json
+treasury*.json
+service-account*.json
+secrets.*
+
 node_modules/
 .DS_Store
 
