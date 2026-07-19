@@ -183,8 +183,17 @@
     var rating = c.rating != null
       ? String(c.rating) + (c.rating_count ? " (" + c.rating_count + ")" : "")
       : "";
-    var perNight = c.price_per_night != null ? "$" + c.price_per_night + "/night" : "";
+    var perNight = c.price_per_night != null
+      ? money(c.price_per_night, c.currency) + "/night" : "";
     var nights = c.nights ? c.nights + " nights" : "";
+    // Same property, different OTA quotes. We book the cheapest; showing the
+    // brand (and what we beat) is why the price is believable.
+    var priciest = (c.quotes && c.quotes.length > 1)
+      ? c.quotes[c.quotes.length - 1] : null;
+    var rooms = [];
+    if (c.bedrooms) rooms.push(c.bedrooms + " bd");
+    if (c.beds) rooms.push(c.beds + (c.beds === 1 ? " bed" : " beds"));
+    if (c.bathrooms) rooms.push(c.bathrooms + " ba");
     el.innerHTML =
       '<div class="photo">' +
         '<img alt="" draggable="false" src="' + escAttr(c.thumbnail || "") + '">' +
@@ -197,10 +206,15 @@
         '<div class="name-row">' +
           '<div class="name">' + esc(c.name) + '</div>' +
           '<div class="price">' +
-            '<div class="total">$' + c.price_total + '</div>' +
+            '<div class="total">' + esc(money(c.price_total, c.currency)) + '</div>' +
             (perNight
               ? '<div class="per"><iconify-icon icon="heroicons:moon" width="12" height="12"></iconify-icon>' +
                   esc(perNight + (nights ? " · " + nights : "")) + "</div>"
+              : "") +
+            (c.supplier_logo
+              ? '<div class="via"><img class="otalogo" alt="' + escAttr(c.supplier || "") +
+                  '" src="' + escAttr(c.supplier_logo) + '"><span>via ' +
+                  esc(supplierName(c.supplier)) + "</span></div>"
               : "") +
           "</div>" +
         "</div>" +
@@ -215,8 +229,21 @@
             ? '<span class="tag guests"><iconify-icon icon="heroicons:user-group" width="12" height="12"></iconify-icon>sleeps ' +
                 c.guests + "</span>"
             : "") +
+          (rooms.length
+            ? '<span class="tag rooms"><iconify-icon icon="heroicons:home-modern" width="12" height="12"></iconify-icon>' +
+                esc(rooms.join(" · ")) + "</span>"
+            : "") +
           (c.free_cancellation
             ? '<span class="tag cancel"><iconify-icon icon="heroicons:shield-check" width="12" height="12"></iconify-icon>free cancel</span>'
+            : "") +
+          (c.instant_book
+            ? '<span class="tag instant"><iconify-icon icon="heroicons:bolt" width="12" height="12"></iconify-icon>instant book</span>'
+            : "") +
+          (c.beats_by > 0 && priciest
+            ? '<span class="tag deal" title="same property, cheaper supplier">' +
+                '<iconify-icon icon="heroicons:tag" width="12" height="12"></iconify-icon>' +
+                esc(money(c.beats_by, c.currency)) + " under " +
+                esc(supplierName(priciest.supplier)) + "</span>"
             : "") +
           (c.green_pick
             ? '<span class="tag green" title="lowest estimated stay footprint on this deck">' +
@@ -395,7 +422,7 @@
           '<span class="ds-stat"><iconify-icon icon="heroicons:star" width="14" height="14"></iconify-icon>' +
             (w.rating || "–") + "</span>" +
           '<span class="ds-stat"><iconify-icon icon="heroicons:currency-dollar" width="14" height="14"></iconify-icon>' +
-            w.price_total + " total</span>" +
+            esc(money(w.price_total, w.currency)) + " total</span>" +
           '<span class="ds-stat"><iconify-icon icon="heroicons:calendar-days" width="14" height="14"></iconify-icon>' +
             esc(formatDateRange(v.checkin, v.checkout)) + "</span>" +
         "</div>" +
@@ -446,6 +473,33 @@
     });
   }
   function escAttr(s) { return esc(s); }
+
+  /**
+   * Money in the group's own currency. Prices arrive already converted by
+   * Stay22 (meta.currency is the authority), so this only handles display.
+   * JPY has no minor unit — Intl handles that, but we pin maximumFractionDigits
+   * to 0 regardless because these are whole-stay totals, not line items.
+   */
+  function money(amount, cur) {
+    if (amount == null) return "";
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency", currency: cur || "USD",
+        minimumFractionDigits: 0, maximumFractionDigits: 0
+      }).format(amount);
+    } catch (e) {
+      return (cur && cur !== "USD" ? cur + " " : "$") + amount;  // unknown code
+    }
+  }
+
+  /** Stay22 supplier keys → the brand names travellers actually recognise. */
+  var SUPPLIER_NAMES = {
+    booking: "Booking.com", expedia: "Expedia",
+    hotelscom: "Hotels.com", vrbo: "Vrbo"
+  };
+  function supplierName(key) {
+    return SUPPLIER_NAMES[key] || (key || "");
+  }
 
   /** "2026-07-18" → "July 18, 2026" (matches Mini App app.js). */
   function formatDate(iso) {

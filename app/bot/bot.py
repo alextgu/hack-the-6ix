@@ -39,6 +39,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import re
 from datetime import date
 from io import BytesIO
@@ -70,6 +71,7 @@ from app.integrations import solana_coin
 from app.agents import supervisor
 from app.agents import greenplanner
 from app.agents import face
+from app.agents import voice
 
 
 def _encode_start_param(chat_id: int) -> str:
@@ -252,10 +254,22 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
     if not critical or chat_id in _spoke_deathbed:
         return
     _spoke_deathbed.add(chat_id)
+    # Fires once per chat, but a demo gets reset and re-run all evening — one
+    # fixed line makes the biggest beat in the show land identically every time.
     await speak_pet(
         chat_id,
-        "i'm fading here... the prices keep climbing and nobody's deciding. "
-        "please — just book something.",
+        random.choice([
+            "i'm fading here... the prices keep climbing and nobody's deciding. "
+            "please — just book something.",
+            "okay. real talk. i don't think i've got another week of this in me. "
+            "somebody pick something.",
+            "the hotels got more expensive again. i got smaller again. "
+            "you see how this ends, right?",
+            "i'm not doing the bit anymore. i'm genuinely running out. "
+            "book anything and i'll be fine.",
+            "this is the part where i'd normally be funny about it. "
+            "i can't. please just choose.",
+        ]),
         ctx, mood="dying", physical=g.pet.physical,
     )
 
@@ -362,8 +376,13 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
     if d.action == "post_flights":
         opts = await asyncio.to_thread(flights.get_options, chat_id,
                                        g.trip.city, g.trip.budget_per_person)
-        text = (d.message + "\n\n" if d.message else "") + flights.render_options(opts)
-        msg = await ctx.bot.send_message(chat_id=chat_id, text=text)
+        # Tabi's line goes through _say so [name](tg://user?id=…) renders as a
+        # real mention. Concatenating it onto the flight list and sending raw
+        # skipped parse_mode entirely and printed the markup literally in chat.
+        if d.message:
+            await _say(chat_id, d.message, ctx)
+        msg = await ctx.bot.send_message(chat_id=chat_id,
+                                         text=flights.render_options(opts))
         supervisor.note_flights_posted(chat_id, opts)
         await _green_react(ctx, chat_id, msg.message_id)  # a 🌱 option is on the table
         return
@@ -438,13 +457,22 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     g = state.reset(update.effective_chat.id)
     _spoke_deathbed.discard(g.chat_id)   # re-arm voice moments for the fresh pet
     _spoke_graduated.discard(g.chat_id)
+    # state.reset() only rebuilds the in-memory pet. Without this, /start on a
+    # live chat announces a fresh egg while wire still holds the old message
+    # buffer and last-reconciled trip — so the "new" pet re-derives the previous
+    # trip on its first turn. Persisted records (deck votes, green ledger, chat
+    # history) deliberately survive: wiping those is /reset's job, not /start's.
+    wire.reset_chat(g.chat_id)
+    supervisor.reset_chat(g.chat_id)
+    voice.forget(g.chat_id)      # a fresh pet shouldn't dodge its past self's lines
     await asyncio.to_thread(set_muted, g.chat_id, False)  # /start always wakes
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
-        "hi. i'm the pet. i live here now.\n"
-        "start talking about the japan trip. every real decision heals me. "
-        "silence and rising prices kill me. try /health any time. "
-        "dev: /scrub 0..6 to fast-forward, /commit to book.",
+        # Deliberately NOT a greeting: the kickoff turn right below is the pet
+        # introducing itself in character. This used to say "hi. i'm the pet."
+        # and then Tabi immediately said hi again — two hellos, back to back.
+        "every real decision heals me. silence and rising prices kill me.\n"
+        "/health any time · dev: /scrub 0..6 to fast-forward, /commit to book.",
         reply_markup=_webapp_keyboard(g.chat_id, ctx.bot.username, label="🐾 open live pet"),
     )
     await _send_pet(update, ctx)
@@ -462,6 +490,7 @@ async def cmd_reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     wire.reset_chat(chat_id)
     cards.forget(chat_id)
     supervisor.reset_chat(chat_id)
+    voice.forget(chat_id)
     green.forget(chat_id)
     flights.forget(chat_id)
     _mute_cache.pop(chat_id, None)
@@ -536,7 +565,8 @@ async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: di
         f"📍 {trip.city}\n"
         f"🗓️ {_fmt_date_range(trip.dates.start, trip.dates.end)}\n"
         f"👥 {guests} travelers{budget}\n"
-        f"🏨 {opts['name']}{rating} — ${opts['price_total']:.0f} total, {nights} night(s){over}"
+        f"🏨 {opts['name']}{rating} — {stay22.fmt_money(opts['price_total'])} total, "
+        f"{nights} night(s){over}"
         f"{green_line}"
     )
     buttons: list[list[InlineKeyboardButton]] = [
@@ -544,7 +574,8 @@ async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: di
     ]
     for alt in (opts.get("alternates") or [])[:2]:
         buttons.append([InlineKeyboardButton(
-            f"or: {alt['name']} — ${alt['price_total']:.0f}", url=alt["book_url"])])
+            f"or: {alt['name']} — {stay22.fmt_money(alt['price_total'])}",
+            url=alt["book_url"])])
     await ctx.bot.send_message(chat_id=chat_id, text=summary,
                                reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -557,8 +588,13 @@ async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: di
     if chat_id not in _spoke_graduated:          # bright graduation voice, once
         _spoke_graduated.add(chat_id)
         try:
-            await speak_pet(chat_id, "we did it — we're actually going to Japan!",
-                            ctx, mood="graduated", physical=g.pet.physical)
+            await speak_pet(chat_id, random.choice([
+                "we did it — we're actually going to Japan!",
+                "it's booked. it's actually booked. i'm going to japan with you idiots.",
+                f"{trip.city}. real dates. a real hotel. i've never been so relieved in my life.",
+                "eleven days of arguing and you pulled it off. i never doubted you. i did doubt you.",
+                "that's a booking. i'm free. go pack something.",
+            ]), ctx, mood="graduated", physical=g.pet.physical)
         except Exception as e:
             log.warning("graduation voice skipped (chat=%s): %s", chat_id, e)
 
@@ -668,6 +704,7 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = str(update.effective_user.id) if update.effective_user else "unknown"
     await asyncio.to_thread(db.log_chat_message, chat_id, user_id, speaker,
                             update.message.text, update.message.message_id)
+    supervisor.note_user_spoke(chat_id)   # someone replied → short leash again
 
     # Asking Tabi directly ("how much have we saved?", "carbon footprint?")
     # answers with the ledger — same card as /saved, no LLM round-trip needed.

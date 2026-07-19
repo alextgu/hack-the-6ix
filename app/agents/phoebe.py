@@ -13,7 +13,7 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Optional
 
 try:
     from dotenv import load_dotenv
@@ -50,7 +50,12 @@ class Action:
 
 # ─── agent_call — the AGENT seam. SEPARATE from brain.call_model. ──────────
 _DEFAULT_MODEL_BY_PROVIDER = {
-    "gemini":    "gemini-2.5-flash",           # fast, cheap default
+    # "gemini-flash-latest" tracks whatever the current fast Flash is. Pinned
+    # ids rot: the old default here (gemini-2.5-flash) started 404ing with
+    # "no longer available to new users", and because compose_message swallows
+    # errors into _canned(), the failure was invisible — Sushi-kun just quietly
+    # served the same canned line forever instead of speaking.
+    "gemini":    "gemini-flash-latest",
     "anthropic": "claude-haiku-4-5-20251001",  # fast, cheap default
 }
 
@@ -84,7 +89,17 @@ def agent_call(prompt: str) -> str:
 
 
 def _phoebe_model(provider: str) -> str:
-    return (os.environ.get("PHOEBE_MODEL") or _DEFAULT_MODEL_BY_PROVIDER[provider]).strip()
+    """PHOEBE_MODEL wins; for gemini, fall back to the same GEMINI_MODEL the
+    rest of the app already pins so one env var keeps every surface on a live
+    model instead of this one drifting onto a retired id by itself."""
+    explicit = os.environ.get("PHOEBE_MODEL", "").strip()
+    if explicit:
+        return explicit
+    if provider == "gemini":
+        shared = os.environ.get("GEMINI_MODEL", "").strip()
+        if shared:
+            return shared
+    return _DEFAULT_MODEL_BY_PROVIDER[provider]
 
 
 def _call_freesolo(prompt: str, base_url: str, api_key: str) -> str:
@@ -282,13 +297,10 @@ def decide_action(blocker: Blocker, state: dict) -> Action:
 
 # ─── compose_message — Sushi-kun's voice via agent_call ────────────────────
 _SUSHI_VOICE = """You are Sushi-kun, the little pet living in a group chat that's trying to plan a trip to Japan.
-YOUR VOICE:
-- playful, needy, slightly dramatic — "i'm dying here, help me" energy
-- charming, not whiny; never sad-sack
-- lowercase, one-liner, no emojis, no hashtags
-- addresses people by name when relevant
-- never says "I'm an AI" or explains what you are
-- you're allowed to be a little rude for the bit
+You are charming, never a sad-sack, and you have real stakes: this group's
+indecision is killing you.
+
+{voice_block}
 
 Write ONE message (max 220 chars) that executes this action.
 Reply with ONLY the message text — no quotes, no preamble.
@@ -304,10 +316,13 @@ Trip so far:
   budget: ${budget}"""
 
 
-def compose_message(action: Action, state: dict) -> str:
+def compose_message(action: Action, state: dict,
+                    chat_id: Optional[int] = None) -> str:
     """Sushi-kun's outreach in-character. LLM writes it; canned fallback only
     when no model is configured at all."""
+    from app.agents import voice   # local: keeps the agent seam import-light
     prompt = _SUSHI_VOICE.format(
+        voice_block=voice.persona_block(chat_id=chat_id, name="Sushi-kun"),
         action_kind=action.kind,
         target=action.target,
         rationale=action.rationale,
@@ -321,6 +336,8 @@ def compose_message(action: Action, state: dict) -> str:
         # some models return wrapped in quotes — strip once.
         if out.startswith(('"', "'")) and out.endswith(('"', "'")):
             out = out[1:-1].strip()
+        if out and chat_id is not None:
+            voice.note_line(chat_id, out)
         return out or _canned(action)
     except Exception as e:
         print(f"[phoebe] agent_call failed ({type(e).__name__}: {e}); using canned line")
@@ -328,17 +345,43 @@ def compose_message(action: Action, state: dict) -> str:
 
 
 def _canned(action: Action) -> str:
+    """Offline fallback when no model is configured. Several options per action
+    and a random pick, because the fallback firing twice in one demo used to
+    print the exact same sentence both times."""
+    import random
+    t = action.target
     if action.kind == "dm_holdout":
-        return f"@{action.target} — quick one, i'm literally shrinking. what days can you actually go & how much can you spend"
+        return random.choice([
+            f"@{t} — quick one. what days can you actually go, and what's your ceiling",
+            f"@{t}. two numbers. dates and a budget. that's the whole ask",
+            f"everyone's waiting on you, {t}. when can you go and for how much",
+        ])
     if action.kind == "propose_cheaper_neighborhood":
         low = action.parameters.get("low_budget_person", "someone")
-        return f"okay, rerouting to a cheaper area of {action.target} so {low}'s budget fits. new picks in a sec"
+        return random.choice([
+            f"rerouting to a cheaper part of {t} so {low}'s budget actually fits. new picks incoming",
+            f"{low}'s number doesn't work in central {t}. pulling options a few stops out",
+            f"same {t}, cheaper postcode. give me a second and {low} can afford it too",
+        ])
     if action.kind == "hold_rooms_48h":
         cands = action.parameters.get("candidates") or ["both"]
-        return f"you can't pick a city. i'm dying. holding a room in each of {' + '.join(cands)} for 48h — someone say no"
+        joined = " + ".join(cands)
+        return random.choice([
+            f"you can't pick a city. holding a room in each of {joined} for 48h — someone object",
+            f"fine. {joined}. one room each, 48 hours, then i pick for you",
+            f"nobody's deciding, so i am: rooms held in {joined} till thursday",
+        ])
     if action.kind == "ask_group":
-        return "quick one — what's the top-end budget per person. i can't shop hotels blind"
-    return "trip's on track. i'll nap till you need me"
+        return random.choice([
+            "what's the top-end budget per person. i can't shop hotels blind",
+            "give me a ceiling. any number. i'll work with anything",
+            "one budget figure and i can actually start being useful",
+        ])
+    return random.choice([
+        "trip's on track. i'll nap till you need me",
+        "nothing for me to do. suspicious. i'll be here",
+        "we're actually fine right now. weird feeling",
+    ])
 
 
 # ─── Demo runner ───────────────────────────────────────────────────────────

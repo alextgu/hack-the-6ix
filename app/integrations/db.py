@@ -220,8 +220,14 @@ def log_chat_message(chat_id: int, user_id: str, name: str, text: str,
 
 
 def nuke_chat(chat_id: int) -> int:
-    """/reset: erase EVERYTHING this bot knows about a group. Returns the
-    number of documents removed across all collections."""
+    """/reset: erase this group's runtime state. Returns the number of
+    documents removed.
+
+    Deliberately NOT wiped: `messenger_records`. Those are the harvested
+    candidate/chosen/outcome triples that training/build_dataset.py turns into
+    the Freesolo SFT set — a training corpus, not group state. A demo /reset
+    must not destroy data collected from real conversations. They're keyed by
+    chat_id but never read on the runtime path, so leaving them is inert."""
     d = _db()
     if d is None:
         return 0

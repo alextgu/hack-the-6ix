@@ -98,8 +98,11 @@ CITY_AIRPORT = {
 
 
 def airport_for_city(city: Optional[str]) -> str:
-    key = (city or "tokyo").split(",")[0].strip().lower()
-    return CITY_AIRPORT.get(key, "NRT")
+    """Most specific comma part wins, so 'Shinjuku, Tokyo' still finds NRT."""
+    for part in [p.strip().lower() for p in (city or "tokyo").split(",")]:
+        if part in CITY_AIRPORT:
+            return CITY_AIRPORT[part]
+    return "NRT"
 
 
 def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -145,6 +148,60 @@ def transit_saving_vs_car_kg(mode: str, km: float) -> float:
     """How much one passenger avoids by taking `mode` instead of car/taxi."""
     return round(max(0.0, (CAR_BASELINE_KG_PER_PKM
                            - MODE_KG_PER_PKM.get((mode or "").lower(), 0.0)) * km), 2)
+
+
+# ─── Airport → hotel transfer ────────────────────────────────────────────────
+# Stay22 returns each property's coordinates, and _AIRPORTS already holds the
+# arrival airport, so the transfer leg is pure local trigonometry — no extra
+# API call, nothing that can fail or time out mid-demo.
+TRANSFER_DETOUR = 1.25   # straight line → road/rail distance actually travelled
+
+
+def transfer_km(lat: Optional[float], lng: Optional[float],
+                city: Optional[str] = None,
+                airport: Optional[str] = None) -> Optional[float]:
+    """One-way airport→hotel distance in km, or None if we lack coordinates.
+    Great-circle scaled by TRANSFER_DETOUR — rail and road never run straight."""
+    if lat is None or lng is None:
+        return None
+    code = (airport or airport_for_city(city)).upper()
+    origin = _AIRPORTS.get(code)
+    if not origin:
+        return None
+    return round(_haversine_km(origin, (float(lat), float(lng))) * TRANSFER_DETOUR, 1)
+
+
+def transfer_co2_kg(lat: Optional[float], lng: Optional[float],
+                    city: Optional[str] = None, mode: str = "train",
+                    group_size: int = 1, roundtrip: bool = True) -> Optional[float]:
+    """kg CO2e for the WHOLE group getting between airport and hotel."""
+    km = transfer_km(lat, lng, city)
+    if km is None:
+        return None
+    legs = 2 if roundtrip else 1
+    return round(transit_co2_kg(mode, km) * legs * max(1, group_size), 1)
+
+
+def transfer_delta_kg(card: dict, deck: list[dict], city: Optional[str] = None,
+                      mode: str = "train", group_size: int = 1) -> Optional[float]:
+    """Transfer CO2 this card saves against the deck's MEDIAN transfer.
+
+    The counterfactual is deliberately the middle of the options actually on
+    the table, not the cheapest or the worst: it's a claim we can defend
+    ("closer to the airport than half your shortlist") and it can't blow up
+    into an absurd number when one outlier sits three prefectures away.
+    Positive = saves; negative = costs extra. None when coords are missing."""
+    mine = transfer_km(card.get("lat"), card.get("lng"), city)
+    if mine is None:
+        return None
+    others = [k for k in (transfer_km(c.get("lat"), c.get("lng"), city) for c in deck)
+              if k is not None]
+    if len(others) < 2:
+        return None
+    baseline = sorted(others)[len(others) // 2]
+    factor = MODE_KG_PER_PKM.get((mode or "").lower(), MODE_KG_PER_PKM["train"])
+    delta = (baseline - mine) * factor * 2 * max(1, group_size)   # 2 = round trip
+    return round(delta, 1)
 
 
 # ─── Hotel CO2 ───────────────────────────────────────────────────────────────

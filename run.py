@@ -14,6 +14,7 @@ import contextlib
 import logging
 import os
 import signal
+import time
 
 import uvicorn
 from dotenv import load_dotenv
@@ -97,11 +98,19 @@ async def _heartbeat(get_bot) -> None:
                                - datetime.fromisoformat(last)).total_seconds()
                     if quiet_s < supervisor.HEARTBEAT_SILENCE_S:
                         continue
+                # chat_log holds only HUMAN messages, so quiet_s keeps growing
+                # while the pet talks to itself. Gate on the pet's own last
+                # send too, with an escalating gap per unanswered nudge —
+                # otherwise every tick past the silence threshold fires again.
+                since_pet = time.time() - supervisor._last_sent_at.get(chat_id, 0)
+                if since_pet < supervisor.nudge_gap_s(chat_id):
+                    continue
                 d = await asyncio.to_thread(supervisor.run_turn, chat_id, "heartbeat")
                 if d.send:
                     class _Ctx:  # minimal ContextTypes shim for execute_decision
                         bot = tg_bot
                     await botmod.execute_decision(chat_id, d, _Ctx())
+                    supervisor.note_nudge_sent(chat_id)
         except Exception as e:
             log.warning("heartbeat error: %s", e)
 

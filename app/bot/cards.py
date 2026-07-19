@@ -60,7 +60,8 @@ def ensure_session(chat_id: int, force: bool = False) -> dict:
     from app.core import state  # late import: state imports db, not cards
     group_size = int(state.get_or_create(chat_id).trip.group_size or 4)
     deck = hotels.fetch_hotel_cards(max_cards=MAX_CARDS,  # network — outside lock
-                                    guests=group_size)
+                                    guests=group_size,
+                                    chat_id=chat_id)  # per-group Stay22 attribution
     with _LOCK:
         s = {
             "chat_id": chat_id,

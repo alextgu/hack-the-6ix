@@ -1,13 +1,22 @@
 # Deploying trippet to Google Cloud Run
 
-> **Current deployment (2026-07-18):** project `hackthe6ix-502813`, region
+> **Current deployment (2026-07-19):** project `hackthe6ix-502813`, region
 > `us-central1`, service `trippet` →
 > **https://trippet-69987838202.us-central1.run.app**
-> Gemini key + Mongo URI are set as env vars on the service.
-> `TELEGRAM_BOT_TOKEN` is NOT set yet — the service runs API-only (Mini App +
-> cards work) until someone runs:
-> `gcloud run services update trippet --region us-central1 --update-env-vars TELEGRAM_BOT_TOKEN=<token>`
-> then registers the Mini App URL in @BotFather (see below).
+> Fully live — the bot polls Telegram and the Mini App serves. All runtime env
+> vars are set ON THE SERVICE and persist across deploys: `TELEGRAM_BOT_TOKEN`,
+> `GEMINI_API_KEY`/`GEMINI_MODEL`, `MONGODB_URI`/`MONGODB_DB`, `STAY22_API_KEY`/
+> `STAY22_AID`, `ELEVENLABS_API_KEY`/`ELEVENLABS_VOICE_ID`, `PUBLIC_WEBAPP_URL`.
+> Check them with:
+> `gcloud run services describe trippet --region us-central1 --format="value(spec.template.spec.containers[0].env)"`
+>
+> Optional and NOT set: `AMADEUS_CLIENT_ID`/`AMADEUS_CLIENT_SECRET`. Without
+> them `flights.py` serves bundled offers — carbon math is local either way,
+> so the green lane is fully functional without them.
+>
+> Expect a burst of `409 Conflict` in the logs for ~30s during every deploy:
+> the old revision is still polling while the new one starts. `run.py`'s
+> supervisor loop recovers on its own — no action needed.
 
 One container runs both the polling Telegram bot and the FastAPI Mini App
 server (`run.py`). They share in-memory state, and Telegram allows only one
