@@ -431,25 +431,27 @@ export default function Home() {
             </Reveal>
 
             <Reveal delay={240}>
-              <div
-                className="mt-5 rounded-2xl p-5"
-                style={{ background: "var(--card-mint)", border: "1px solid rgba(47,107,74,0.16)" }}
-              >
-                <p className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: "var(--card-mint-ink)" }}>
-                  Not a slide — the live product →
+              <div className="mt-6 pl-4" style={{ borderLeft: "3px solid var(--card-mint-ink)" }}>
+                <p className="text-sm leading-relaxed sm:text-base">
+                  <span className="font-semibold" style={{ color: "var(--card-mint-ink)" }}>
+                    Not a slide — that&apos;s the live product.
+                  </span>{" "}
+                  <span style={{ color: "var(--muted)" }}>
+                    Type{" "}
+                    <code
+                      className="rounded-md px-1.5 py-0.5 text-[0.85em]"
+                      style={{ background: "rgba(42,36,28,0.06)", color: "var(--fg)" }}
+                    >
+                      /saved
+                    </code>{" "}
+                    in the chat and Tabi computes the group&apos;s real ledger on the spot, from the
+                    same module behind every figure on this page.
+                  </span>
                 </p>
-                <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--card-mint-ink)" }}>
-                  Type <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{"/saved "}</span>
-                  in the chat and Tabi computes the group&apos;s real ledger on the spot — equivalents, scale-up, and
-                  sources — from the same module behind every figure on this page.
+                <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
+                  Factors: DEFRA 2024 · CHSB 2023 · EPA · JR Central
                 </p>
               </div>
-            </Reveal>
-
-            <Reveal delay={300}>
-              <p className="mt-4 text-xs" style={{ color: "var(--muted)" }}>
-                Factors: DEFRA 2024 · CHSB 2023 · EPA · JR Central.
-              </p>
             </Reveal>
           </div>
 
