@@ -13,11 +13,11 @@ import {
 const HEALTH_INFO = {
   Physical: {
     icon: "heroicons:heart",
-    body: "Tied to real hotel pricing and availability — it withers as rooms sell out and the budget gets tighter.",
+    body: "Tied to real hotel pricing and availability. It withers as rooms sell out and the budget gets tighter.",
   },
   Mental: {
     icon: "heroicons:chat-bubble-left-right",
-    body: "Tied to the group itself — it tracks how engaged the chat is. Deciding keeps it happy; silence makes it depressed.",
+    body: "Tied to the group itself. It tracks how engaged the chat is. Deciding keeps it happy; silence makes it depressed.",
   },
 } as const;
 
@@ -32,33 +32,33 @@ function HealthCard({
   value: number;
   icon: string;
 }) {
-  // Same hex thresholds as webapp/app.js healthColor (≥70 / ≥40 / else).
   const color = healthColor(value);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const info = HEALTH_INFO[label];
 
   return (
-    <div className="ds-health-card" style={{ padding: "14px 16px", gap: 12 }}>
-      <div className="bar-top">
-        <div className="bar-icon">
-          <iconify-icon icon={icon} width="20" height="20" />
+    <div className="ds-health-card" style={{ padding: "10px 12px", gap: 8 }}>
+      <div className="bar-top" style={{ gap: 8 }}>
+        <div className="bar-icon" style={{ width: 32, height: 32, borderRadius: 10 }}>
+          <iconify-icon icon={icon} width="16" height="16" />
         </div>
-        <div className="bar-name" style={{ fontSize: 14 }}>
+        <div className="bar-name" style={{ fontSize: 12 }}>
           {label}
           <button
             type="button"
             className="ds-info-btn"
             aria-label={`About ${label} health`}
             onClick={() => dialogRef.current?.showModal()}
+            style={{ width: 18, height: 18 }}
           >
-            <iconify-icon icon="heroicons:information-circle" width="16" height="16" />
+            <iconify-icon icon="heroicons:information-circle" width="14" height="14" />
           </button>
         </div>
-        <div className="bar-val" style={{ fontSize: 24, color }}>
+        <div className="bar-val" style={{ fontSize: 20, color }}>
           {Math.round(value)}
         </div>
       </div>
-      <div className="bar-outer">
+      <div className="bar-outer" style={{ height: 8 }}>
         <div
           className="bar-inner"
           style={{ width: `${value}%`, background: color }}
@@ -109,28 +109,28 @@ export default function SushiDemo() {
   const glow = MOOD_COLOR[pet.mood];
 
   return (
-    <div className="mx-auto grid w-full max-w-4xl gap-5 lg:grid-cols-2">
+    <div className="mx-auto grid w-full max-w-3xl items-stretch gap-4 lg:grid-cols-2">
       <div
         className="card-lift flex flex-col overflow-hidden"
         style={{
-          borderRadius: "var(--radius)",
+          borderRadius: "calc(var(--radius) * 0.85)",
           background: "var(--surface)",
           boxShadow: "var(--shadow)",
         }}
       >
         <div
-          className="relative flex h-56 items-center justify-center overflow-hidden sm:h-64"
+          className="relative flex h-40 items-center justify-center overflow-hidden sm:h-44"
           style={{ background: "var(--card-peach)" }}
         >
           <div
             aria-hidden
-            className="absolute bottom-6 h-8 w-40 rounded-full transition-all duration-700"
-            style={{ background: glow, opacity: 0.22, filter: "blur(22px)" }}
+            className="absolute bottom-4 h-6 w-32 rounded-full transition-all duration-700"
+            style={{ background: glow, opacity: 0.22, filter: "blur(18px)" }}
           />
 
           <span
             key={booked ? "booked" : "alive"}
-            className={`select-none text-8xl transition-all duration-500 ${
+            className={`select-none text-6xl transition-all duration-500 sm:text-7xl ${
               booked ? "animate-pop" : pet.mood === "dying" ? "" : "animate-floaty"
             }`}
             style={{
@@ -150,11 +150,11 @@ export default function SushiDemo() {
               {SPARKS.map((s, i) => (
                 <span
                   key={i}
-                  className="animate-sparkle absolute text-xl"
+                  className="animate-sparkle absolute text-base"
                   style={
                     {
-                      "--spark-x": `${s.x}px`,
-                      "--spark-y": `${s.y}px`,
+                      "--spark-x": `${s.x * 0.8}px`,
+                      "--spark-y": `${s.y * 0.8}px`,
                       "--spark-delay": `${s.delay}s`,
                     } as CSSProperties
                   }
@@ -164,36 +164,24 @@ export default function SushiDemo() {
               ))}
             </div>
           )}
-
-          <span
-            className="ds-chip absolute right-3 top-3"
-            style={{ color: glow, background: "var(--surface)" }}
-          >
-            {pet.mood}
-          </span>
         </div>
 
-        <div className="flex flex-1 flex-col gap-4 p-5">
-          <p className="ds-title min-h-[1.5rem] text-center text-[15px]" style={{ color: "var(--muted)" }}>
-            「{pet.caption}」
-          </p>
-
-          <div className="flex flex-wrap justify-center gap-2">
-            <span className="ds-stat">
-              <iconify-icon icon="heroicons:currency-dollar" width="14" height="14" />
+        <div className="flex flex-1 flex-col gap-3 p-3.5 sm:p-4">
+          <div className="flex flex-wrap justify-center gap-1.5">
+            <span className="ds-stat" style={{ fontSize: 11 }}>
               ${pet.price}/night
             </span>
-            <span className="ds-stat">
-              <iconify-icon icon="heroicons:building-office-2" width="14" height="14" />
+            <span className="ds-stat" style={{ fontSize: 11 }}>
+              <iconify-icon icon="heroicons:building-office-2" width="12" height="12" />
               {pet.rooms} rooms left
             </span>
-            <span className="ds-stat">
-              <iconify-icon icon="heroicons:calendar-days" width="14" height="14" />
-              week {booked ? "—" : pet.week}
+            <span className="ds-stat" style={{ fontSize: 11 }}>
+              <iconify-icon icon="heroicons:calendar-days" width="12" height="12" />
+              week {booked ? "-" : pet.week}
             </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <HealthCard label="Physical" value={pet.physical} icon="heroicons:heart" />
             <HealthCard
               label="Mental"
@@ -203,10 +191,13 @@ export default function SushiDemo() {
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between text-xs" style={{ color: "var(--muted)" }}>
+            <div
+              className="mb-1.5 flex items-center justify-between"
+              style={{ color: "var(--muted)", fontSize: 11 }}
+            >
               <span>drag to procrastinate →</span>
               <span className="tabular-nums" style={{ color: "var(--fg)" }}>
-                week {booked ? "—" : pet.week}
+                week {booked ? "-" : pet.week}
               </span>
             </div>
             <input
@@ -231,59 +222,82 @@ export default function SushiDemo() {
             className="ds-cta w-full"
             style={
               booked
-                ? { background: "var(--health-good)", color: "var(--surface)" }
-                : undefined
+                ? {
+                    background: "var(--health-good)",
+                    color: "var(--surface)",
+                    fontSize: 13,
+                    padding: "11px 16px",
+                  }
+                : { fontSize: 13, padding: "11px 16px" }
             }
           >
-            {booked ? "Booked — Sushi-kun is free" : "Book it → revive Sushi-kun"}
+            {booked ? "Booked, Sushi-kun is free" : "Book it → revive Sushi-kun"}
           </button>
         </div>
       </div>
 
-      <article className="ds-hotel-card card-lift" style={{ minHeight: 420 }}>
-        <div className="photo" style={{ minHeight: 200, flex: "1 1 auto" }}>
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{
-              background: "linear-gradient(145deg, var(--card-peach), var(--card-sky))",
-              color: "var(--card-peach-ink)",
-            }}
-          >
-            <iconify-icon icon="heroicons:photo" width="64" height="64" />
-          </div>
-          <div className="fade" />
+      <article
+        className="ds-hotel-card card-lift flex h-full min-h-[100%] flex-col"
+        style={{ borderRadius: "calc(var(--radius) * 0.85)" }}
+      >
+        <div className="photo" style={{ flex: "1 1 auto", minHeight: 220 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/shibuya-stream-hotel.png"
+            alt="Shibuya Stream Hotel room"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="fade" style={{ height: 40 }} />
         </div>
-        <div className="info">
-          <div className="name-row">
-            <div className="name">Shibuya Stream Hotel</div>
-            <div className="price">
-              <div className="total">${pet.price}</div>
-              <div className="per">
-                <iconify-icon icon="heroicons:moon" width="12" height="12" />
+        <div
+          className="info"
+          style={{
+            flex: "0 0 auto",
+            padding: "8px 10px 9px",
+            gap: 4,
+          }}
+        >
+          <div className="name-row" style={{ alignItems: "baseline", gap: 6 }}>
+            <div className="name" style={{ fontSize: 14, lineHeight: 1.2 }}>
+              Shibuya Stream Hotel
+            </div>
+            <div
+              className="price"
+              style={{
+                display: "inline-flex",
+                alignItems: "baseline",
+                gap: 3,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span className="total" style={{ fontSize: 15 }}>
+                ${pet.price}
+              </span>
+              <span className="per" style={{ marginTop: 0, fontSize: 10 }}>
                 / night
-              </div>
+              </span>
             </div>
           </div>
-          <div className="meta">
-            <span className="tag rating">
-              <iconify-icon icon="heroicons:star" width="12" height="12" />
+          <div className="meta" style={{ gap: 4 }}>
+            <span className="tag rating" style={{ fontSize: 10, padding: "2px 7px", gap: 3 }}>
+              <iconify-icon icon="heroicons:star" width="10" height="10" />
               4.7
             </span>
-            <span className="tag type">
-              <iconify-icon icon="heroicons:building-office-2" width="12" height="12" />
+            <span className="tag type" style={{ fontSize: 10, padding: "2px 7px", gap: 3 }}>
+              <iconify-icon icon="heroicons:building-office-2" width="10" height="10" />
               hotel
             </span>
-            <span className="tag guests">
-              <iconify-icon icon="heroicons:user-group" width="12" height="12" />
+            <span className="tag guests" style={{ fontSize: 10, padding: "2px 7px", gap: 3 }}>
+              <iconify-icon icon="heroicons:user-group" width="10" height="10" />
               sleeps 2
             </span>
-            <span className="tag cancel">
-              <iconify-icon icon="heroicons:shield-check" width="12" height="12" />
+            <span className="tag cancel" style={{ fontSize: 10, padding: "2px 7px", gap: 3 }}>
+              <iconify-icon icon="heroicons:shield-check" width="10" height="10" />
               free cancel
             </span>
           </div>
-          <div className="addr">
-            <iconify-icon icon="heroicons:map-pin" width="14" height="14" />
+          <div className="addr" style={{ fontSize: 10, gap: 3 }}>
+            <iconify-icon icon="heroicons:map-pin" width="11" height="11" />
             <span>1-2-3 Shibuya, Tokyo</span>
           </div>
         </div>
