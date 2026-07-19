@@ -207,8 +207,8 @@
   var SPRITE_FADE_MS = 500;
 
   function updateSprite(physical, mental, feeling) {
-    // Same tami art the Telegram chat card + bot avatar use — the server
-    // owns the size/mold bucket thresholds (app/render/tami.py), so the
+    // Same tabi art the Telegram chat card + bot avatar use — the server
+    // owns the size/mold bucket thresholds (app/render/tabi.py), so the
     // client just forwards the 3 raw numbers.
     var url = "/api/pet/sprite.png?physical=" + Math.round(physical) +
       "&mental=" + Math.round(mental) + "&feeling=" + encodeURIComponent(feeling);

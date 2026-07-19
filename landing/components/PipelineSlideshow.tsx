@@ -52,7 +52,7 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
         style={{
           borderRadius: "var(--radius)",
           background: "var(--surface)",
-          boxShadow: "var(--shadow)",
+          boxShadow: "var(--sheen), var(--shadow)",
         }}
       >
         <div className="grid items-stretch lg:grid-cols-[1.55fr_minmax(0,1fr)]">
@@ -97,35 +97,35 @@ export default function PipelineSlideshow({ cards }: { cards: PipelineCard[] }) 
           >
             <span
               aria-hidden
-              className="ds-title pointer-events-none absolute -top-3 right-3 select-none leading-none tabular-nums"
-              style={{ fontSize: "6.5rem", color: "var(--fg)", opacity: 0.05 }}
+              className="ds-title pointer-events-none absolute -top-4 right-3 select-none leading-none tabular-nums"
+              style={{ fontSize: "8rem", color: "var(--fg)", opacity: 0.05 }}
             >
               {i + 1}
             </span>
             <p
-              className="mb-5 inline-flex w-fit items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em]"
+              className="mb-6 inline-flex w-fit items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em]"
               style={{ color: "var(--card-coral-ink)" }}
             >
               <span
-                className="inline-block h-1.5 w-1.5 rounded-full"
+                className="inline-block h-2 w-2 rounded-full"
                 style={{ background: "var(--card-coral-ink)" }}
               />
               Phase {i + 1} · {card.phase}
             </p>
-            <ul className="relative flex flex-col gap-4">
+            <ul className="relative flex flex-col gap-5">
               {card.steps.map((step, si) => (
-                <li key={step.title} className="flex gap-3">
+                <li key={step.title} className="flex gap-3.5">
                   <span
-                    className="ds-title mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs tabular-nums"
+                    className="ds-title mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm tabular-nums"
                     style={{ background: "var(--card-peach)", color: "var(--fg)" }}
                   >
                     {si + 1}
                   </span>
                   <div>
-                    <h3 className="ds-title text-base leading-snug sm:text-[1.05rem]">
+                    <h3 className="ds-title text-xl leading-snug sm:text-2xl">
                       {step.title}
                     </h3>
-                    <p className="mt-1 text-[0.82rem] leading-relaxed" style={{ color: "var(--muted)" }}>
+                    <p className="mt-1.5 text-base leading-relaxed" style={{ color: "var(--muted)" }}>
                       {step.body}
                     </p>
                   </div>

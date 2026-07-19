@@ -163,7 +163,7 @@ export default function Home() {
             <Reveal>
               <p className="ds-chip mb-7" style={{ display: "inline-flex" }}>
                 <iconify-icon icon="heroicons:map-pin" width="14" height="14" />
-                Tami · Hack the 6ix
+                Tabi · Hack the 6ix
               </p>
             </Reveal>
             <Reveal delay={100}>
@@ -208,15 +208,18 @@ export default function Home() {
         <div className="relative mx-auto w-full max-w-4xl">
           <Reveal>
           <div
-            className="overflow-hidden"
+            className="framed overflow-hidden"
             style={{
               borderRadius: "var(--radius)",
               background: "var(--surface)",
-              boxShadow: "var(--shadow)",
+              padding: 10,
             }}
           >
             {/* Swap this block for <video controls poster=… src=…> when the demo file is ready */}
-            <div className="relative w-full" style={{ aspectRatio: "16 / 9" }}>
+            <div
+              className="relative w-full overflow-hidden"
+              style={{ aspectRatio: "16 / 9", borderRadius: "calc(var(--radius) - 12px)", boxShadow: "inset 0 0 0 1px rgba(42,36,28,0.06)" }}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/tokyo-poster.png"
@@ -356,7 +359,11 @@ export default function Home() {
             <Reveal delay={260}>
               <div
                 className="flex h-full flex-col justify-center rounded-2xl p-7 text-center"
-                style={{ background: "var(--card-peach)", boxShadow: "var(--shadow)" }}
+                style={{
+                  background: "var(--card-peach)",
+                  border: "1px solid rgba(107,63,40,0.14)",
+                  boxShadow: "var(--sheen), var(--shadow)",
+                }}
               >
                 <div className="text-xs uppercase tracking-[0.24em]" style={{ color: "var(--muted)" }}>
                   the group&apos;s shared ledger
@@ -557,7 +564,8 @@ export default function Home() {
               className="mx-auto w-full max-w-sm rounded-3xl p-7 text-left"
               style={{
                 background: "linear-gradient(160deg, #2a241c 0%, #3a2f26 100%)",
-                boxShadow: "0 24px 60px rgba(42,36,28,0.35)",
+                border: "1px solid rgba(245,239,224,0.14)",
+                boxShadow: "inset 0 1px 0 rgba(245,239,224,0.12), 0 24px 60px rgba(42,36,28,0.35)",
                 color: "#f5efe0",
               }}
             >
@@ -626,7 +634,7 @@ export default function Home() {
             ))}
           </div>
           <div className="ds-title mt-8 text-xs" style={{ color: "var(--muted)" }}>
-            Built at Hack the 6ix · Tami · いってらっしゃい
+            Built at Hack the 6ix · Tabi · いってらっしゃい
           </div>
           <div className="mt-12">
             <div className="text-xs uppercase tracking-[0.3em]" style={{ color: "var(--muted)" }}>
@@ -635,7 +643,7 @@ export default function Home() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/team.jpg"
-              alt="The team behind Tami at Hack the 6ix"
+              alt="The team behind Tabi at Hack the 6ix"
               className="mx-auto mt-4 w-full max-w-lg rounded-2xl"
               style={{ boxShadow: "var(--shadow)" }}
               loading="lazy"

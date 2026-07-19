@@ -1,10 +1,10 @@
-"""Tami pet renderer — Pillow PNG, styled to match the webapp Mini App.
+"""Tabi pet renderer — Pillow PNG, styled to match the webapp Mini App.
 
 Ports the webapp's design tokens (design-system/tokens.css) straight into
 Pillow drawing code — same cream/seigaiha background, white rounded cards,
 Unbounded/Geist Sans type, same health-bar colors and layout — so the image
 posted to chat looks like the same product as the Mini App, not a separate
-placeholder style. Real sushi art (app/render/tami.py — 18 PNGs keyed by
+placeholder style. Real sushi art (app/render/tabi.py — 18 PNGs keyed by
 size × mold × feeling) is composited into the pet-card exactly as the
 webapp's <img id="pet-sprite"> does. Falls back to a drawn placeholder blob
 if a sprite file is missing, so an incomplete art drop never breaks the chat
@@ -23,7 +23,7 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from app.core.state import GroupState, PetState
-from app.render import tami
+from app.render import tabi
 
 
 # ─── Design tokens — ported verbatim from design-system/tokens.css ─────────
@@ -195,7 +195,7 @@ def _draw_sprite(img: Image.Image, cx: int, cy: int, pet: PetState, box: int, *,
     and bars. `shadow_scale`/`shadow_alpha_mult` let GIF frames shrink/fade
     the shadow as the sprite lifts, same grounded effect as the webapp's
     CSS bob animation."""
-    sprite = tami.load_sushi_image(pet.physical, pet.mental, pet.feeling)
+    sprite = tabi.load_sushi_image(pet.physical, pet.mental, pet.feeling)
     if sprite is None:
         _draw_pet_placeholder(ImageDraw.Draw(img), cx, cy, pet)
         return
@@ -219,7 +219,7 @@ def _draw_sprite(img: Image.Image, cx: int, cy: int, pet: PetState, box: int, *,
 
 
 def _draw_pet_placeholder(draw: ImageDraw.ImageDraw, cx: int, cy: int, pet: PetState) -> None:
-    """Simple blob with face — used only if a tami asset file is missing."""
+    """Simple blob with face — used only if a tabi asset file is missing."""
     mood_colors = {
         "happy":     HEALTH_GOOD,
         "worried":   HEALTH_WARN,
@@ -320,7 +320,7 @@ def render_pet_gif(g: GroupState, *, frames: int = 18, frame_ms: int = 90,
                    amplitude: int = 10) -> bytes:
     """Same square card as render_pet_png, but the sprite bobs up and down —
     a raised-cosine bounce (0 -> -amplitude at the midpoint -> 0), matching
-    the webapp's `tami-float` CSS animation, with the shadow shrinking/
+    the webapp's `tabi-float` CSS animation, with the shadow shrinking/
     fading on the up-beat for a grounded feel. Card/bars/title are drawn
     once and reused for every frame; only the sprite+shadow are redrawn.
     Send via bot.send_animation, NOT send_photo (Telegram won't animate a

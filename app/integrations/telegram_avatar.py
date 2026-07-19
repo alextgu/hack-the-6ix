@@ -1,10 +1,10 @@
-"""Swap the bot's own Telegram profile photo to match the pet's current tami
+"""Swap the bot's own Telegram profile photo to match the pet's current tabi
 state, via a raw call to `setMyProfilePhoto` (Bot API 8.2+). python-telegram-
 bot is pinned to <22 (see requirements.txt) and doesn't expose this method
 yet, so this goes straight to the HTTP API with urllib instead of bumping a
 major dependency version for one call.
 
-Uses app.render.tami's same (size × mold × feeling) resolver as the in-chat
+Uses app.render.tabi's same (size × mold × feeling) resolver as the in-chat
 pet image, so the profile photo is always exactly the picture last posted to
 the chat — not a separate, coarser mood-only face set.
 
@@ -26,7 +26,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-from app.render import tami
+from app.render import tabi
 
 log = logging.getLogger("trippet.avatar")
 
@@ -55,18 +55,18 @@ def _encode_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
 
 def set_avatar_for_state(token: str, physical: int, mental: int, feeling: str,
                          force: bool = False) -> bool:
-    """POST the current tami sprite as the bot's profile photo. Deduped
+    """POST the current tabi sprite as the bot's profile photo. Deduped
     process-wide (skips the API call if this exact sprite is already the last
     one set) unless `force=True`. Returns True only on a confirmed Telegram
     success."""
     global _last_set_filename
     if not token:
         return False
-    filename = tami.sushi_filename(physical, mental, feeling)
+    filename = tabi.sushi_filename(physical, mental, feeling)
     if filename == _last_set_filename and not force:
         return True
 
-    path = tami.sushi_path(physical, mental, feeling)
+    path = tabi.sushi_path(physical, mental, feeling)
     try:
         with open(path, "rb") as f:
             photo_bytes = f.read()

@@ -62,7 +62,7 @@ export default function ModelBenchmark() {
       className="card-lift"
       style={{
         margin: 0, background: "var(--surface)", borderRadius: "var(--radius, 20px)",
-        boxShadow: "var(--shadow, 0 8px 30px rgba(42,36,28,0.10))",
+        boxShadow: "var(--sheen), var(--shadow, 0 8px 30px rgba(42,36,28,0.10))",
         padding: "26px 26px 22px", maxWidth: 560, width: "100%",
       }}
     >

@@ -15,7 +15,7 @@ app/
   agents/         supervisor (LangGraph "Tabi"), brain (Gemini Read), face, greenplanner
   integrations/   stay22, booking, db (Mongo), flights, green, elevenlabs, solana_coin, telegram_avatar
   api/            FastAPI — pet-state endpoint + serves the Mini App
-  render/         Pillow pet card + tami sprite resolver
+  render/         Pillow pet card + tabi sprite resolver
   core/           in-memory state + the two-bar health engine
 webapp/           Telegram Mini App (vanilla HTML/JS, served by FastAPI)
 landing/          public showcase (Next.js, static-exported to Netlify)
