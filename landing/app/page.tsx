@@ -316,10 +316,73 @@ export default function Home() {
             </Reveal>
           </div>
 
+          {/* The receipt — the claim above, with the arithmetic shown. Folded
+              into this beat rather than given its own section, so the 6-beat
+              pacing holds. */}
+          <Reveal delay={300}>
+            <div
+              className="mt-4 grid items-center gap-5 rounded-2xl p-6 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"
+              style={{ background: "var(--surface)", boxShadow: "var(--shadow)" }}
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <iconify-icon
+                    icon="heroicons:receipt-percent"
+                    width="15"
+                    height="15"
+                    style={{ color: "var(--card-mint-ink)" }}
+                  />
+                  <span
+                    className="text-[0.65rem] font-bold uppercase tracking-[0.2em]"
+                    style={{ color: "var(--card-mint-ink)" }}
+                  >
+                    Show your work
+                  </span>
+                </div>
+                <p className="ds-title mt-3 text-lg leading-snug sm:text-xl">
+                  We never log a footprint. We log a difference.
+                </p>
+                <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
+                  &ldquo;Your trip emits 3,080 kg&rdquo; is true and useless — it isn&apos;t a saving.
+                  Every entry answers a narrower question:{" "}
+                  <span style={{ color: "var(--fg)" }}>
+                    versus the option actually on the table, how much less is this?
+                  </span>
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2.5 text-sm tabular-nums">
+                <div className="flex items-baseline justify-between gap-4">
+                  <span>
+                    Nonstop <span style={{ color: "var(--muted)" }}>YYZ→NRT, 10,300 km</span>
+                  </span>
+                  <span className="font-semibold">3,079.6 kg</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-4">
+                  <span>
+                    Via Chicago <span style={{ color: "var(--muted)" }}>+475 km, +1 landing</span>
+                  </span>
+                  <span className="font-semibold">3,321.7 kg</span>
+                </div>
+                <div style={{ borderTop: "1px dashed var(--card-peach)" }} className="my-1" />
+                <div className="flex items-baseline justify-between gap-4">
+                  <span style={{ color: "var(--muted)" }}>Avoided per person</span>
+                  <span className="font-semibold">242.1 kg</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-4">
+                  <span style={{ color: "var(--muted)" }}>× 4 travellers</span>
+                  <span className="ds-title text-2xl" style={{ color: "var(--card-mint-ink)" }}>
+                    968.4 kg
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+
           <Reveal delay={320}>
             <p className="mt-6 text-xs" style={{ color: "var(--muted)" }}>
               Sources: DEFRA · EPA · JR Central. Baseline is the median of your own shortlist — savings only
-              count when your pick beats it.
+              count when your pick beats it. Every figure computed from the live module.
             </p>
           </Reveal>
         </div>
