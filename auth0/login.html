@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tabi · Auth0 (isolated demo)</title>
+  <!-- Auth0 SPA SDK (UMD) — lets this page run standalone with no build step. -->
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #ede8d0; color: #2a241c;
+           display: grid; place-items: center; min-height: 100vh; margin: 0; }
+    .card { background: #fff; border: 1px solid rgba(42,36,28,.1); border-radius: 20px;
+            box-shadow: 0 10px 28px rgba(42,36,28,.08); padding: 32px; max-width: 380px; text-align: center; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    p { color: #7a7266; font-size: 14px; line-height: 1.5; }
+    button { border: 0; border-radius: 999px; padding: 12px 22px; font-weight: 600; cursor: pointer;
+             background: #2a241c; color: #f5efe0; margin: 6px; }
+    pre { text-align: left; background: #f5f2e8; padding: 12px; border-radius: 12px; font-size: 12px; overflow: auto; }
+    .note { font-size: 12px; color: #7a7266; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Sign in with Auth0</h1>
+    <p>Isolated Auth0 login demo for Tabi — not wired into the bot, landing, or Mini App.</p>
+    <div id="signed-out">
+      <button id="login">Log in</button>
+    </div>
+    <div id="signed-in" hidden>
+      <pre id="profile"></pre>
+      <button id="logout">Log out</button>
+    </div>
+    <p class="note">Set <code>domain</code> + <code>clientId</code> below (from your Auth0 application)
+      and add this page's origin to the app's Allowed Callback / Logout / Web Origins.</p>
+  </div>
+
+  <script>
+    // ── Config — fill in from your Auth0 application ───────────────────────────
+    const CONFIG = {
+      domain: "YOUR_TENANT.us.auth0.com",
+      clientId: "YOUR_AUTH0_CLIENT_ID",
+      authorizationParams: { redirect_uri: window.location.origin + window.location.pathname },
+    };
+
+    let auth0Client;
+
+    async function init() {
+      auth0Client = await auth0.createAuth0Client(CONFIG);
+
+      // Complete the redirect if we came back from Auth0.
+      const q = window.location.search;
+      if (q.includes("code=") && q.includes("state=")) {
+        await auth0Client.handleRedirectCallback();
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      await render();
+    }
+
+    async function render() {
+      const isAuthed = await auth0Client.isAuthenticated();
+      document.getElementById("signed-out").hidden = isAuthed;
+      document.getElementById("signed-in").hidden = !isAuthed;
+      if (isAuthed) {
+        const user = await auth0Client.getUser();
+        document.getElementById("profile").textContent = JSON.stringify(user, null, 2);
+      }
+    }
+
+    document.getElementById("login").onclick = () => auth0Client.loginWithRedirect();
+    document.getElementById("logout").onclick = () =>
+      auth0Client.logout({ logoutParams: { returnTo: window.location.origin + window.location.pathname } });
+
+    init();
+  </script>
+</body>
+</html>

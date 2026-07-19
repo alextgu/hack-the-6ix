@@ -1,0 +1,11 @@
+{
+  "name": "tabi-auth0",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated Auth0 integration scaffold for Tabi. Self-contained — not wired into the bot, landing, or Mini App.",
+  "type": "module",
+  "main": "auth.js",
+  "dependencies": {
+    "@auth0/auth0-spa-js": "^2.1.3"
+  }
+}
