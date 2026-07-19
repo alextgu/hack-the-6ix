@@ -90,27 +90,37 @@ async def _heartbeat(get_bot) -> None:
             if tg_bot is None:
                 continue
             for chat_id in await asyncio.to_thread(db.active_chats, 72):
-                if await asyncio.to_thread(botmod.is_muted, chat_id):
-                    continue  # /stop means the heartbeat can't nudge either
-                last = await asyncio.to_thread(db.last_message_at, chat_id)
-                if last:
-                    quiet_s = (datetime.now(timezone.utc)
-                               - datetime.fromisoformat(last)).total_seconds()
-                    if quiet_s < supervisor.HEARTBEAT_SILENCE_S:
+                # Per-chat isolation. This used to sit inside the pass-wide
+                # try/except, so ONE bad chat killed the whole sweep: a stale
+                # test group the bot had been removed from raised "Chat not
+                # found" and every real chat after it in the list silently
+                # went un-nudged, every tick, forever.
+                try:
+                    if await asyncio.to_thread(botmod.is_muted, chat_id):
+                        continue  # /stop means the heartbeat can't nudge either
+                    last = await asyncio.to_thread(db.last_message_at, chat_id)
+                    if last:
+                        quiet_s = (datetime.now(timezone.utc)
+                                   - datetime.fromisoformat(last)).total_seconds()
+                        if quiet_s < supervisor.HEARTBEAT_SILENCE_S:
+                            continue
+                    # chat_log holds only HUMAN messages, so quiet_s keeps growing
+                    # while the pet talks to itself. Gate on the pet's own last
+                    # send too, with an escalating gap per unanswered nudge —
+                    # otherwise every tick past the silence threshold fires again.
+                    since_pet = time.time() - supervisor._last_sent_at.get(chat_id, 0)
+                    if since_pet < supervisor.nudge_gap_s(chat_id):
                         continue
-                # chat_log holds only HUMAN messages, so quiet_s keeps growing
-                # while the pet talks to itself. Gate on the pet's own last
-                # send too, with an escalating gap per unanswered nudge —
-                # otherwise every tick past the silence threshold fires again.
-                since_pet = time.time() - supervisor._last_sent_at.get(chat_id, 0)
-                if since_pet < supervisor.nudge_gap_s(chat_id):
+                    d = await asyncio.to_thread(supervisor.run_turn, chat_id, "heartbeat")
+                    if d.send:
+                        class _Ctx:  # minimal ContextTypes shim for execute_decision
+                            bot = tg_bot
+                        await botmod.execute_decision(chat_id, d, _Ctx())
+                        supervisor.note_nudge_sent(chat_id)
+                except Exception as e:
+                    log.warning("heartbeat skipped chat=%s: %s: %s",
+                                chat_id, type(e).__name__, e)
                     continue
-                d = await asyncio.to_thread(supervisor.run_turn, chat_id, "heartbeat")
-                if d.send:
-                    class _Ctx:  # minimal ContextTypes shim for execute_decision
-                        bot = tg_bot
-                    await botmod.execute_decision(chat_id, d, _Ctx())
-                    supervisor.note_nudge_sent(chat_id)
         except Exception as e:
             log.warning("heartbeat error: %s", e)
 

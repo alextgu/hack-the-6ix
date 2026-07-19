@@ -528,20 +528,26 @@ async def execute_decision(chat_id: int, d: "supervisor.Decision",
         supervisor.note_itinerary_posted(chat_id)
         await _green_react(ctx, chat_id, msg.message_id)
         return
+    # Below the health threshold the pet stops typing and starts TALKING. A
+    # voice note is a different kind of interruption — you feel obliged to
+    # listen — which is the escalation a dying pet should get.
+    #
+    # This is checked BEFORE show_health on purpose. It used to be the elif of
+    # `if d.show_health:`, which meant the one case most likely to request the
+    # health card (a pet that's dying, guilt-tripping the group) could never
+    # reach the voice branch. The card won every time and the pet never spoke.
+    voicing = bool(d.message) and _should_voice(g)
     if d.show_health:
-        # Tabi's line rides as the photo's caption — one message, not two.
-        await send_pet_card(chat_id, ctx, message=d.message, reply_to=d.reply_to)
-    elif d.message:
-        # Below the health threshold the pet stops typing and starts TALKING.
-        # A voice note is a genuinely different kind of interruption — you feel
-        # obliged to listen to it — which is exactly the escalation a pet that's
-        # actually dying should get. Above the line it stays text so the voice
-        # keeps its weight.
-        if _should_voice(g):
-            await speak_pet(chat_id, d.message, ctx,
-                            mood=g.pet.mood, physical=g.pet.physical)
-        else:
-            await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
+        # When voicing, the card carries only its own mood caption — Tabi's
+        # line goes out as the voice note instead, so it isn't said twice.
+        await send_pet_card(chat_id, ctx,
+                            message=None if voicing else d.message,
+                            reply_to=d.reply_to)
+    if voicing:
+        await speak_pet(chat_id, d.message, ctx,
+                        mood=g.pet.mood, physical=g.pet.physical)
+    elif d.message and not d.show_health:
+        await _say(chat_id, d.message, ctx, reply_to=d.reply_to)
     # Flywheel: after a messenger line goes out, watch the chat for a window and
     # back-fill the ground-truth outcome. Fire-and-forget; no-ops without Mongo.
     if d.harvest_id:
@@ -730,6 +736,35 @@ async def cmd_silence(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
               g.chat_id, ticks, g.pet.mental, g.pet.mood)
     await _send_pet(update, ctx)
     await maybe_speak_deathbed(update.effective_chat.id, ctx)
+
+
+async def cmd_dead(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dev: drop the pet to the edge of death and make it SPEAK.
+
+    /scrub and /silence move one bar each and then rely on the normal send path
+    to decide whether to talk — which is exactly where the voice note used to
+    get lost. This command is deterministic on purpose: set both bars to
+    near-zero, post the card so the sprite matches, then synthesize the plea
+    directly rather than hoping a later turn routes to speech."""
+    chat_id = update.effective_chat.id
+    g = state.get_or_create(chat_id)
+    g.pet.physical = 4
+    g.pet.mental = 6
+    g.pet.refresh_mood()
+    await asyncio.to_thread(state.persist_pet, g)
+    log.info("DEAD chat_id=%s → physical=%d mental=%d mood=%s",
+             chat_id, g.pet.physical, g.pet.mental, g.pet.mood)
+
+    await _send_pet(update, ctx)
+
+    if not elevenlabs.available():
+        await update.effective_chat.send_message(
+            "(voice is off — ELEVENLABS_API_KEY / voice id not set on this deploy)")
+        return
+
+    # Reset the cooldown so /dead always speaks, however recently it last did.
+    _deathbed_last_spoken.pop(chat_id, None)
+    await maybe_speak_deathbed(chat_id, ctx)
 
 
 async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: dict,
@@ -1094,6 +1129,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("health", cmd_health))
     app.add_handler(CommandHandler("scrub", cmd_scrub))
     app.add_handler(CommandHandler("silence", cmd_silence))
+    app.add_handler(CommandHandler("dead", cmd_dead))
     app.add_handler(CommandHandler("commit", cmd_commit))
     app.add_handler(CommandHandler("end", cmd_end))
     app.add_handler(CommandHandler("open", cmd_open))
