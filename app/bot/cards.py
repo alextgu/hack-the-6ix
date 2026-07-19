@@ -55,12 +55,22 @@ def ensure_session(chat_id: int, force: bool = False) -> dict:
                 log.info("session restored from Mongo (chat=%s)", chat_id)
                 return persisted
 
-    # Group size drives the green scoring (how many rooms the party needs), so
-    # take the extracted trip size when the Read layer has one.
+    # Build the deck from the trip data we've extracted (Mongo-backed): group
+    # size drives the green scoring (rooms the party needs), and the group's own
+    # dates drive check-in/out when we have them (else fetch_hotel_cards falls
+    # back to its default window).
     from app.core import state  # late import: state imports db, not cards
-    group_size = int(state.get_or_create(chat_id).trip.group_size or 4)
+    trip = state.get_or_create(chat_id).trip
+    group_size = int(trip.group_size or 4)
+    ci = co = None
+    try:
+        if trip.dates and trip.dates.start and trip.dates.end:
+            ci, co = trip.dates.start.isoformat(), trip.dates.end.isoformat()
+    except Exception:
+        ci = co = None
     deck = hotels.fetch_hotel_cards(max_cards=MAX_CARDS,  # network — outside lock
                                     guests=group_size,
+                                    checkin=ci, checkout=co,
                                     chat_id=chat_id)  # per-group Stay22 attribution
     with _LOCK:
         s = {
