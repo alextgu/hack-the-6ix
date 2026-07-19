@@ -7,8 +7,8 @@ id = "thesix/phoebe-agent"
 
 [train]
 epochs = 1
-max_examples = 3
-lora_rank = 16                    # OPD over-sharpens on small models — prefer a modest rank
+max_examples = 332
+# lora_rank inherited from the warm-start adapter (rank 32)
 # teacher_model = "glm-5.2"       # managed: glm-5.2 (default) | deepseek-v4-pro | kimi-k2.6
 # Vet the teacher on THIS task before distilling (TRAINING.md): OPD can't
 # exceed a teacher that can't diagnose the blocker itself. Warm-start from the

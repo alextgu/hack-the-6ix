@@ -56,6 +56,9 @@ def completer_gemini(prompt: str) -> str:
 
 def completer_flash(run_id: str):
     env = {**os.environ}
+    # .env's FREESOLO_API_KEY overrides the CLI's stored login and belongs to a
+    # different account — strip it so the authed (org thesix) session is used.
+    env.pop("FREESOLO_API_KEY", None)
     cb = subprocess.run([sys.executable, "-c", "import certifi;print(certifi.where())"],
                         capture_output=True, text=True).stdout.strip()
     env.update(SSL_CERT_FILE=cb, REQUESTS_CA_BUNDLE=cb)
