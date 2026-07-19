@@ -302,9 +302,17 @@ async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
                 voice=InputFile(BytesIO(ogg), filename="pet.ogg"),
                 caption=text,
             )
+            log.info("voice note sent (chat=%s, %d bytes, mood=%s)", chat_id, len(ogg), mood)
             return
         except Exception as e:
             log.warning("send_voice failed (chat=%s): %s — falling back to text", chat_id, e)
+    else:
+        # Used to be silent: synthesis returning None (rather than raising) fell
+        # straight through to text with nothing logged, so a broken voice path
+        # looked exactly like a working text path.
+        log.warning("no voice audio for chat=%s (mood=%s, physical=%s) — "
+                    "sending text instead; check ELEVENLABS_API_KEY / voice ids",
+                    chat_id, mood, physical)
     # Fallback: plain text, best-effort.
     try:
         await ctx.bot.send_message(chat_id=chat_id, text=text)
@@ -319,8 +327,18 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
     critical = g.pet.mood == "dying" or g.pet.physical <= _DEATHBED_PHYSICAL
-    last = _deathbed_last_spoken.get(chat_id, 0.0)
-    if not critical or (time.monotonic() - last) < DEATHBED_COOLDOWN_S:
+    # `None` means never spoken — NOT 0.0. time.monotonic() counts from process
+    # start, so on a fresh container it's a small number: with a 0.0 default,
+    # `monotonic() - 0.0` was ~277s after one deploy, which is < the 600s
+    # cooldown, so the plea silently returned for the first 10 MINUTES of every
+    # container's life. Every redeploy re-armed the dead zone, which is why the
+    # voice note never fired no matter how low the health went.
+    last = _deathbed_last_spoken.get(chat_id)
+    if not critical:
+        return
+    if last is not None and (time.monotonic() - last) < DEATHBED_COOLDOWN_S:
+        log.info("deathbed plea suppressed (chat=%s): %.0fs into a %ds cooldown",
+                 chat_id, time.monotonic() - last, DEATHBED_COOLDOWN_S)
         return
     _deathbed_last_spoken[chat_id] = time.monotonic()
     await speak_pet(
