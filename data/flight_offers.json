@@ -1,0 +1,14 @@
+{
+  "note": "Realistic YYZ→Japan economy round-trip offers (hand-curated from public fare data, July 2026). Used when AMADEUS creds are absent or the live call fails — prices are plausible, CO2 is always computed locally from route geometry.",
+  "options": [
+    { "origin": "YYZ", "dest": "NRT", "airline": "Air Canada", "price": 1240, "stops": 0, "via": [], "style": "comfy" },
+    { "origin": "YYZ", "dest": "NRT", "airline": "United", "price": 985, "stops": 1, "via": ["ORD"], "style": "balanced" },
+    { "origin": "YYZ", "dest": "NRT", "airline": "ANA", "price": 1310, "stops": 0, "via": [], "style": "comfy" },
+    { "origin": "YYZ", "dest": "NRT", "airline": "Korean Air", "price": 870, "stops": 1, "via": ["ICN"], "style": "cheapest" },
+    { "origin": "YYZ", "dest": "KIX", "airline": "Air Canada", "price": 1190, "stops": 1, "via": ["YVR"], "style": "balanced" },
+    { "origin": "YYZ", "dest": "KIX", "airline": "Japan Airlines", "price": 1020, "stops": 1, "via": ["NRT"], "style": "balanced" },
+    { "origin": "YYZ", "dest": "KIX", "airline": "EVA Air", "price": 905, "stops": 1, "via": ["TPE"], "style": "cheapest" },
+    { "origin": "YYZ", "dest": "CTS", "airline": "ANA", "price": 1150, "stops": 1, "via": ["HND"], "style": "balanced" },
+    { "origin": "YYZ", "dest": "FUK", "airline": "Japan Airlines", "price": 1090, "stops": 1, "via": ["NRT"], "style": "balanced" }
+  ]
+}

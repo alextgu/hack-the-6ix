@@ -1,27 +1,29 @@
-"""Freesolo environment — the Phoebe agent (diagnose → act → message).
+"""Freesolo environment — the MESSENGER task (train Tabi's persuasive voice).
 
-FIRST PASS / SCAFFOLD. Structure matches `flash env setup` (single-turn:
-EnvironmentSingleTurn + build_prompt_messages + score_response, TaskExample
-with .input/.output, RewardResult(score, threshold)). Shaped to the agent
-task; the *real* reward, data, and sim are TODO seams below.
+Reshaped from the old diagnose task to the messenger task that the LIVE
+supervisor actually runs:
 
-Agent task
-----------
-  input  = an agent scenario: reconciled trip state (city/dates/budget/
-           per_person) + blocker flags + recent chat context.
-  output = {"blocker": {...}, "action": {...}, "message": "..."} as JSON.
+  input  = serialized agent context: trip_state + blocker_flags + recent_chat
+           (produced by training/build_dataset.py::serialize_context, which
+           mirrors what supervisor.messenger sees).
+  output = ONE persuasive line as guided-decoding JSON: {"message": "..."}.
 
-Labels are baked into dataset/train.jsonl at generation time by
-`training/gen_dataset.py`, which imports the REAL production logic
-(phoebe.diagnose / phoebe.decide_action) so training targets match what the
-bot actually does. This env therefore does NOT import phoebe/brain — it only
-grades the model's JSON against the pre-computed gold in `example.output`,
-which keeps the uploaded environment self-contained (`training/` only).
+Reward (score_response) — dense, ground-truth-anchored:
+  + motivation component  — how strong the chosen line's self-score was
+                            (proxy for "consistent with high-scoring
+                             candidates"; TODO: real candidate-similarity)
+  + OUTCOME component     — the VERIFIABLE ground truth: did the group actually
+                            progress after this line was sent? (harvested by
+                            the Mongo flywheel, back-filled by the bot)
+  − length penalty        — kills length-hacking
+eval_metric (commit_rate / progress_rate) is a STRICTER held-out signal and is
+NEVER used as the reward — so reward-hacking can't masquerade as progress.
 
-Upload + reference
-------------------
-  flash env push --name phoebe-agent .      # from this folder; returns an id
-  # paste that id into configs/*.toml → [environment].id
+Rows carry a `meta` field (outcome + motivations) that the reward reads via a
+per-input index; the model's OUTPUT is message-only (guided decoding), so meta
+never leaks into training targets.
+
+Upload: flash env push --name phoebe-agent .   (id already in configs)
 """
 from __future__ import annotations
 
@@ -35,51 +37,37 @@ from freesolo.environments import EnvironmentSingleTurn, RewardResult
 
 DEFAULT_DATASET_PATH = Path(__file__).parent / "dataset" / "train.jsonl"
 
-# ─── Output contract (also the guided-decoding schema) ──────────────────────
-# Keep in sync with phoebe.BlockerKind / phoebe.ActionKind.
-BLOCKER_KINDS = ["person", "timing", "issue", "none"]
-ACTION_KINDS = [
-    "dm_holdout", "propose_cheaper_neighborhood", "hold_rooms_48h",
-    "ask_group", "no_action",
-]
-
-# TODO(subagent): bind this as guided decoding (structured_outputs) in the
-# RL/OPD configs so rollouts can't emit format-broken text and the reward can
-# grade content, not punctuation.
+# Guided-decoding schema: the model may only emit {"message": "..."} so every
+# rollout is valid JSON and the reward grades content, not punctuation.
+# TODO(subagent): bind this as structured_outputs in configs/{rl,opd}.toml.
 OUTPUT_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["blocker", "action", "message"],
-    "properties": {
-        "blocker": {
-            "type": "object",
-            "required": ["kind", "subject", "detail"],
-            "properties": {
-                "kind": {"type": "string", "enum": BLOCKER_KINDS},
-                "subject": {"type": "string", "maxLength": 80},
-                "detail": {"type": "string", "maxLength": 300},
-            },
-        },
-        "action": {
-            "type": "object",
-            "required": ["kind", "target", "parameters"],
-            "properties": {
-                "kind": {"type": "string", "enum": ACTION_KINDS},
-                "target": {"type": "string", "maxLength": 80},
-                "parameters": {"type": "object"},
-            },
-        },
-        "message": {"type": "string", "minLength": 5, "maxLength": 240},
-    },
+    "required": ["message"],
+    "properties": {"message": {"type": "string", "minLength": 3, "maxLength": 300}},
 }
 
 
 def schema_json_string() -> str:
-    """Compact JSON for the TOML `structured_outputs` field (see configs TODO)."""
     return json.dumps(OUTPUT_SCHEMA, separators=(",", ":"))
 
 
-def load_jsonl(path: str | Path):
+def _extract_json(text: str) -> dict | None:
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if not m:
+            return None
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            return None
+
+
+def _load_raw(path: str | Path) -> list[dict]:
     rows = []
     with Path(path).open() as f:
         for line in f:
@@ -89,70 +77,63 @@ def load_jsonl(path: str | Path):
     return rows
 
 
-def _parse_json(response_text: str) -> dict | None:
-    """Guided decoding should yield clean JSON; stay defensive so a non-guided
-    SFT/eval path can't crash the reward."""
-    if not response_text:
-        return None
-    try:
-        return json.loads(response_text)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", response_text, re.DOTALL)
-        if not m:
-            return None
-        try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError:
-            return None
+# Load once. `dataset` is what Flash trains on (input/output only); `_META`
+# indexes the reward ground-truth by input so score_response can reach it
+# without leaking it into the SFT target.
+_RAW = _load_raw(DEFAULT_DATASET_PATH) if DEFAULT_DATASET_PATH.exists() else []
+_META = {r["input"]: (r.get("meta") or {}) for r in _RAW}
 
 
-def _as_dict(output) -> dict:
-    """example.output is a JSON string in the dataset; tolerate a dict too."""
-    if isinstance(output, dict):
-        return output
-    return _parse_json(str(output or "")) or {}
+def _length_penalty(msg: str) -> float:
+    return min(0.2, max(0, len(msg) - 220) / 400.0)
 
 
-class PhoebeEnv(EnvironmentSingleTurn):
-    """Single-turn: read a trip scenario → emit {blocker, action, message}."""
+class MessengerEnv(EnvironmentSingleTurn):
+    """Single-turn: read the serialized context → emit ONE persuasive line."""
 
-    dataset = load_jsonl(DEFAULT_DATASET_PATH)
+    dataset = [{"input": r["input"], "output": r["output"]} for r in _RAW]
 
     def build_prompt_messages(self, example: TaskExample, prompt_text: str):
-        # example.input is the fully-formatted scenario string produced by
-        # gen_dataset._fmt_input — keep the two in parity.
         return [{"role": "user", "content": example.input or prompt_text}]
 
     def score_response(self, example: TaskExample, response_text: str) -> RewardResult:
-        # ── FIRST-PASS REWARD: verifiable core only (blocker + action match) ──
-        gold = _as_dict(example.output)
-        pred = _parse_json(response_text) or {}
+        meta = _META.get(example.input, {})
+        pred = _extract_json(response_text) or {}
+        msg = str(pred.get("message", "")).strip()
 
-        blocker_ok = pred.get("blocker", {}).get("kind") == gold.get("blocker", {}).get("kind")
-        action_ok = pred.get("action", {}).get("kind") == gold.get("action", {}).get("kind")
-        score = 0.5 * float(blocker_ok) + 0.5 * float(action_ok)
+        # Hard validity gate first (TRAINING.md): unparseable/empty → 0.
+        if not msg:
+            return RewardResult(score=0.0, threshold=0.9)
 
-        # TODO(subagent): replace with the full ground-truth reward —
-        #   0.45 * blocker.kind match         (verifiable)
-        # + 0.25 * action.kind match          (verifiable)
-        # + 0.30 * message_rubric(...)        (names blocker subject/target +
-        #                                      Sushi-kun voice heuristic)
-        # - length_penalty(message > 220..240 chars)  (kills length-hacking)
-        # and bind OUTPUT_SCHEMA as guided decoding in the configs so the
-        # reward grades content, not JSON validity. Keep a STRICTER held-out
-        # eval_metric (exact blocker+action pair, no partial credit) that is
-        # NEVER used as the reward, so reward-hacking can't fake progress.
+        # Motivation component (0..1): the chosen line's self-score, 1..5.
+        # TODO(subagent): replace with real similarity to the highest-motivation
+        # candidates in meta["candidate_motivations"].
+        motivation = min(1.0, float(meta.get("chosen_motivation") or 0) / 5.0)
 
-        return RewardResult(
-            score=score,
-            threshold=1.0,
-            blocker_ok=blocker_ok,
-            action_ok=action_ok,
-        )
+        # Ground-truth outcome (verifiable): did the group progress? Unknown
+        # (record not yet back-filled) → neutral 0.5 so it's not punished.
+        progressed = meta.get("progressed")
+        outcome = 0.5 if progressed is None else (1.0 if progressed else 0.0)
+
+        score = 0.4 * motivation + 0.6 * outcome - _length_penalty(msg)
+        score = max(0.0, min(1.0, score))
+        return RewardResult(score=score, threshold=0.9,
+                            progressed=bool(progressed), motivation=motivation)
+
+    # Stricter held-out signal — NEVER the reward. Real commit rate is the
+    # honest measure of whether the trained voice actually moves groups.
+    def eval_metric(self, example: TaskExample, response_text: str) -> dict:
+        meta = _META.get(example.input, {})
+        return {
+            "commit_rate": 1.0 if meta.get("committed") else 0.0,
+            "progress_rate": 1.0 if meta.get("progressed") else 0.0,
+        }
 
 
-def load_environment(dataset_path: str | None = None, **kwargs) -> PhoebeEnv:
-    env = PhoebeEnv()
+def load_environment(dataset_path: str | None = None, **kwargs) -> MessengerEnv:
+    env = MessengerEnv()
     if dataset_path:
-        env.dataset = load_jsonl(dataset_path)
+        raw = _load_raw(dataset_path)
+        env.dataset = [{"input": r["input"], "output": r["output"]} for r in raw]
+        _META.update({r["input"]: (r.get("meta") or {}) for r in raw})
     return env

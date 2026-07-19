@@ -25,6 +25,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
+from app.integrations import green
 from app.integrations import stay22
 
 log = logging.getLogger("trippet.hotels")
@@ -172,9 +173,33 @@ def fetch_hotel_cards(max_cards: int = 5, guests: int = 4,
         source = "sample"
 
     deck = _pick_deck(cards, max_cards)
+    _tag_green_pick(deck, guests)
     log.info("hotel deck ready: %d cards (source=%s)", len(deck), source)
     return {"basecamp": BASECAMP_NAME, "checkin": ci, "checkout": co,
-            "source": source, "cards": deck}
+            "source": source, "group_size": guests, "cards": deck}
+
+
+def _tag_green_pick(deck: list[dict], group_size: int) -> None:
+    """Score every card's total stay footprint for THIS group (green.py:
+    property class × rooms the party needs × nights) and flag the lowest 🌱.
+    The badge is only a nudge — the ledger credit lands later, and only if the
+    group's own winner actually beats the deck average (cards._credit_green_winner)."""
+    if not deck:
+        return
+    prices = sorted(c["price_per_night"] for c in deck)
+    median = prices[len(prices) // 2] if prices else None
+    for c in deck:
+        c["est_kg_night"] = green.hotel_kg_per_night(
+            c.get("type") or "", c.get("name") or "", c.get("stars"),
+            c.get("price_per_night"), median)
+        c["est_stay_kg"] = green.stay_footprint_kg(c, group_size,
+                                                   c.get("nights") or 2, median)
+        c["green_pick"] = False
+    best = min(deck, key=lambda c: c["est_stay_kg"])
+    best["green_pick"] = True
+    log.info("green pick: %s (%.0f kg for %d people) vs deck %s",
+             best["name"][:40], best["est_stay_kg"], group_size,
+             [round(c["est_stay_kg"]) for c in deck])
 
 
 def refresh_cache() -> bool:

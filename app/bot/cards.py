@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.integrations import db
+from app.integrations import green
 from app.integrations import hotels
 
 log = logging.getLogger("trippet.cards")
@@ -54,7 +55,12 @@ def ensure_session(chat_id: int, force: bool = False) -> dict:
                 log.info("session restored from Mongo (chat=%s)", chat_id)
                 return persisted
 
-    deck = hotels.fetch_hotel_cards(max_cards=MAX_CARDS)  # network — outside lock
+    # Group size drives the green scoring (how many rooms the party needs), so
+    # take the extracted trip size when the Read layer has one.
+    from app.core import state  # late import: state imports db, not cards
+    group_size = int(state.get_or_create(chat_id).trip.group_size or 4)
+    deck = hotels.fetch_hotel_cards(max_cards=MAX_CARDS,  # network — outside lock
+                                    guests=group_size)
     with _LOCK:
         s = {
             "chat_id": chat_id,
@@ -174,6 +180,9 @@ def record_swipe(chat_id: int, user_id: str, name: str, hotel_id: str,
                 "meta": meta or {},
             })
             _maybe_resolve_round(s)
+        decided_now = valid and s["status"] == "decided" and not s.get("green_credited")
+        if decided_now:
+            s["green_credited"] = True
         view = _build_view(s, user_id)
         snapshot = copy.deepcopy(s) if valid else None
 
@@ -181,7 +190,36 @@ def record_swipe(chat_id: int, user_id: str, name: str, hotel_id: str,
         db.save_session(snapshot)
         db.log_event(chat_id, user_id, "swipe", hotel_id,
                      {**(meta or {}), "direction": direction, "round": swipe_round})
+    if decided_now:
+        _credit_green_winner(snapshot)
     return view
+
+
+def _credit_green_winner(s: dict) -> None:
+    """Credit the ledger when the group's winning stay beats the deck average
+    footprint — the counterfactual being "any of these five, at random".
+    Outside the lock on purpose: Mongo writes must never stall a swipe."""
+    try:
+        winner = s["hotels"][s["winner"]]
+        deck = list(s["hotels"].values())
+        group_size = max(2, len(s["participants"]))
+        stays = [c.get("est_stay_kg") or green.stay_footprint_kg(
+            c, group_size, c.get("nights") or 2) for c in deck]
+        winner_kg = winner.get("est_stay_kg") or green.stay_footprint_kg(
+            winner, group_size, winner.get("nights") or 2)
+        avg = sum(stays) / max(1, len(stays))
+        if winner_kg >= avg:
+            log.info("green: winner %s is not below deck average (%.0f vs %.0f) — no credit",
+                     winner["name"][:30], winner_kg, avg)
+            return
+        green.record_saving(s["chat_id"], "hotel", avg - winner_kg,
+                            f"picked the low-carbon stay: {winner['name']}",
+                            {"winner_stay_kg": winner_kg,
+                             "deck_avg_stay_kg": round(avg, 1),
+                             "group_size": group_size,
+                             "nights": winner.get("nights")})
+    except Exception as e:
+        log.warning("green winner credit failed: %s", e)
 
 
 def _maybe_resolve_round(s: dict) -> None:

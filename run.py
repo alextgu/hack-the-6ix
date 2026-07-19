@@ -89,6 +89,8 @@ async def _heartbeat(get_bot) -> None:
             if tg_bot is None:
                 continue
             for chat_id in await asyncio.to_thread(db.active_chats, 72):
+                if await asyncio.to_thread(botmod.is_muted, chat_id):
+                    continue  # /stop means the heartbeat can't nudge either
                 last = await asyncio.to_thread(db.last_message_at, chat_id)
                 if last:
                     quiet_s = (datetime.now(timezone.utc)

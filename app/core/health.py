@@ -93,3 +93,4 @@ def commit_trip(g: GroupState) -> None:
     g.pet.physical = 100
     g.pet.mental = 100
     g.pet.mood = "graduated"
+    g.pet.feeling = "happy"

@@ -149,15 +149,43 @@ def _buffer(doc: dict) -> None:
         _pending_events.append(doc)
 
 
+# ─── Green ledger (avoided-emissions events; memory-first in green.py) ──────
+def log_green_event(chat_id: int, kind: str, co2_kg: float, note: str,
+                    meta: Optional[dict] = None) -> None:
+    d = _db()
+    if d is None:
+        return
+    try:
+        d.green_ledger.insert_one({"chat_id": chat_id, "kind": kind,
+                                   "co2_kg": float(co2_kg), "note": note,
+                                   "meta": meta or {}, "ts": _utcnow()})
+    except Exception as e:
+        log.warning("log_green_event failed: %s", e)
+
+
+def green_events(chat_id: int) -> list[dict]:
+    """All persisted savings for a chat (green.py hydrates memory from this)."""
+    d = _db()
+    if d is None:
+        return []
+    try:
+        return list(d.green_ledger.find({"chat_id": chat_id}, {"_id": 0}).sort("ts", 1))
+    except Exception as e:
+        log.warning("green_events failed: %s", e)
+        return []
+
+
 # ─── Pet persistence (pet survives deploys) ─────────────────────────────────
-def save_pet(chat_id: int, physical: int, mental: int, mood: str, sim_week: int) -> None:
+def save_pet(chat_id: int, physical: int, mental: int, mood: str, sim_week: int,
+             feeling: str = "mid") -> None:
     d = _db()
     if d is None:
         return
     try:
         d.pets.replace_one({"chat_id": chat_id}, {
             "chat_id": chat_id, "physical": physical, "mental": mental,
-            "mood": mood, "sim_week": sim_week, "updated_at": _utcnow(),
+            "mood": mood, "sim_week": sim_week, "feeling": feeling,
+            "updated_at": _utcnow(),
         }, upsert=True)
     except Exception as e:
         log.warning("save_pet failed: %s", e)
@@ -199,7 +227,7 @@ def nuke_chat(chat_id: int) -> int:
         return 0
     removed = 0
     for coll in ("chat_log", "user_profiles", "trip_plans", "pets",
-                 "card_sessions", "analytics"):
+                 "card_sessions", "analytics", "green_ledger"):
         try:
             removed += d[coll].delete_many({"chat_id": chat_id}).deleted_count
         except Exception as e:
@@ -317,6 +345,69 @@ def update_plan(chat_id: int, updates: dict) -> None:
                                 upsert=True)
     except Exception as e:
         log.warning("update_plan failed: %s", e)
+
+
+# ─── Messenger harvest (the training flywheel) ──────────────────────────────
+# Every time the live supervisor's messenger picks a line to send, we log the
+# full decision (context + all 4 candidates + scores + chosen) with outcome=None,
+# then back-fill outcome after a window (did the group progress?). These records
+# are the ground-truth training data for the Freesolo messenger model.
+# NEVER raises and no-ops cleanly without Mongo (returns None / does nothing).
+def log_messenger_record(chat_id: int, context: dict, candidates: list[dict],
+                         chosen: dict) -> Optional[str]:
+    """Log one messenger decision; returns the record id (str) or None."""
+    d = _db()
+    if d is None:
+        return None
+    try:
+        res = d.messenger_records.insert_one({
+            "chat_id": chat_id,
+            "context": context,          # {trip_state, blocker_flags, recent_chat}
+            "candidates": candidates,    # [{text, motivation_score, kind}]
+            "chosen": chosen,            # {text, motivation_score, kind}
+            "sent_at": _utcnow(),
+            "outcome": None,             # back-filled by backfill_messenger_outcome
+        })
+        return str(res.inserted_id)
+    except Exception as e:
+        log.warning("log_messenger_record failed: %s", e)
+        return None
+
+
+def backfill_messenger_outcome(record_id: str, outcome: dict) -> None:
+    """Attach the ground-truth outcome (did the group progress?) to a record."""
+    d = _db()
+    if d is None or not record_id:
+        return
+    try:
+        from bson import ObjectId
+        d.messenger_records.update_one(
+            {"_id": ObjectId(record_id)},
+            {"$set": {"outcome": outcome, "outcome_at": _utcnow()}},
+        )
+    except Exception as e:
+        log.warning("backfill_messenger_outcome failed: %s", e)
+
+
+def messenger_records(chat_id: Optional[int] = None,
+                      with_outcome: bool = False) -> list[dict]:
+    """Pull harvested messenger records (for training/build_dataset.py)."""
+    d = _db()
+    if d is None:
+        return []
+    try:
+        q: dict = {}
+        if chat_id is not None:
+            q["chat_id"] = chat_id
+        if with_outcome:
+            q["outcome"] = {"$ne": None}
+        rows = list(d.messenger_records.find(q).sort("sent_at", 1))
+        for r in rows:
+            r["_id"] = str(r["_id"])
+        return rows
+    except Exception as e:
+        log.warning("messenger_records failed: %s", e)
+        return []
 
 
 def analytics_summary(chat_id: int) -> dict:

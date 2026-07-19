@@ -10,12 +10,14 @@ TODO seams:
     Currently read-only, so unauth'd polling is fine.
 """
 from __future__ import annotations
+import os
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -24,6 +26,7 @@ from app.core import health
 from app.bot import cards
 from app.integrations import db
 from app.integrations import elevenlabs
+from app.render import pet, tami
 
 
 ROOT = Path(__file__).resolve().parents[2]   # app/api/api.py -> repo root
@@ -79,6 +82,78 @@ async def root() -> FileResponse:
 @app.get("/api/health")
 async def api_ping() -> dict:
     return {"ok": True, "service": "trippet-face"}
+
+
+# ─── Dev-only art preview — see the tami renders without launching the bot ──
+# No Telegram token needed: `uvicorn app.api.api:app --reload` then open
+# /api/preview in a browser. Synthetic, throwaway GroupState — never touches
+# real chat data.
+def _preview_state(physical: int, mental: int, feeling: str) -> state.GroupState:
+    g = state.GroupState(chat_id=0)
+    g.pet = state.PetState(physical=physical, mental=mental)
+    g.pet.set_feeling(feeling)
+    g.pet.refresh_mood()
+    return g
+
+
+@app.get("/api/preview/pet.png")
+def preview_pet_png(physical: int = 100, mental: int = 100, feeling: str = "mid") -> Response:
+    """The exact PNG posted to chat (sprite + bars + caption) for a given state."""
+    g = _preview_state(physical, mental, feeling)
+    return Response(content=pet.render_pet_png(g), media_type="image/png")
+
+
+@app.get("/api/pet/sprite.png")
+def pet_sprite_png(physical: int = 100, mental: int = 100, feeling: str = "mid") -> Response:
+    """The raw tami sprite alone — the SAME image used for the Telegram chat
+    card, the bot's profile photo, and the webapp pet-card. Pure function of
+    (physical, mental, feeling); no group_id needed, so the webapp just reads
+    the 3 numbers off its own /api/state poll and points an <img> here."""
+    img = tami.load_sushi_image(physical, mental, feeling)
+    if img is None:
+        raise HTTPException(status_code=404,
+                           detail=f"missing asset: {tami.sushi_filename(physical, mental, feeling)}")
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
+
+
+@app.get("/api/preview")
+def preview_gallery() -> HTMLResponse:
+    """All 18 size × mold × feeling combos at a glance, each linking to the
+    full chat-card render and flagging any asset file that's still missing."""
+    reps = {"full": 90, "half": 55, "small": 10}
+    mold_reps = {"clean": 90, "moldy": 10}
+    cells = []
+    for size, physical in reps.items():
+        for mold, mental in mold_reps.items():
+            for feeling in tami.FEELINGS:
+                fname = tami.sushi_filename(physical, mental, feeling)
+                exists = os.path.exists(tami.sushi_path(physical, mental, feeling))
+                cells.append(f'''
+                  <a class="cell" href="/api/preview/pet.png?physical={physical}&mental={mental}&feeling={feeling}"
+                     target="_blank">
+                    <img src="/api/pet/sprite.png?physical={physical}&mental={mental}&feeling={feeling}"
+                         onerror="this.closest('.cell').classList.add('missing')" />
+                    <div class="label">{size} · {mold} · {feeling}</div>
+                    <div class="file">{fname}{'' if exists else ' — MISSING'}</div>
+                  </a>''')
+    html = f'''<!doctype html><html><head><meta charset="utf-8">
+    <title>tami preview</title>
+    <style>
+      body {{ background:#121116; color:#eef1f6; font-family:-apple-system,sans-serif; padding:24px; }}
+      .grid {{ display:grid; grid-template-columns:repeat(6,1fr); gap:14px; }}
+      .cell {{ background:#1c1b22; border-radius:10px; padding:10px; text-align:center;
+               text-decoration:none; color:inherit; display:block; }}
+      .cell img {{ width:100%; aspect-ratio:1; object-fit:contain; background:#0c0b10; border-radius:8px; }}
+      .cell.missing {{ outline:2px solid #e05252; }}
+      .label {{ font-size:12px; margin-top:6px; color:#8a92a5; }}
+      .file {{ font-size:10px; color:#5c6273; margin-top:2px; word-break:break-all; }}
+    </style></head><body>
+    <h2>tami — 18 states (click a tile for the full chat-card render)</h2>
+    <div class="grid">{''.join(cells)}</div>
+    </body></html>'''
+    return HTMLResponse(html)
 
 
 # ─── Hotel cards (Tinder-style basecamp decision) ────────────────────────────
@@ -186,6 +261,7 @@ async def api_state(group_id: str) -> JSONResponse:
             "physical": g.pet.physical,
             "mental":   g.pet.mental,
             "mood":     g.pet.mood,
+            "feeling":  g.pet.feeling,
         },
         "trip": {
             "city":              g.trip.city,
