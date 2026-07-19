@@ -290,7 +290,7 @@ export default function SushiDemo() {
                 : { fontSize: 13, padding: "11px 16px" }
             }
           >
-            {booked ? "Booked, Sushi-kun is free" : "Book it → revive Sushi-kun"}
+            {booked ? "Booked, Tabi is free" : "Book it → revive Tabi"}
           </button>
         </div>
       </div>

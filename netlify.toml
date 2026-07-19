@@ -1,5 +1,5 @@
 # Hosts the public Next.js showcase (landing/) on Netlify as a static export.
-# The landing page prerenders fully static (interactive Sushi-kun demo runs
+# The landing page prerenders fully static (interactive Tabi demo runs
 # client-side; no API routes/server actions), so `next build` with
 # output:"export" emits landing/out/ — plain static, no Next runtime needed.
 [build]

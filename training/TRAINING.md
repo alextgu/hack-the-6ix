@@ -22,7 +22,7 @@ TODO SEAMS for the next subagent (each marked TODO(subagent) in code):
      guided-decoding structured_outputs in the configs. Keep a stricter held-out
      eval_metric that is NEVER the reward.
   3. GRPO self-play sim: an EnvironmentMultiTurn where friend-group personas
-     respond to Sushi-kun and reward = did the sim group COMMIT (ground truth).
+     respond to Tabi and reward = did the sim group COMMIT (ground truth).
   4. Mongo flywheel: real stored agent interactions (app/integrations/db.py) →
      harvested into training/eval scenarios (close the data loop).
 

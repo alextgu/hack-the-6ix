@@ -1,5 +1,5 @@
 /**
- * Sushi-kun demo model — a faithful TypeScript port of the Python backend's
+ * Tabi demo model — a faithful TypeScript port of the Python backend's
  * canonical logic (the repo had no landing.html, so this is ported from source):
  *   - health.py  → _MARKET_SERIES, apply_market_delta, scrub_to_week, mental decay
  *   - state.py   → derive_mood thresholds
@@ -123,7 +123,7 @@ export function committedState(): PetSnapshot {
   };
 }
 
-// pet.py::_caption — Sushi-kun's dialogue for the current state.
+// pet.py::_caption — Tabi's dialogue for the current state.
 export function caption(physical: number, mental: number, mood: Mood): string {
   if (mood === "graduated") return "TRIP BOOKED. i'm free.";
   const lines: string[] = [];
