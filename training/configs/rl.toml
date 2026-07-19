@@ -7,12 +7,17 @@ id = "thesix/phoebe-agent"
 
 [train]
 epochs = 1
-max_examples = 3
+max_examples = 332
 # Warm-start GRPO from the SFT adapter (recommended): set init_from_adapter to
 # the SFT run id and do NOT set lora_rank/alpha (the source adapter's win).
 # init_from_adapter = "<sft-run-id>"
 lora_rank = 32
 lora_alpha = 64
+group_size = 8                    # within-group variance = the GRPO gradient
+temperature = 0.9                 # entropy vs collapse
+max_completion_tokens = 320       # headroom kills truncation-poisoned rewards
+kl_penalty_coef = 0.05            # β leash vs drift/entropy collapse
+structured_outputs = '{"type":"object","additionalProperties":false,"required":["message"],"properties":{"message":{"type":"string","minLength":3,"maxLength":300}}}'  # guided decoding: reward grades content, not JSON
 
 # TODO(subagent): bind guided decoding so every rollout emits valid JSON and
 # the reward grades content, not punctuation. environment.schema_json_string()

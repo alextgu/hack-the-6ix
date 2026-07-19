@@ -21,7 +21,7 @@ from typing import Iterator
 
 # Import from the repo root — training/ is a subpackage.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import phoebe  # noqa: E402  — labels MUST come from production logic
+from app.agents import phoebe  # noqa: E402  — labels MUST come from production logic
 
 
 JAPAN_CITIES = ["Tokyo", "Kyoto", "Osaka", "Nara", "Sapporo", "Fukuoka", "Hakone", "Kanazawa"]

@@ -97,37 +97,67 @@ class MessengerEnv(EnvironmentSingleTurn):
         return [{"role": "user", "content": example.input or prompt_text}]
 
     def score_response(self, example: TaskExample, response_text: str) -> RewardResult:
-        meta = _META.get(example.input, {})
-        pred = _extract_json(response_text) or {}
-        msg = str(pred.get("message", "")).strip()
+        """Dense, verifiable, tiered reward (per the post-training playbook):
+        parse gate → addresses-the-blocker rubric → voice → outcome, with a
+        length penalty so length-hacking never pays. Never raises."""
+        try:
+            meta = _META.get(example.input, {})
+            pred = _extract_json(str(response_text)) or {}
+            msg = str(pred.get("message", "")).strip()
 
-        # Hard validity gate first (TRAINING.md): unparseable/empty → 0.
-        if not msg:
-            return RewardResult(score=0.0, threshold=0.9)
+            # Tier 0 — hard validity gate: unparseable/empty → 0 (no judge to hack).
+            if not msg:
+                return RewardResult(score=0.0, threshold=0.75)
 
-        # Motivation component (0..1): the chosen line's self-score, 1..5.
-        # TODO(subagent): replace with real similarity to the highest-motivation
-        # candidates in meta["candidate_motivations"].
-        motivation = min(1.0, float(meta.get("chosen_motivation") or 0) / 5.0)
+            score = 0.25  # parses + non-empty (dense floor so GRPO has gradient)
 
-        # Ground-truth outcome (verifiable): did the group progress? Unknown
-        # (record not yet back-filled) → neutral 0.5 so it's not punished.
-        progressed = meta.get("progressed")
-        outcome = 0.5 if progressed is None else (1.0 if progressed else 0.0)
+            # Tier 1 (0.35) — VERIFIABLE: does the line address the actual
+            # blocker? Checked against ground-truth labels baked at gen time.
+            msg_lo = msg.lower()
+            mentions = 0.0
+            for key in ("subject", "target"):
+                v = meta.get(key)
+                if v and str(v).lower() not in ("none", "group") and str(v).lower() in msg_lo:
+                    mentions = 1.0
+            bk = meta.get("blocker_kind")
+            topic_words = {
+                "issue": ("city", "budget", "hold", "pick", "vote"),
+                "timing": ("date", "day", "window", "overlap", "calendar", "when"),
+                "person": ("budget", "$", "date", "quiet", "waiting"),
+                "none": ("track", "nap", "hotel", "keep", "thriving", "well"),
+            }.get(bk, ())
+            topical = any(w in msg_lo for w in topic_words) if topic_words else 0.0
+            score += 0.35 * max(mentions, 0.6 * float(bool(topical)))
 
-        score = 0.4 * motivation + 0.6 * outcome - _length_penalty(msg)
-        score = max(0.0, min(1.0, score))
-        return RewardResult(score=score, threshold=0.9,
-                            progressed=bool(progressed), motivation=motivation)
+            # Tier 2 (0.20) — voice: lowercase, ≤3 lines, no LLM-tells.
+            voice = 0.0
+            if msg[:1].islower() or msg[:1] in "@[":
+                voice += 0.5
+            if msg.count("\n") <= 2:
+                voice += 0.25
+            if not re.search(r"(as an ai|i am a language model|certainly|here is)", msg_lo):
+                voice += 0.25
+            score += 0.20 * voice
 
-    # Stricter held-out signal — NEVER the reward. Real commit rate is the
-    # honest measure of whether the trained voice actually moves groups.
+            # Tier 3 (0.20) — ground-truth outcome when the flywheel has it.
+            progressed = meta.get("progressed")
+            score += 0.20 * (0.5 if progressed is None else float(bool(progressed)))
+
+            score -= _length_penalty(msg)
+            score = max(0.0, min(1.0, score))
+            return RewardResult(score=score, threshold=0.75)
+        except Exception:
+            return RewardResult(score=0.0, threshold=0.75)
+
+    # Stricter held-out signal — NEVER the reward: gold-line token-F1 +
+    # validity. Judges the run; the reward above trains it.
     def eval_metric(self, example: TaskExample, response_text: str) -> dict:
-        meta = _META.get(example.input, {})
-        return {
-            "commit_rate": 1.0 if meta.get("committed") else 0.0,
-            "progress_rate": 1.0 if meta.get("progressed") else 0.0,
-        }
+        pred = _extract_json(str(response_text)) or {}
+        msg = str(pred.get("message", "")).strip()
+        gold = str((_extract_json(str(example.output)) or {}).get("message", ""))
+        pt, gt = set(msg.lower().split()), set(gold.lower().split())
+        f1 = (2 * len(pt & gt) / (len(pt) + len(gt))) if pt and gt else 0.0
+        return {"schema_valid": 1.0 if msg else 0.0, "gold_token_f1": round(f1, 4)}
 
 
 def load_environment(dataset_path: str | None = None, **kwargs) -> MessengerEnv:
