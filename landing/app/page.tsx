@@ -263,6 +263,15 @@ export default function Home() {
           <Reveal delay={120}>
             <PipelineSlideshow cards={PIPELINE_CARDS} />
           </Reveal>
+          <Reveal delay={200}>
+            <p
+              className="mx-auto mt-8 max-w-xl text-center text-sm leading-relaxed"
+              style={{ color: "var(--muted)" }}
+            >
+              ↻ She runs this loop — propose, vote, unblock — over and over until the
+              whole group commits.
+            </p>
+          </Reveal>
         </div>
       </section>
 
@@ -305,7 +314,131 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 8. Footer / CTA ──────────────────────────────────────────────── */}
+      {/* ─── 8. Green by default — the carbon engine ──────────────────────── */}
+      <section className="snap-panel px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <Reveal>
+            <p className="kicker mb-6">Green by default</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2 className="ds-title max-w-3xl text-3xl leading-[1.1] sm:text-4xl lg:text-5xl">
+              Every booking is carbon-scored the moment it&apos;s on the table.
+            </h2>
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="mt-5 max-w-2xl text-base leading-relaxed sm:text-lg" style={{ color: "var(--muted)" }}>
+              Flights, trains, hotels, even the airport transfer — priced in CO₂e from
+              published government factors, computed locally. No API in the loop, so the
+              numbers are <span style={{ color: "var(--fg)" }}>impossible to inflate</span>.
+            </p>
+          </Reveal>
+
+          <div className="mt-10 grid items-stretch gap-4 lg:grid-cols-[1.3fr_minmax(0,1fr)]">
+            {/* the four scored domains */}
+            <Reveal delay={200}>
+              <div className="grid h-full grid-cols-2 gap-3">
+                {[
+                  { e: "✈️", t: "Flights", s: "DEFRA, incl. radiative forcing" },
+                  { e: "🚄", t: "Trains", s: "JR Central — Shinkansen ~17 g/km" },
+                  { e: "🏨", t: "Hotels", s: "CHSB, by class & rooms needed" },
+                  { e: "🚕", t: "Transfers", s: "airport → hotel last mile" },
+                ].map((d) => (
+                  <div key={d.t} className="ds-health-card card-lift">
+                    <div className="text-2xl" aria-hidden>{d.e}</div>
+                    <h3 className="ds-title mt-2 text-base">{d.t}</h3>
+                    <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--muted)" }}>{d.s}</p>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+
+            {/* the shared ledger — a live-feeling stat */}
+            <Reveal delay={260}>
+              <div
+                className="flex h-full flex-col justify-center rounded-2xl p-7 text-center"
+                style={{ background: "var(--card-peach)", boxShadow: "var(--shadow)" }}
+              >
+                <div className="text-xs uppercase tracking-[0.24em]" style={{ color: "var(--muted)" }}>
+                  the group&apos;s shared ledger
+                </div>
+                <div className="ds-title mt-3 text-5xl leading-none" style={{ color: "var(--card-coral-ink)" }}>
+                  142
+                </div>
+                <div className="mt-2 text-sm" style={{ color: "var(--fg)" }}>
+                  🚗 miles not driven <span style={{ color: "var(--muted)" }}>· ≈ 56 kg CO₂e avoided</span>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+
+          <Reveal delay={320}>
+            <p className="mt-6 text-xs" style={{ color: "var(--muted)" }}>
+              Baseline is the median of your own shortlist — savings only count when your pick
+              beats it. Sources: DEFRA 2024 · EPA · CHSB 2023 · JR Central.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 9. The trip coin — Spotify-Wrapped memory card ───────────────── */}
+      <section className="snap-panel px-6 py-20">
+        <div className="mx-auto grid max-w-5xl items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <Reveal>
+              <p className="kicker mb-6">Your souvenir</p>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2 className="ds-title text-3xl leading-[1.1] sm:text-4xl lg:text-5xl">
+                Book it, and Tabi mints your trip&apos;s Spotify Wrapped.
+              </h2>
+            </Reveal>
+            <Reveal delay={140}>
+              <p className="mt-5 max-w-md text-base leading-relaxed sm:text-lg" style={{ color: "var(--muted)" }}>
+                A custom coin, minted to the group on Solana — a permanent memory card of
+                everything it took to finally go. Immutable. Yours.
+              </p>
+            </Reveal>
+          </div>
+
+          {/* the wrapped card */}
+          <Reveal delay={180}>
+            <div
+              className="mx-auto w-full max-w-sm rounded-3xl p-7 text-left"
+              style={{
+                background: "linear-gradient(160deg, #2a241c 0%, #3a2f26 100%)",
+                boxShadow: "0 24px 60px rgba(42,36,28,0.35)",
+                color: "#f5efe0",
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.24em]" style={{ opacity: 0.6 }}>
+                  Japan Trip Coin
+                </span>
+                <span className="text-xs" style={{ opacity: 0.6 }}>◎ Solana</span>
+              </div>
+              <div className="font-display mt-3 text-2xl">Kyoto · Aug 1–5</div>
+              <div className="mt-6 flex flex-col gap-3 text-sm">
+                {[
+                  ["📍", "Destination", "Kyoto"],
+                  ["🔁", "Iterations to book", "12"],
+                  ["⏱️", "Time to book", "3 days"],
+                  ["🌱", "CO₂e avoided", "56 kg"],
+                ].map(([e, k, v]) => (
+                  <div key={k} className="flex items-center justify-between" style={{ borderTop: "1px solid rgba(245,239,224,0.12)", paddingTop: 10 }}>
+                    <span style={{ opacity: 0.8 }}>{e} {k}</span>
+                    <span className="tabular-nums" style={{ fontWeight: 700 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 text-[0.7rem]" style={{ opacity: 0.5 }}>
+                minted on devnet · immutable · one per group
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 10. Footer / CTA ─────────────────────────────────────────────── */}
       <section className="snap-panel relative overflow-hidden px-6">
         <Petals />
         <div className="relative mx-auto max-w-3xl text-center">

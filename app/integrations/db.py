@@ -468,6 +468,19 @@ def messenger_records(chat_id: Optional[int] = None,
         return []
 
 
+def decision_count(chat_id: int) -> int:
+    """How many decisions the agents logged for this chat — the coin's
+    'iterations' it took to get the group to book. 0 on any error / no Mongo."""
+    d = _db()
+    if d is None:
+        return 0
+    try:
+        return int(d.messenger_records.count_documents({"chat_id": chat_id}))
+    except Exception as e:
+        log.warning("decision_count failed: %s", e)
+        return 0
+
+
 def analytics_summary(chat_id: int) -> dict:
     """Cheap rollup for the results endpoint / judges demo."""
     d = _db()

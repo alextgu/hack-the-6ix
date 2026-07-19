@@ -365,6 +365,12 @@ async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
             slacker = await asyncio.to_thread(db.least_active_member, chat_id) or ""
         except Exception:
             slacker = ""
+        # Iterations: how many decisions the agents logged before the group booked.
+        try:
+            n = await asyncio.to_thread(db.decision_count, chat_id)
+            iterations = str(n) if n > 0 else ""
+        except Exception:
+            iterations = ""
         # Green certificate: the CO2e this trip avoided (real ledger, DEFRA/EPA
         # factors) inscribed on the souvenir. Fail-open — 0/none just omits it.
         co2e = ""
@@ -378,7 +384,7 @@ async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
             solana_coin.mint_trip_coin,
             {"name": name, "booking_url": booking_url or "",
              "location": location, "time_spent": time_spent, "slacker": slacker,
-             "co2e_saved": co2e},
+             "iterations": iterations, "co2e_saved": co2e},
             chat_id)
         if not result:
             return  # skipped/failed silently — booking already complete
@@ -389,6 +395,8 @@ async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
             extras.append(f"📍 {result['location']}")
         if result.get("time_spent"):
             extras.append(f"⏱️ booked in {result['time_spent']}")
+        if result.get("iterations"):
+            extras.append(f"🔁 {result['iterations']} iterations")
         if result.get("slacker"):
             extras.append(f"🛌 did the least: {result['slacker']}")
         if result.get("co2e_saved"):

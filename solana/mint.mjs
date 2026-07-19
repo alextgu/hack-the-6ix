@@ -50,6 +50,7 @@ async function main() {
   // omitting any that weren't supplied.
   const attributes = [
     ["Destination", process.env.COIN_LOCATION],
+    ["Iterations to book", process.env.COIN_ITERATIONS],
     ["Time to book", process.env.COIN_TIME_SPENT],
     ["Did the least work", process.env.COIN_SLACKER],
     ["CO2e avoided", process.env.COIN_CO2E],
