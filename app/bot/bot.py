@@ -504,6 +504,75 @@ async def cmd_scrub(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await maybe_speak_deathbed(update.effective_chat.id, ctx)
 
 
+async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: dict,
+                    guests: int, nights: int) -> None:
+    """The convergence finale. The booking link + summary posts FIRST and
+    ALWAYS; green stats, the graduation voice, the itinerary, and the trip coin
+    are additive and each swallow their own errors — none can stop the booking
+    link from posting. Reusable from /commit or a future convergence trigger."""
+    g = state.get_or_create(chat_id)
+    health.commit_trip(g)
+    log.info("graduate chat=%s → booked %s @ $%.0f",
+             chat_id, opts.get("name"), opts.get("price_total") or 0)
+
+    # Green booking stats — CALL the existing green module (never rebuilt).
+    # Bounded + guarded so it can never delay or block the booking link.
+    green_line = ""
+    try:
+        t = await asyncio.wait_for(asyncio.to_thread(green.totals, chat_id), timeout=4)
+        kg = t.get("total_kg") or 0
+        if kg > 0:
+            eq = green.fun_equivalents(kg)
+            green_line = f"\n🌱 {kg:g} kg CO2e avoided" + (f" — like {eq[0]}" if eq else "") + " · /saved"
+    except Exception as e:
+        log.warning("graduation green stats skipped (chat=%s): %s", chat_id, e)
+
+    # ── CORE: trip summary + the real Allez button. Posts first and always. ──
+    rating = f" · {opts['rating']:.1f}/10" if opts.get("rating") else ""
+    over = "\n(over budget — cheapest that fit)" if opts.get("fallback") else ""
+    budget = f" · 💰 ${trip.budget_per_person}/person" if trip.budget_per_person else ""
+    summary = (
+        "🎉 we did it — Japan is BOOKED!\n\n"
+        f"📍 {trip.city}\n"
+        f"🗓️ {_fmt_date_range(trip.dates.start, trip.dates.end)}\n"
+        f"👥 {guests} travelers{budget}\n"
+        f"🏨 {opts['name']}{rating} — ${opts['price_total']:.0f} total, {nights} night(s){over}"
+        f"{green_line}"
+    )
+    buttons: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton("🎉 Book your trip →", url=opts["book_url"])]
+    ]
+    for alt in (opts.get("alternates") or [])[:2]:
+        buttons.append([InlineKeyboardButton(
+            f"or: {alt['name']} — ${alt['price_total']:.0f}", url=alt["book_url"])])
+    await ctx.bot.send_message(chat_id=chat_id, text=summary,
+                               reply_markup=InlineKeyboardMarkup(buttons))
+
+    # ── Additive finale — each self-guarded; a failure never affects the rest ──
+    try:
+        await send_pet_card(chat_id, ctx)
+    except Exception as e:
+        log.warning("graduation pet card skipped (chat=%s): %s", chat_id, e)
+
+    if chat_id not in _spoke_graduated:          # bright graduation voice, once
+        _spoke_graduated.add(chat_id)
+        try:
+            await speak_pet(chat_id, "we did it — we're actually going to Japan!",
+                            ctx, mood="graduated", physical=g.pet.physical)
+        except Exception as e:
+            log.warning("graduation voice skipped (chat=%s): %s", chat_id, e)
+
+    try:                                          # itinerary — existing greenplanner (optional)
+        itin = await asyncio.to_thread(greenplanner.build_itinerary, chat_id)
+        if itin:
+            await ctx.bot.send_message(chat_id=chat_id, text=itin)
+    except Exception as e:
+        log.warning("graduation itinerary skipped (chat=%s): %s", chat_id, e)
+
+    # Japan Trip Coin — fire-and-forget capstone (already fully fail-safe).
+    asyncio.create_task(_mint_and_post_coin(chat_id, trip, opts.get("book_url"), ctx))
+
+
 async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Graduation path: query Stay22, pick a hotel, post the Allez book link.
     Falls back gracefully if the trip isn't locked or nothing fits the budget."""
@@ -536,40 +605,9 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # graduate (existing pet logic)
-    health.commit_trip(g)
-    log.info("commit chat_id=%s → graduated (booked: %s @ $%.0f)",
-             g.chat_id, opts["name"], opts["price_total"])
-
-    rating_str = f" · {opts['rating']:.1f}/10" if opts.get("rating") else ""
-    fallback_note = "\n(over budget — cheapest we could find)" if opts.get("fallback") else ""
-    caption = (
-        f"🎉 booked. graduating the pet.\n"
-        f"{opts['name']}{rating_str}\n"
-        f"${opts['price_total']:.0f} total · {guests} guests · {nights} night(s) in {trip.city}"
-        f"{fallback_note}"
-    )
-    buttons: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="🎉 Book your trip →", url=opts["book_url"])]
-    ]
-    for alt in (opts.get("alternates") or [])[:2]:
-        buttons.append([InlineKeyboardButton(
-            text=f"or: {alt['name']} — ${alt['price_total']:.0f}",
-            url=alt["book_url"],
-        )])
-    await update.effective_chat.send_message(
-        caption, reply_markup=InlineKeyboardMarkup(buttons)
-    )
-    await _send_pet(update, ctx)
-    # Graduation moment — the pet speaks its send-off (once per chat).
-    if g.chat_id not in _spoke_graduated:
-        _spoke_graduated.add(g.chat_id)
-        await speak_pet(g.chat_id,
-                        "we did it — i'm free! pack your bags, we're going to japan.",
-                        ctx, mood="graduated", physical=g.pet.physical)
-    # Souvenir: mint the devnet Japan Trip Coin. Fire-and-forget + fully guarded
-    # (see _mint_and_post_coin) — never blocks or breaks the booking above.
-    asyncio.create_task(_mint_and_post_coin(g.chat_id, trip, opts.get("book_url"), ctx))
+    # The convergence finale — booking link first + always, everything else
+    # additive and fail-safe (see _graduate).
+    await _graduate(g.chat_id, ctx, trip, opts, guests, nights)
 
 
 async def cmd_saved(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
