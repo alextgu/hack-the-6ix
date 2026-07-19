@@ -7,7 +7,7 @@ run.py                     entry point — python run.py (bot polling + api in o
 app/
   bot/        bot.py  wire.py  cards.py            Telegram + orchestration + deck engine
   core/       state.py  health.py                  in-memory state + two-bar mechanics
-  agents/     brain.py  phoebe.py  gemini.py        LLM seams (Read = Gemini, Agent = Freesolo)
+  agents/     brain.py  supervisor.py  phoebe.py       Read (Gemini), live agent (supervisor), training labels (phoebe)
               supervisor.py  greenplanner.py        LangGraph pet + green itinerary sub-agent
   integrations/ stay22.py  booking.py  hotels.py  db.py   external APIs (Stay22, MongoDB)
               flights.py  green.py                 Amadeus flights + carbon/savings engine
@@ -51,7 +51,6 @@ repo root so `app` is importable: `python run.py`, or standalone entry points vi
 | Module                | What it is |
 | --------------------- | ---------- |
 | `app/agents/phoebe.py`  | **Agent seam — Freesolo later.** `agent_call` uses `FREESOLO_AGENT_BASE_URL`, falls back to Gemini for now. `diagnose(state)` → one `Blocker`; `decide_action(blocker, state)` → `Action`; `compose_message(action, state)` → outreach text. Standalone via `python -m app.agents.phoebe`. |
-| `app/agents/gemini.py`  | **Multimodal per-message pipeline** (PROJECT.md §6) — distinct from `brain.py`: reads messages ONE at a time (text + photo/OCR), timestamps + classifies each as a blocker signal so Phoebe sees *who* said *what*, *when*. `call_model` is the single swappable LLM call. Standalone via `python -m app.agents.gemini`. Not yet imported by the bot. |
 
 **Reference / dev-only** (not imported at runtime):
 
