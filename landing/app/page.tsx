@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import SushiDemo from "@/components/SushiDemo";
 import Reveal from "@/components/Reveal";
 import Petals from "@/components/Petals";
@@ -183,28 +182,6 @@ function CTAButton({ large = false }: { large?: boolean }) {
   );
 }
 
-function SectionTitle({
-  children,
-  eyebrow,
-}: {
-  children: ReactNode;
-  eyebrow?: string;
-}) {
-  return (
-    <div className="mb-10 text-center">
-      {eyebrow ? (
-        <p
-          className="mb-3 text-xs uppercase tracking-[0.28em]"
-          style={{ color: "var(--muted)" }}
-        >
-          {eyebrow}
-        </p>
-      ) : null}
-      <h2 className="ds-title text-3xl sm:text-4xl">{children}</h2>
-    </div>
-  );
-}
-
 function CardGrid({
   items,
   cols = "sm:grid-cols-2",
@@ -356,13 +333,13 @@ function PipelineCards() {
 
 export default function Home() {
   return (
-    <main className="min-h-screen" style={{ color: "var(--fg)" }}>
+    <main style={{ color: "var(--fg)" }}>
       {/* ─── 1. Hero ──────────────────────────────────────────────────────── */}
-      <section className="hero-split relative lg:grid lg:min-h-dvh lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
+      <section className="hero-split snap-start relative lg:grid lg:min-h-dvh lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
         <div className="relative flex flex-col justify-center px-6 py-16 sm:px-10 sm:py-20 lg:px-12 lg:py-24 xl:px-16">
           <Petals />
 
-          <div className="relative mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[34rem]">
+          <div className="relative mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[36rem]">
             <Reveal>
               <p className="ds-chip mb-7" style={{ display: "inline-flex" }}>
                 <iconify-icon icon="heroicons:map-pin" width="14" height="14" />
@@ -370,7 +347,7 @@ export default function Home() {
               </p>
             </Reveal>
             <Reveal delay={100}>
-              <h1 className="ds-title text-[2.15rem] leading-[1.12] sm:text-5xl lg:text-[3.15rem]">
+              <h1 className="ds-title text-[2.5rem] leading-[1.06] sm:text-6xl lg:text-[3.7rem]">
                 Everyone wants to go to Japan.
                 <br />
                 <span style={{ color: "var(--card-coral-ink)" }}>Nobody books it.</span>
@@ -381,9 +358,8 @@ export default function Home() {
                 className="mt-6 max-w-md text-base leading-relaxed sm:text-lg"
                 style={{ color: "var(--muted)" }}
               >
-                Built at Hack the 6ix: a Telegram pet whose Physical health tracks live
-                hotel data and whose Mental health tracks group engagement. The only way
-                to save it is to actually book the trip.
+                A Telegram pet whose health tracks live hotel prices and group engagement.
+                The only way to save it is to actually book the trip.
               </p>
             </Reveal>
             <Reveal delay={320}>
@@ -406,31 +382,34 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── 2. Problem / Inspiration ─────────────────────────────────────── */}
-      <section className="relative mx-auto max-w-3xl px-6 py-20">
+      {/* ─── 2. Problem — one big line, no title ──────────────────────────── */}
+      <section className="snap-start snap-panel relative px-6">
         <Petals />
-        <div className="relative">
+        <div className="relative mx-auto max-w-4xl text-center">
           <Reveal>
-            <SectionTitle eyebrow="Inspiration">The groupchat that never leaves</SectionTitle>
+            <p className="ds-title text-[2.1rem] leading-[1.1] sm:text-5xl lg:text-6xl">
+              Someone drops{" "}
+              <span style={{ color: "var(--card-coral-ink)" }}>
+                &ldquo;let&apos;s go to Japan bro.&rdquo;
+              </span>
+              <br className="hidden sm:block" /> Nobody ever books it.
+            </p>
           </Reveal>
-          <Reveal delay={120}>
-            <p className="text-center text-lg leading-relaxed sm:text-xl" style={{ color: "var(--muted)" }}>
-              Every friend group has the same stalled ritual: someone drops{" "}
-              <span style={{ color: "var(--fg)" }}>&ldquo;let&apos;s go to Japan bro&rdquo;</span>
-              , a few people react, dates get half-discussed, and the thread dies. The trip
-              stays a sentence. Tama-Go-Chi turns that failure mode into a creature whose
-              health declines until someone commits.
+          <Reveal delay={160}>
+            <p
+              className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed sm:text-2xl"
+              style={{ color: "var(--muted)" }}
+            >
+              A few react, dates get half-discussed, the thread dies. The trip stays a
+              sentence — so we turned it into a creature that dies with it.
             </p>
           </Reveal>
         </div>
       </section>
 
-      {/* ─── 3. Video Demo ────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <Reveal>
-          <SectionTitle eyebrow="Demo">Watch it end-to-end</SectionTitle>
-        </Reveal>
-        <Reveal delay={120}>
+      {/* ─── 3. Video — full-bleed, no title ──────────────────────────────── */}
+      <section className="snap-start snap-panel px-6">
+        <Reveal className="mx-auto w-full max-w-6xl">
           <div
             className="overflow-hidden"
             style={{
@@ -447,23 +426,16 @@ export default function Home() {
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover"
               />
-              <div
-                className="absolute inset-0"
-                style={{ background: "rgba(42, 36, 28, 0.28)" }}
-              />
-              <div className="relative z-[1] flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <div className="absolute inset-0" style={{ background: "rgba(42, 36, 28, 0.30)" }} />
+              <div className="relative z-[1] flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
                 <div
-                  className="flex h-16 w-16 items-center justify-center rounded-full"
-                  style={{
-                    background: "var(--surface)",
-                    boxShadow: "var(--shadow)",
-                    color: "var(--fg)",
-                  }}
+                  className="flex h-20 w-20 items-center justify-center rounded-full"
+                  style={{ background: "var(--surface)", boxShadow: "var(--shadow)", color: "var(--fg)" }}
                   aria-hidden
                 >
-                  <iconify-icon icon="heroicons:play" width="28" height="28" />
+                  <iconify-icon icon="heroicons:play" width="34" height="34" />
                 </div>
-                <p className="ds-title text-base sm:text-lg" style={{ color: "var(--surface)" }}>
+                <p className="ds-title text-lg sm:text-2xl" style={{ color: "var(--surface)" }}>
                   Demo video coming soon
                 </p>
               </div>
@@ -472,92 +444,87 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* ─── 4. What It Does (+ interactive demo) ─────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-20">
-        <Reveal>
-          <SectionTitle eyebrow="What it does">A pet that dies if you don&apos;t book</SectionTitle>
-        </Reveal>
-        <Reveal delay={80}>
-          <p
-            className="mx-auto mb-10 max-w-3xl text-center leading-relaxed"
-            style={{ color: "var(--muted)" }}
-          >
-            Drop Tama-Go-Chi in the group. It listens for trip talk, extracts constraints,
-            and maintains two bars:{" "}
-            <span style={{ color: "var(--fg)" }}>Physical</span> (Stay22 hotel
-            pricing and availability) and{" "}
-            <span style={{ color: "var(--fg)" }}>Mental</span> (chat engagement). Silence
-            and rising prices make it sick; real decisions heal it. When a bar bottoms out,
-            it sends an ElevenLabs voice message into the chat. On commit, Stay22
-            returns a finished booking instead of another unfinished plan.
-          </p>
-        </Reveal>
-        <PipelineCards />
+      {/* ─── 4. How it works — the 3-step pipeline (cards self-label) ─────── */}
+      <section className="snap-start px-6 py-24">
+        <div className="mx-auto max-w-5xl">
+          <Reveal>
+            <p className="kicker mb-8">How it works</p>
+          </Reveal>
+          <PipelineCards />
+        </div>
+      </section>
 
-        <Reveal delay={160}>
-          <div className="mb-8 text-center">
-            <h3 className="ds-title text-xl sm:text-2xl">Try the scrubber</h3>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
-              Drag weeks forward. Watch Physical and Mental fall as prices climb and the chat
-              goes quiet, then book to revive the pet.
+      {/* ─── 5. The interactive scrubber — the centerpiece, big ───────────── */}
+      <section className="snap-start snap-panel px-6">
+        <div className="mx-auto w-full max-w-5xl">
+          <Reveal>
+            <SushiDemo />
+          </Reveal>
+          <Reveal delay={140}>
+            <p
+              className="mx-auto mt-6 max-w-lg text-center text-sm leading-relaxed"
+              style={{ color: "var(--muted)" }}
+            >
+              Drag the weeks forward — watch it rot as prices climb and the chat goes
+              quiet, then book to revive it.
             </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 6. Pillars — cards only ──────────────────────────────────────── */}
+      <section className="snap-start snap-panel px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <Reveal>
+            <p className="kicker mb-8">What&apos;s under the hood</p>
+          </Reveal>
+          <CardGrid items={PILLARS} cols="sm:grid-cols-2 lg:grid-cols-3" />
+        </div>
+      </section>
+
+      {/* ─── 7. Proof — the benchmark leads, accomplishments support ──────── */}
+      <section className="snap-start snap-panel px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <Reveal>
+            <div className="mb-10 flex justify-center">
+              <ModelBenchmark />
+            </div>
+          </Reveal>
+          <CardGrid items={ACCOMPLISHMENTS} cols="sm:grid-cols-3" />
+        </div>
+      </section>
+
+      {/* ─── 8. Learned + next — de-titled, small kickers only ────────────── */}
+      <section className="snap-start px-6 py-24">
+        <div className="mx-auto max-w-5xl space-y-16">
+          <div>
+            <Reveal>
+              <p className="kicker mb-6">What we learned</p>
+            </Reveal>
+            <CardGrid items={LEARNINGS} cols="sm:grid-cols-3" />
           </div>
-        </Reveal>
-        <Reveal delay={200}>
-          <SushiDemo />
-        </Reveal>
-      </section>
-
-      {/* ─── 5. How We Built It ───────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-20">
-        <Reveal>
-          <SectionTitle eyebrow="How we built it">Six Pillars</SectionTitle>
-        </Reveal>
-        <CardGrid items={PILLARS} cols="sm:grid-cols-2 lg:grid-cols-3" />
-      </section>
-
-      {/* ─── 6. Accomplishments ───────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <Reveal>
-          <SectionTitle eyebrow="Accomplishments">What we&apos;re proud of</SectionTitle>
-        </Reveal>
-        <CardGrid items={ACCOMPLISHMENTS} cols="sm:grid-cols-3" />
-        <Reveal delay={220}>
-          <div className="mt-10 flex justify-center">
-            <ModelBenchmark />
+          <div>
+            <Reveal>
+              <p className="kicker mb-6">Where it goes next</p>
+            </Reveal>
+            <CardGrid items={NEXT_STEPS} />
           </div>
-        </Reveal>
-      </section>
-
-      {/* ─── 7. What We Learned ───────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <Reveal>
-          <SectionTitle eyebrow="What we learned">Takeaways</SectionTitle>
-        </Reveal>
-        <CardGrid items={LEARNINGS} cols="sm:grid-cols-3" />
-      </section>
-
-      {/* ─── 8. What's Next ───────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <Reveal>
-          <SectionTitle eyebrow="What's next">Roadmap</SectionTitle>
-        </Reveal>
-        <CardGrid items={NEXT_STEPS} />
+        </div>
       </section>
 
       {/* ─── 9. Footer / CTA ──────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden">
+      <section className="snap-start snap-panel relative overflow-hidden px-6">
         <Petals />
-        <div className="relative mx-auto max-w-5xl px-6 py-28 text-center">
+        <div className="relative mx-auto max-w-3xl text-center">
           <Reveal>
-            <h2 className="ds-title mx-auto max-w-2xl text-3xl leading-snug sm:text-5xl">
+            <h2 className="ds-title mx-auto text-4xl leading-[1.06] sm:text-6xl">
               Stop letting the trip die in the group chat.
             </h2>
           </Reveal>
           <Reveal delay={150}>
-            <p className="mx-auto mt-5 max-w-xl leading-relaxed" style={{ color: "var(--muted)" }}>
-              Add Tama-Go-Chi. Give your friends something that gets sad when you don&apos;t
-              book, and a spring morning in Kyoto when you do.
+            <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed" style={{ color: "var(--muted)" }}>
+              Give your friends something that gets sad when you don&apos;t book — and a
+              spring morning in Kyoto when you do.
             </p>
           </Reveal>
           <Reveal delay={300}>

@@ -18,6 +18,43 @@
 
 html {
   background-color: var(--bg);
+  /* Snap scroll: every section is a snap stop. `proximity` (not `mandatory`)
+     so tall sections — the pipeline, the benchmark — stay freely scrollable
+     inside instead of the browser fighting to re-center them. */
+  scroll-snap-type: y proximity;
+  scroll-behavior: smooth;
+}
+
+.snap-start {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+/* A full-viewport, vertically-centered stage. Content taller than the screen
+   simply grows the box (centering becomes a no-op) — never clipped. */
+.snap-panel {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Small section label — replaces the old big centered eyebrow+title stacks. */
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--card-coral-ink);
+}
+.kicker::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 9999px;
+  background: currentColor;
 }
 
 body {
@@ -128,15 +165,16 @@ body > * {
 
 .reveal {
   opacity: 0;
-  transform: translateY(26px);
+  transform: translateY(40px) scale(0.985);
   transition:
-    opacity 0.8s cubic-bezier(0.22, 0.8, 0.36, 1),
-    transform 0.8s cubic-bezier(0.22, 0.8, 0.36, 1);
+    opacity 0.85s cubic-bezier(0.22, 0.8, 0.36, 1),
+    transform 0.85s cubic-bezier(0.22, 0.8, 0.36, 1);
   transition-delay: var(--reveal-delay, 0s);
+  will-change: opacity, transform;
 }
 .reveal.is-visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
 input[type="range"].scrubber {
@@ -195,5 +233,9 @@ input[type="range"].scrubber::-moz-range-track {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+  html {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
   }
 }
