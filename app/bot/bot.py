@@ -276,13 +276,20 @@ DEATHBED_COOLDOWN_S = int(os.environ.get("DEATHBED_COOLDOWN_S", "600"))
 # the sicker voice happen together rather than at two unrelated moments.
 VOICE_HEALTH_THRESHOLD = int(os.environ.get("VOICE_HEALTH_THRESHOLD", "40"))
 
+# How often a HEALTHY pet speaks instead of typing. She's a character, not a
+# notification feed — hearing her sometimes when nothing is wrong is what makes
+# her feel present, and it means the voice isn't only ever a distress signal.
+# Below the health threshold this is bypassed: a dying pet always speaks.
+VOICE_CHANCE = float(os.environ.get("VOICE_CHANCE", "0.3"))
+
 
 def _should_voice(g: state.GroupState) -> bool:
-    """Is the pet sick enough that it should speak rather than type?"""
+    """Speak, or type? Always speak when unwell; otherwise roll VOICE_CHANCE."""
     if not elevenlabs.available():
         return False
-    return (g.pet.physical <= VOICE_HEALTH_THRESHOLD
-            or g.pet.mood in ("sick", "dying"))
+    if g.pet.physical <= VOICE_HEALTH_THRESHOLD or g.pet.mood in ("sick", "dying"):
+        return True
+    return random.random() < VOICE_CHANCE
 
 
 async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
@@ -296,16 +303,33 @@ async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
     except Exception as e:
         log.warning("voice synth raised (chat=%s): %s", chat_id, e)
     if ogg:
-        try:
-            await ctx.bot.send_voice(
-                chat_id=chat_id,
-                voice=InputFile(BytesIO(ogg), filename="pet.ogg"),
-                caption=text,
-            )
-            log.info("voice note sent (chat=%s, %d bytes, mood=%s)", chat_id, len(ogg), mood)
-            return
-        except Exception as e:
-            log.warning("send_voice failed (chat=%s): %s — falling back to text", chat_id, e)
+        # The caption needs parse_mode exactly like _say does, or Tabi's
+        # mentions print as literal markup under the waveform —
+        # "[lucas](tg://user?id=8685072453)-kun" instead of a real @mention.
+        # Same Markdown-then-plain fallback, since her prose can break the
+        # parser (a stray * or _) and a caption failure must not cost the
+        # whole voice note.
+        for parse_mode in (ParseMode.MARKDOWN, None):
+            try:
+                await ctx.bot.send_voice(
+                    chat_id=chat_id,
+                    voice=InputFile(BytesIO(ogg), filename="pet.ogg"),
+                    caption=text,
+                    parse_mode=parse_mode,
+                )
+                log.info("voice note sent (chat=%s, %d bytes, mood=%s, parse=%s)",
+                         chat_id, len(ogg), mood, parse_mode or "plain")
+                # Log the spoken turn like _say does for typed ones. Without
+                # this a voice note is invisible to the pet's own transcript,
+                # so at VOICE_CHANCE=0.3 roughly a third of what she says
+                # would vanish from her memory and she'd start repeating it.
+                await asyncio.to_thread(
+                    db.log_chat_message, chat_id, "tabi", PET_NAME, text,
+                    None, "pet")
+                return
+            except Exception as e:
+                log.warning("send_voice failed (chat=%s, parse=%s): %s",
+                            chat_id, parse_mode or "plain", e)
     else:
         # Used to be silent: synthesis returning None (rather than raising) fell
         # straight through to text with nothing logged, so a broken voice path
@@ -313,11 +337,10 @@ async def speak_pet(chat_id: int, text: str, ctx: ContextTypes.DEFAULT_TYPE,
         log.warning("no voice audio for chat=%s (mood=%s, physical=%s) — "
                     "sending text instead; check ELEVENLABS_API_KEY / voice ids",
                     chat_id, mood, physical)
-    # Fallback: plain text, best-effort.
-    try:
-        await ctx.bot.send_message(chat_id=chat_id, text=text)
-    except Exception:
-        pass
+    # Fallback: go through _say rather than a bare send_message, so a voice
+    # failure still renders mentions properly AND still logs the turn. The
+    # bare call here used to leak "[lucas](tg://user?id=…)" into the chat.
+    await _say(chat_id, text, ctx)
 
 
 async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> None:
