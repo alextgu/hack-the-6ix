@@ -30,6 +30,7 @@ from typing import Optional, TypedDict
 
 from langgraph.graph import StateGraph, END
 
+from app.agents import voice
 from app.integrations import db
 from app.integrations import flights
 from app.integrations import green
@@ -417,10 +418,21 @@ def messenger(s: AgentState) -> AgentState:
                      "answer (or everyone), and guilt-trip with your health.",
     }.get(s["trigger"], "new messages arrived")
 
+    # Good news earns a different register — a pet that jokes through every win
+    # reads as incapable of being pleased.
+    _good = bool(s["trigger"] == "kickoff") or not s.get("missing")
+    voice_block = voice.persona_block(
+        chat_id=s["chat_id"], mood=g.pet.mood, physical=g.pet.physical,
+        good_news=_good, name="Tabi")
+
     out = _llm_json(f"""You are Tabi, a tamagotchi trip-pet living in a Telegram group chat.
 You are the +1 member of this friend group whose whole job is getting the
-trip planned. Personality: lowercase, brief (max 3 short lines), warm but
-dramatic about your health — the group's indecision is literally killing you.
+trip planned. The group's indecision is literally killing you — you have real
+stakes here, and you're allowed to have a mood about it.
+
+{voice_block}
+
+Keep it to max 3 short lines.
 Stages: GATHER (lock city+dates+budget — the first 50%) → FLIGHTS (pick a
 mock flight) → HOTELS (swipe the card deck) → BOOK.
 
@@ -438,12 +450,21 @@ Recent chat (each line has its telegram message id):
 
 Think like a group member deciding whether to jump in. Generate up to 4
 candidate contributions (0 is fine if the humans are mid-flow and need
-nothing). Score each candidate's motivation 1-5 against: relevance,
-information gap (something missing you can chase), urgency, BALANCE (someone
-contributed and nobody responded — acknowledging them scores high; pull in
-people who haven't spoken), coherence, originality (never repeat what you
-already said in the recent chat), and retention (someone backing out = 5,
-always). Candidate kinds: acknowledge | ask | summarize | nudge | retention.
+nothing).
+
+Make the candidates GENUINELY DIFFERENT from each other — not one line in four
+outfits. Vary what they do: one might chase a missing fact, one react to what
+someone actually said, one drop a real number, one just be funny about the
+situation. If two candidates could be swapped without anyone noticing, you
+wrote the same candidate twice.
+
+Score each candidate's motivation 1-5 against: relevance, information gap
+(something missing you can chase), urgency, BALANCE (someone contributed and
+nobody responded — acknowledging them scores high; pull in people who haven't
+spoken), coherence, ORIGINALITY (never reuse a phrase, image, or joke shape
+you've already used in this chat — score generic filler low no matter how
+polite it is), and retention (someone backing out = 5, always).
+Candidate kinds: acknowledge | ask | summarize | nudge | retention.
 If a candidate responds to one specific message, set reply_to to that
 message id. List any pending contribution ids/summaries the candidate
 answers in "acknowledges".
@@ -517,6 +538,12 @@ def _gate(chat_id: int, d: Decision, urgent: bool = False) -> Decision:
         return Decision()
     if d.send:
         _last_sent_at[chat_id] = now
+        if d.message:
+            # Record ONLY here — this is the one point a line is committed to
+            # actually being sent. The messenger node drafts on every turn and
+            # the cooldown swallows most of them; noting drafts would make the
+            # pet dodge phrasings the group never saw.
+            voice.note_line(chat_id, d.message)
     return d
 
 

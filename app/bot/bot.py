@@ -39,6 +39,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import re
 from datetime import date
 from io import BytesIO
@@ -70,6 +71,7 @@ from app.integrations import solana_coin
 from app.agents import supervisor
 from app.agents import greenplanner
 from app.agents import face
+from app.agents import voice
 
 
 def _encode_start_param(chat_id: int) -> str:
@@ -252,10 +254,22 @@ async def maybe_speak_deathbed(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE) -> 
     if not critical or chat_id in _spoke_deathbed:
         return
     _spoke_deathbed.add(chat_id)
+    # Fires once per chat, but a demo gets reset and re-run all evening — one
+    # fixed line makes the biggest beat in the show land identically every time.
     await speak_pet(
         chat_id,
-        "i'm fading here... the prices keep climbing and nobody's deciding. "
-        "please — just book something.",
+        random.choice([
+            "i'm fading here... the prices keep climbing and nobody's deciding. "
+            "please — just book something.",
+            "okay. real talk. i don't think i've got another week of this in me. "
+            "somebody pick something.",
+            "the hotels got more expensive again. i got smaller again. "
+            "you see how this ends, right?",
+            "i'm not doing the bit anymore. i'm genuinely running out. "
+            "book anything and i'll be fine.",
+            "this is the part where i'd normally be funny about it. "
+            "i can't. please just choose.",
+        ]),
         ctx, mood="dying", physical=g.pet.physical,
     )
 
@@ -445,6 +459,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # history) deliberately survive: wiping those is /reset's job, not /start's.
     wire.reset_chat(g.chat_id)
     supervisor.reset_chat(g.chat_id)
+    voice.forget(g.chat_id)      # a fresh pet shouldn't dodge its past self's lines
     await asyncio.to_thread(set_muted, g.chat_id, False)  # /start always wakes
     log.info("hatch chat_id=%s", g.chat_id)
     await update.effective_chat.send_message(
@@ -469,6 +484,7 @@ async def cmd_reset(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     wire.reset_chat(chat_id)
     cards.forget(chat_id)
     supervisor.reset_chat(chat_id)
+    voice.forget(chat_id)
     green.forget(chat_id)
     flights.forget(chat_id)
     _mute_cache.pop(chat_id, None)
@@ -566,8 +582,13 @@ async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: di
     if chat_id not in _spoke_graduated:          # bright graduation voice, once
         _spoke_graduated.add(chat_id)
         try:
-            await speak_pet(chat_id, "we did it — we're actually going to Japan!",
-                            ctx, mood="graduated", physical=g.pet.physical)
+            await speak_pet(chat_id, random.choice([
+                "we did it — we're actually going to Japan!",
+                "it's booked. it's actually booked. i'm going to japan with you idiots.",
+                f"{trip.city}. real dates. a real hotel. i've never been so relieved in my life.",
+                "eleven days of arguing and you pulled it off. i never doubted you. i did doubt you.",
+                "that's a booking. i'm free. go pack something.",
+            ]), ctx, mood="graduated", physical=g.pet.physical)
         except Exception as e:
             log.warning("graduation voice skipped (chat=%s): %s", chat_id, e)
 
