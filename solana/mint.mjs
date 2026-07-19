@@ -52,6 +52,7 @@ async function main() {
     ["Destination", process.env.COIN_LOCATION],
     ["Time to book", process.env.COIN_TIME_SPENT],
     ["Did the least work", process.env.COIN_SLACKER],
+    ["CO2e avoided", process.env.COIN_CO2E],
   ]
     .filter(([, v]) => (v || "").trim())
     .map(([trait_type, value]) => ({ trait_type, value: value.trim() }));

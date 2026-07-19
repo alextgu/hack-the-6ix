@@ -365,10 +365,20 @@ async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
             slacker = await asyncio.to_thread(db.least_active_member, chat_id) or ""
         except Exception:
             slacker = ""
+        # Green certificate: the CO2e this trip avoided (real ledger, DEFRA/EPA
+        # factors) inscribed on the souvenir. Fail-open — 0/none just omits it.
+        co2e = ""
+        try:
+            kg = (await asyncio.to_thread(green.totals, chat_id)).get("total_kg") or 0
+            if kg > 0:
+                co2e = f"{kg:g} kg CO2e"
+        except Exception:
+            co2e = ""
         result = await asyncio.to_thread(
             solana_coin.mint_trip_coin,
             {"name": name, "booking_url": booking_url or "",
-             "location": location, "time_spent": time_spent, "slacker": slacker},
+             "location": location, "time_spent": time_spent, "slacker": slacker,
+             "co2e_saved": co2e},
             chat_id)
         if not result:
             return  # skipped/failed silently — booking already complete
@@ -381,6 +391,8 @@ async def _mint_and_post_coin(chat_id: int, trip, booking_url: str | None,
             extras.append(f"⏱️ booked in {result['time_spent']}")
         if result.get("slacker"):
             extras.append(f"🛌 did the least: {result['slacker']}")
+        if result.get("co2e_saved"):
+            extras.append(f"🌱 {result['co2e_saved']} avoided")
         if extras:
             caption += "\n\n" + "  ·  ".join(extras)
         try:

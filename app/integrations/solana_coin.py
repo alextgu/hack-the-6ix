@@ -81,6 +81,7 @@ def mint_trip_coin(trip: dict, group_id: int) -> Optional[dict]:
     location = str((trip or {}).get("location") or "")
     time_spent = str((trip or {}).get("time_spent") or "")
     slacker = str((trip or {}).get("slacker") or "")
+    co2e_saved = str((trip or {}).get("co2e_saved") or "")
     try:
         env = {
             **os.environ,
@@ -89,6 +90,7 @@ def mint_trip_coin(trip: dict, group_id: int) -> Optional[dict]:
             "COIN_LOCATION": location,
             "COIN_TIME_SPENT": time_spent,
             "COIN_SLACKER": slacker,
+            "COIN_CO2E": co2e_saved,
             "SOLANA_CLUSTER": os.environ.get("SOLANA_CLUSTER", "devnet"),
         }
         proc = subprocess.run(
@@ -116,6 +118,7 @@ def mint_trip_coin(trip: dict, group_id: int) -> Optional[dict]:
         "location": location or None,
         "time_spent": time_spent or None,
         "slacker": slacker or None,
+        "co2e_saved": co2e_saved or None,
         "image_url": os.environ.get("TRIP_COIN_IMAGE_URL", "").strip() or None,
     }
 
