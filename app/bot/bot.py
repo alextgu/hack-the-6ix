@@ -629,6 +629,66 @@ async def log_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await execute_decision(chat_id, decision, ctx)
 
 
+# ─── Two-way voice: voice-in → transcribe → live loop → voice-out ───────────
+async def on_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """A group voice message: download it, transcribe with ElevenLabs Scribe,
+    then feed the transcript into the SAME pipeline as a text message (wire +
+    supervisor, same send-gate/cooldown). A plain-message reply is spoken back
+    as a voice note (voice-in → voice-out); actions/decks go through the normal
+    text path. Any STT/TTS failure degrades to text — never crashes the loop."""
+    if not update.message or not update.message.voice:
+        return
+    chat_id = update.effective_chat.id
+    if await asyncio.to_thread(is_muted, chat_id):
+        return  # /stop means stopped — no reads, no reply
+    speaker = (update.effective_user.first_name if update.effective_user else "someone") or "someone"
+    user_id = str(update.effective_user.id) if update.effective_user else "unknown"
+
+    # 1. Download the OGG/Opus voice note.
+    try:
+        tg_file = await update.message.voice.get_file()
+        audio = bytes(await tg_file.download_as_bytearray())
+    except Exception as e:
+        log.warning("voice download failed (chat=%s): %s", chat_id, e)
+        return
+
+    # 2. Scribe STT. Failure → text fallback, never crash.
+    transcript = await asyncio.to_thread(elevenlabs.transcribe, audio, "audio/ogg")
+    if not transcript:
+        try:
+            await update.effective_chat.send_message("couldn't quite catch that — mind typing it?")
+        except Exception:
+            pass
+        return
+    log.info("voice chat=%s from=%s → %r", chat_id, speaker, transcript[:200])
+
+    # 3. Feed the transcript in exactly like a text message.
+    await asyncio.to_thread(db.log_chat_message, chat_id, user_id, speaker,
+                            transcript, update.message.message_id)
+    wire.note_message(chat_id, speaker, transcript)
+    reconciled = await wire.maybe_process(chat_id)
+    if reconciled is not None:
+        g = state.get_or_create(chat_id)
+        g.pet.refresh_mood()
+        await asyncio.to_thread(state.persist_pet, g)
+        asyncio.create_task(_sync_avatar(g, ctx))
+        await maybe_speak_deathbed(chat_id, ctx)
+
+    # 4. Same send-gate + cooldown as text. Speak the reply back as a voice note.
+    urgent = supervisor.is_urgent(transcript)
+    if not (supervisor.can_speak(chat_id) or urgent):
+        return
+    decision = await asyncio.to_thread(supervisor.run_turn, chat_id, "message", urgent)
+    if decision.send and decision.message and decision.action == "none":
+        g = state.get_or_create(chat_id)
+        await speak_pet(chat_id, decision.message, ctx, mood=g.pet.mood, physical=g.pet.physical)
+        if decision.harvest_id:  # keep the flywheel outcome parity with execute_decision
+            _schedule_outcome(chat_id, decision.harvest_id)
+    else:
+        # actions (deck/flights/itinerary) or a swallowed send → normal path.
+        await execute_decision(chat_id, decision, ctx)
+
+
 # ─── Global error handler ────────────────────────────────────────────────────
 async def on_error(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Catch-all so one bad update (a raised handler, a Telegram/API hiccup)
@@ -661,6 +721,7 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("stop", cmd_stop))
     app.add_handler(CommandHandler("resume", cmd_resume))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))
+    app.add_handler(MessageHandler(filters.VOICE, on_voice))
     app.add_error_handler(on_error)
     return app
 
