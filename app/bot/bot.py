@@ -21,7 +21,9 @@ Commands (once running):
   /start           hatch the pet, post its image (also wakes a /stop'd pet)
   /health          post the current pet image + numbers
   /scrub <0..6>    dev: jump the simulated timeline; watch the bars move
+  /silence <ticks> dev: simulate N ignored nudges; watch mental drop
   /commit          both bars full — celebrated 'graduated' pet
+  /end             dev: 'we're in Japan' — graduation + Solana coin, no Stay22 needed
   /saved           green ledger: CO2e avoided so far, in human units
   /itinerary       green-routed day-by-day plan (rail > car, savings counted)
   /stop            full mute: no reads, no Gemini calls, heartbeat skips the chat
@@ -576,6 +578,32 @@ async def cmd_scrub(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await maybe_speak_deathbed(update.effective_chat.id, ctx)
 
 
+async def cmd_silence(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dev: simulate N ignored heartbeat nudges — the same mental hit a real
+    silent chat takes (supervisor.NUDGE_MENTAL_DECAY per unanswered nudge, see
+    supervisor.s_trigger_hurts), without waiting out the real 5m/15m/45m/2h
+    backoff. Only touches mental — physical still needs /scrub or real market."""
+    if not ctx.args:
+        await update.effective_chat.send_message(
+            "usage: /silence <ticks>  — each tick = one ignored nudge, "
+            f"-{supervisor.NUDGE_MENTAL_DECAY} mental")
+        return
+    try:
+        ticks = int(ctx.args[0])
+    except ValueError:
+        await update.effective_chat.send_message("gimme a number")
+        return
+    ticks = max(1, min(20, ticks))
+    g = state.get_or_create(update.effective_chat.id)
+    g.pet.mental = max(0, g.pet.mental - ticks * supervisor.NUDGE_MENTAL_DECAY)
+    g.pet.refresh_mood()
+    await asyncio.to_thread(state.persist_pet, g)
+    log.info("silence chat_id=%s ticks=%d → mental=%d mood=%s",
+              g.chat_id, ticks, g.pet.mental, g.pet.mood)
+    await _send_pet(update, ctx)
+    await maybe_speak_deathbed(update.effective_chat.id, ctx)
+
+
 async def _graduate(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, trip, opts: dict,
                     guests: int, nights: int) -> None:
     """The convergence finale. The booking link + summary posts FIRST and
@@ -687,6 +715,37 @@ async def cmd_commit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # The convergence finale — booking link first + always, everything else
     # additive and fail-safe (see _graduate).
     await _graduate(g.chat_id, ctx, trip, opts, guests, nights)
+
+
+async def cmd_end(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dev/demo: 'we're actually in Japan' — skip the live Stay22 booking
+    search /commit requires and go straight to the graduation capstone, then
+    mint the Solana souvenir coin. For demoing the coin/finale on its own
+    without a real hotel match wired up."""
+    chat_id = update.effective_chat.id
+    g = state.get_or_create(chat_id)
+    trip = g.trip
+    health.commit_trip(g)
+    log.info("end chat=%s → forced graduation (dev)", chat_id)
+
+    await update.effective_chat.send_message(
+        f"🎉 we made it — we're in {trip.city or 'Japan'}!\nminting the souvenir coin now…"
+    )
+    try:
+        await send_pet_card(chat_id, ctx)
+    except Exception as e:
+        log.warning("end pet card skipped (chat=%s): %s", chat_id, e)
+
+    if chat_id not in _spoke_graduated:
+        _spoke_graduated.add(chat_id)
+        try:
+            await speak_pet(chat_id, "we made it. we're actually here. thank you.",
+                            ctx, mood="graduated", physical=g.pet.physical)
+        except Exception as e:
+            log.warning("end voice skipped (chat=%s): %s", chat_id, e)
+
+    # No real booking_url in this dev path — the coin mints off the trip name alone.
+    await _mint_and_post_coin(chat_id, trip, None, ctx)
 
 
 async def cmd_saved(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -880,7 +939,9 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("health", cmd_health))
     app.add_handler(CommandHandler("scrub", cmd_scrub))
+    app.add_handler(CommandHandler("silence", cmd_silence))
     app.add_handler(CommandHandler("commit", cmd_commit))
+    app.add_handler(CommandHandler("end", cmd_end))
     app.add_handler(CommandHandler("open", cmd_open))
     app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(CommandHandler("saved", cmd_saved))

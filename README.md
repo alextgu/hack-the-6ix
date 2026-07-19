@@ -74,7 +74,9 @@ Preview standalone (no Telegram) at `http://localhost:8000/?group=12345`.
 | `/start` | Hatch/wake the pet, post its card, offer the Mini App button |
 | `/health` | Repost the current pet card + numbers |
 | `/scrub N` | Dev — jump the simulated timeline to week 0..6 (drives both bars) |
+| `/silence N` | Dev — simulate N ignored nudges; watch mental drop without waiting out real silence |
 | `/commit` | Graduation finale — real Stay22 booking, green stats, voice, trip coin |
+| `/end` | Dev — 'we're in Japan': graduation + Solana trip coin, skips the live Stay22 search |
 | `/saved` | Green ledger: CO₂e avoided so far, in human units |
 | `/itinerary` | Green-routed day-by-day plan |
 | `/open` | Send just the Mini App button |
