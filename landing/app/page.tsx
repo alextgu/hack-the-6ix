@@ -12,6 +12,7 @@ const SPONSORS = ["Stay22", "Phoebe", "Freesolo", "MongoDB Atlas", "ElevenLabs",
 
 const PIPELINE_CARDS = [
   {
+    phase: "Onboard",
     media: "/pipeline-tabi-checkin.png",
     mediaExtra: "/pet/all-avatars-fade.gif",
     mediaType: "duo" as const,
@@ -34,6 +35,7 @@ const PIPELINE_CARDS = [
     ],
   },
   {
+    phase: "Align",
     media: "/pipeline-chat.png",
     mediaExtra: undefined as string | undefined,
     mediaType: "image" as const,
@@ -52,6 +54,7 @@ const PIPELINE_CARDS = [
     ],
   },
   {
+    phase: "Book",
     media: "_v7N3bwIQSQ",
     mediaExtra: undefined as string | undefined,
     mediaType: "youtube" as const,
@@ -233,7 +236,7 @@ function CardGrid({
 function PipelineCards() {
   let stepNo = 0;
   return (
-    <div className="mb-14 flex flex-col gap-8">
+    <div className="mb-14 flex flex-col gap-6 sm:gap-7">
       {PIPELINE_CARDS.map((card, i) => {
         const steps = card.steps.map((step) => {
           stepNo += 1;
@@ -242,84 +245,108 @@ function PipelineCards() {
         const imageFirst = card.imageSide === "left";
         const mediaClass =
           card.fit === "contain"
-            ? "absolute inset-0 h-full w-full object-contain p-4 sm:p-6"
+            ? "absolute inset-0 h-full w-full object-contain p-3 sm:p-4"
             : "absolute inset-0 h-full w-full object-cover";
 
         return (
           <Reveal key={card.mediaAlt} delay={i * 100}>
-            <div
-              className="overflow-hidden"
+            <article
+              className="card-lift overflow-hidden"
               style={{
                 borderRadius: "var(--radius)",
                 background: "var(--surface)",
                 boxShadow: "var(--shadow)",
               }}
             >
-              <div className="grid items-stretch lg:grid-cols-2">
+              {/* Media leads: ~60% of the row, taller panel so the visual carries the card. */}
+              <div className="grid items-stretch lg:grid-cols-[1.55fr_minmax(0,1fr)]">
                 <div
-                  className={`relative min-h-[280px] overflow-hidden sm:min-h-[320px] lg:min-h-[380px] ${
+                  className={`relative min-h-[300px] overflow-hidden sm:min-h-[360px] lg:min-h-[460px] ${
                     imageFirst ? "lg:order-1" : "lg:order-2"
                   }`}
                   style={{ background: "var(--card-peach)" }}
                 >
                   {card.mediaType === "youtube" ? (
-                    <PipelineYouTube
-                      videoId={card.media}
-                      title={card.mediaAlt}
-                    />
+                    <PipelineYouTube videoId={card.media} title={card.mediaAlt} />
                   ) : card.mediaType === "duo" && card.mediaExtra ? (
-                    <div className="absolute inset-0 flex items-center justify-center gap-3 p-3 sm:gap-4 sm:p-5">
+                    <div className="absolute inset-0 flex items-center justify-center gap-3 p-4 sm:gap-5 sm:p-6">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={card.media}
                         alt={card.mediaAlt}
-                        className="h-full max-h-full w-auto max-w-[52%] object-contain"
+                        className="h-[92%] max-h-full w-auto max-w-[60%] object-contain drop-shadow-sm"
                       />
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={card.mediaExtra}
                         alt="Tabi avatar states fading through health moods"
-                        className="h-[72%] max-h-full w-auto max-w-[40%] object-contain"
+                        className="h-[86%] max-h-full w-auto max-w-[46%] object-contain"
                       />
                     </div>
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={card.media}
-                      alt={card.mediaAlt}
-                      className={mediaClass}
-                    />
+                    <img src={card.media} alt={card.mediaAlt} className={mediaClass} />
                   )}
+                  {/* soft inner edge so the visual seats into the card */}
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{ boxShadow: "inset 0 0 0 1px rgba(42,36,28,0.05)" }}
+                    aria-hidden
+                  />
                 </div>
+
+                {/* Caption rail: condensed. Ghost step number + phase kicker + tight steps. */}
                 <div
-                  className={`flex flex-col justify-center gap-5 p-6 sm:gap-6 sm:p-8 ${
+                  className={`relative flex flex-col justify-center overflow-hidden p-7 sm:p-8 lg:p-9 ${
                     imageFirst ? "lg:order-2" : "lg:order-1"
                   }`}
                 >
-                  {steps.map((step) => (
-                    <div key={step.n} className="flex gap-3">
-                      <span
-                        className="ds-title shrink-0 tabular-nums"
-                        style={{ color: "var(--fg)", minWidth: "1.75rem" }}
-                      >
-                        {step.n}.
-                      </span>
-                      <div>
-                        <h3 className="ds-title text-base sm:text-lg">
-                          {step.title}
-                        </h3>
-                        <p
-                          className="mt-1 text-sm leading-relaxed"
-                          style={{ color: "var(--muted)" }}
+                  <span
+                    aria-hidden
+                    className="ds-title pointer-events-none absolute -top-3 right-3 select-none leading-none tabular-nums"
+                    style={{ fontSize: "6.5rem", color: "var(--fg)", opacity: 0.05 }}
+                  >
+                    {i + 1}
+                  </span>
+                  <p
+                    className="mb-5 inline-flex w-fit items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em]"
+                    style={{ color: "var(--card-coral-ink)" }}
+                  >
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ background: "var(--card-coral-ink)" }}
+                    />
+                    Phase {i + 1} · {card.phase}
+                  </p>
+                  <ul className="relative flex flex-col gap-4">
+                    {steps.map((step) => (
+                      <li key={step.n} className="flex gap-3">
+                        <span
+                          className="ds-title mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs tabular-nums"
+                          style={{
+                            background: "var(--card-peach)",
+                            color: "var(--fg)",
+                          }}
                         >
-                          {step.body}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                          {step.n}
+                        </span>
+                        <div>
+                          <h3 className="ds-title text-base leading-snug sm:text-[1.05rem]">
+                            {step.title}
+                          </h3>
+                          <p
+                            className="mt-1 text-[0.82rem] leading-relaxed"
+                            style={{ color: "var(--muted)" }}
+                          >
+                            {step.body}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-            </div>
+            </article>
           </Reveal>
         );
       })}
