@@ -177,20 +177,41 @@ async def _sync_avatar(g: state.GroupState, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 async def send_pet_card(chat_id: int, ctx: ContextTypes.DEFAULT_TYPE, *,
                         message: str | None = None, reply_to: int | None = None) -> None:
-    """Post the pet card PNG to a chat. Tabi's line (if any) rides as the
-    photo's OWN caption — one Telegram message, not a text message followed
-    by a separate photo. Falls back to the card's own mood caption when
-    there's no Tabi line (plain /health-style checks). If every caption
-    attempt fails (e.g. an unusually long line blowing past Telegram's
-    1024-char photo-caption cap), degrades to a bare photo + a separate text
-    send rather than silently dropping the turn."""
+    """Post the pet card to a chat as an animated GIF (the sprite bobs, same
+    as the webapp's tami-float CSS) via send_animation — falling back to the
+    static PNG via send_photo if the GIF render or every animation-send
+    attempt fails. Tabi's line (if any) rides as the media's OWN caption —
+    one Telegram message, not a text message followed by a separate
+    photo/animation. Falls back to the card's own mood caption when there's
+    no Tabi line (plain /health-style checks). If every attempt (GIF and
+    photo) fails, degrades to a bare photo + a separate text send rather
+    than silently dropping the turn."""
     g = state.get_or_create(chat_id)
     g.pet.refresh_mood()
     await asyncio.to_thread(state.persist_pet, g)
     asyncio.create_task(_sync_avatar(g, ctx))
-    png_bytes = pet.render_pet_png(g)
     caption = message or pet.pet_caption(g)
 
+    gif_bytes: bytes | None = None
+    try:
+        gif_bytes = pet.render_pet_gif(g)
+    except Exception as e:
+        log.warning("pet gif render failed (chat=%s): %s — falling back to photo", chat_id, e)
+
+    if gif_bytes is not None:
+        for parse_mode in (ParseMode.MARKDOWN, None):
+            for rt in (reply_to, None) if reply_to else (None,):
+                try:
+                    await ctx.bot.send_animation(
+                        chat_id=chat_id,
+                        animation=InputFile(BytesIO(gif_bytes), filename="trippet.gif"),
+                        caption=caption, parse_mode=parse_mode, reply_to_message_id=rt,
+                    )
+                    return
+                except Exception:
+                    continue
+
+    png_bytes = pet.render_pet_png(g)
     for parse_mode in (ParseMode.MARKDOWN, None):
         for rt in (reply_to, None) if reply_to else (None,):
             try:
