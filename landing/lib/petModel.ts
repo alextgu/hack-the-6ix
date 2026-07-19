@@ -135,7 +135,7 @@ export function caption(physical: number, mental: number, mood: Mood): string {
     if (physical > 80 && mental > 80) return "pet is thriving. keep going.";
     return "pet is stable.";
   }
-  return lines.join(" — ");
+  return lines.join(", ");
 }
 
 // Mood chip colors — aligned with Tabi DS health palette.
