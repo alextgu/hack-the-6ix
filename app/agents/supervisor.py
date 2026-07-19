@@ -491,7 +491,13 @@ def messenger(s: AgentState) -> AgentState:
     convo = "\n".join(f"[id={m.get('message_id')}] {m['name']}: {m['text']}"
                       for m in s["transcript"][-25:])
     profiles = json.dumps(s["profiles"], default=str)[:1500]
-    members = json.dumps(db.known_members(s["chat_id"]))[:600]
+    # After /reset the profile collection is empty, and an empty list used to
+    # read as "make some up" — the pet greeted "sam, alex" in a chat with
+    # neither. Say so explicitly instead of handing over "[]".
+    _members = db.known_members(s["chat_id"])
+    members = (json.dumps(_members)[:600] if _members else
+               "NOBODY KNOWN YET — you have not seen anyone speak. Address the "
+               "group as a whole. Do NOT invent or guess any names.")
     pending = json.dumps(s.get("pending", []))[:800]
     # Drop asks the group has since answered, then show what's still open.
     asks_now = clear_answered_asks(s["chat_id"], s["plan"], g.trip)
