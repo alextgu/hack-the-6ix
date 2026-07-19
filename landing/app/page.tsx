@@ -374,8 +374,159 @@ export default function Home() {
           <Reveal delay={320}>
             <p className="mt-6 text-xs" style={{ color: "var(--muted)" }}>
               Baseline is the median of your own shortlist — savings only count when your pick
-              beats it. Sources: DEFRA 2024 · EPA · CHSB 2023 · JR Central.
+              beats it.
             </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── 8b. Show your work — the carbon methodology, proved ──────────── */}
+      <section className="snap-panel px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <Reveal>
+            <p className="kicker mb-6">Show your work</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2 className="ds-title max-w-3xl text-3xl leading-[1.1] sm:text-4xl lg:text-5xl">
+              The ledger never records a footprint. It records a difference.
+            </h2>
+          </Reveal>
+          <Reveal delay={140}>
+            <p className="mt-5 max-w-2xl text-base leading-relaxed sm:text-lg" style={{ color: "var(--muted)" }}>
+              &ldquo;Your trip emits 3,080 kg&rdquo; is true and useless — it isn&apos;t a saving.
+              Every entry answers a narrower question:{" "}
+              <span style={{ color: "var(--fg)" }}>
+                compared to the option that was actually on the table, how much less is this?
+              </span>{" "}
+              If a choice isn&apos;t better than its alternative, nothing is recorded at all.
+            </p>
+          </Reveal>
+
+          <div className="mt-10 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_1.05fr]">
+            {/* the four steps — order matters, so they're numbered */}
+            <Reveal delay={200}>
+              <div className="grid h-full gap-3">
+                {[
+                  {
+                    icon: "heroicons:calculator",
+                    t: "Measure the pick",
+                    s: "Distance or nights × a published factor. Every constant is local — a dead API can't move a carbon number.",
+                  },
+                  {
+                    icon: "heroicons:scale",
+                    t: "Name the counterfactual",
+                    s: "The dirtiest flight on the list. The deck-average hotel. The same trip by car. Always something they could have picked.",
+                  },
+                  {
+                    icon: "heroicons:users",
+                    t: "Delta × the people",
+                    s: "Per-person factors scale by group size, because four people flying is four times the flight.",
+                  },
+                  {
+                    icon: "heroicons:shield-check",
+                    t: "Credit only if positive",
+                    s: "Pick the worst room on the deck and you earn zero, never a negative. The ledger can't go up on a bad choice.",
+                  },
+                ].map((d, i) => (
+                  <div key={d.t} className="ds-health-card card-lift">
+                    <div className="bar-top">
+                      <div className="bar-icon">
+                        <iconify-icon icon={d.icon} width="20" height="20" />
+                      </div>
+                      <h3 className="bar-name">{d.t}</h3>
+                      <span
+                        className="ml-auto text-xs tabular-nums"
+                        style={{ color: "var(--muted)" }}
+                        aria-hidden
+                      >
+                        0{i + 1}
+                      </span>
+                    </div>
+                    <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+                      {d.s}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+
+            {/* the receipt — the actual arithmetic, itemised */}
+            <Reveal delay={260}>
+              <div
+                className="flex h-full flex-col rounded-2xl p-6 sm:p-7"
+                style={{ background: "var(--surface)", boxShadow: "var(--shadow)" }}
+              >
+                <div className="flex items-center gap-2">
+                  <iconify-icon
+                    icon="heroicons:receipt-percent"
+                    width="16"
+                    height="16"
+                    style={{ color: "var(--card-mint-ink)" }}
+                  />
+                  <span
+                    className="text-[0.68rem] font-bold uppercase tracking-[0.2em]"
+                    style={{ color: "var(--card-mint-ink)" }}
+                  >
+                    Worked example · Toronto → Tokyo, 4 people
+                  </span>
+                </div>
+
+                <div
+                  className="mt-5 flex flex-col gap-3 text-sm tabular-nums"
+                  style={{ fontFamily: "var(--font-body)" }}
+                >
+                  <div className="flex items-baseline justify-between gap-4">
+                    <span>
+                      Nonstop{" "}
+                      <span style={{ color: "var(--muted)" }}>10,300 km × 0.1495 × 2</span>
+                    </span>
+                    <span className="font-semibold">3,079.6 kg</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-4">
+                    <span>
+                      Via Chicago{" "}
+                      <span style={{ color: "var(--muted)" }}>10,775 km + 50 kg stop</span>
+                    </span>
+                    <span className="font-semibold">3,321.7 kg</span>
+                  </div>
+
+                  <div style={{ borderTop: "1px dashed var(--card-peach)" }} className="my-1" />
+
+                  <div className="flex items-baseline justify-between gap-4">
+                    <span style={{ color: "var(--muted)" }}>Avoided per person</span>
+                    <span className="font-semibold">242.1 kg</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-4">
+                    <span style={{ color: "var(--muted)" }}>× 4 travellers</span>
+                    <span className="ds-title text-2xl" style={{ color: "var(--card-mint-ink)" }}>
+                      968.4 kg
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className="mt-5 rounded-xl px-4 py-3 text-xs leading-relaxed"
+                  style={{ background: "var(--card-mint)", color: "var(--card-mint-ink)" }}
+                >
+                  Note what isn&apos;t claimed: the trip still emits over three tonnes a head.
+                  The ledger only says this choice avoided 242 kg of it — the detour distance
+                  plus one more takeoff and landing.
+                </div>
+              </div>
+            </Reveal>
+          </div>
+
+          <Reveal delay={320}>
+            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs" style={{ color: "var(--muted)" }}>
+              <span className="inline-flex items-center gap-1.5">
+                <iconify-icon icon="heroicons:document-check" width="14" height="14" />
+                Factors: DEFRA 2024 · CHSB 2023 · EPA · JR Central
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <iconify-icon icon="heroicons:beaker" width="14" height="14" />
+                Every figure computed from the live module, not written by hand
+              </span>
+            </div>
           </Reveal>
         </div>
       </section>
