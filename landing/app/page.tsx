@@ -23,6 +23,7 @@ const SPONSORS: { name: string; thanks?: boolean }[] = [
   { name: "MongoDB Atlas" },
   { name: "ElevenLabs" },
   { name: "Gemini" },
+  { name: "Solana" },
   { name: "Base44", thanks: true },
 ];
 
