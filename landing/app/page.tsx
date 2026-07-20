@@ -12,8 +12,19 @@ const MINT_EXPLORER =
   "https://explorer.solana.com/address/9F2u1WywuPryEuZBzzgoqQfvfSTLvgSdnQLDLjVvrHv8?cluster=devnet";
 // Demo walkthrough — click to play, never autoplays.
 const DEMO_VIDEO = "https://www.youtube.com/embed/t1_Amtt9RSQ?start=6&rel=0&modestbranding=1";
+// The Devpost submission — linked from the hero chip.
+const DEVPOST_URL = "https://devpost.com/software/a-nhsi8g";
 
-const SPONSORS = ["Stay22", "Phoebe", "Freesolo", "MongoDB Atlas", "ElevenLabs", "Gemini"];
+// thanks: true → we won that sponsor's prize; the footer says thank you.
+const SPONSORS: { name: string; thanks?: boolean }[] = [
+  { name: "Stay22" },
+  { name: "Phoebe", thanks: true },
+  { name: "Freesolo" },
+  { name: "MongoDB Atlas" },
+  { name: "ElevenLabs" },
+  { name: "Gemini" },
+  { name: "Base44", thanks: true },
+];
 
 const PIPELINE_CARDS = [
   {
@@ -113,12 +124,27 @@ const BRAIN = [
 
 function CTAButton({ large = false }: { large?: boolean }) {
   return (
-    <a href={BOT_URL} className={large ? "ds-cta hero-cta" : "ds-cta"}>
-      Add to Telegram
-      <span style={{ opacity: 0.7, fontFamily: "var(--font-body)", fontSize: large ? 14 : 13 }}>
-        {BOT_HANDLE}
-      </span>
-    </a>
+    <div className={large ? "" : "text-center"}>
+      <a
+        href={BOT_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={large ? "ds-cta hero-cta" : "ds-cta"}
+      >
+        Add to Telegram
+        <span style={{ opacity: 0.7, fontFamily: "var(--font-body)", fontSize: large ? 14 : 13 }}>
+          {BOT_HANDLE}
+        </span>
+      </a>
+      {/* Post-hackathon honesty: the Cloud Run backend is torn down. */}
+      <p
+        className="mt-3 inline-flex items-center gap-1.5 text-xs"
+        style={{ color: "var(--muted)", display: "flex", justifyContent: large ? "flex-start" : "center" }}
+      >
+        <iconify-icon icon="heroicons:exclamation-triangle" width="13" height="13" aria-hidden />
+        backend has been disconnected — the bot no longer responds
+      </p>
+    </div>
   );
 }
 
@@ -160,10 +186,24 @@ export default function Home() {
           <Petals />
           <div className="relative mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[36rem]">
             <Reveal>
-              <p className="ds-chip mb-7" style={{ display: "inline-flex" }}>
+              <a
+                href={DEVPOST_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ds-chip mb-7 transition-transform hover:scale-105"
+                style={{ display: "inline-flex", textDecoration: "none" }}
+                title="See Tabi on Devpost"
+              >
                 <iconify-icon icon="heroicons:map-pin" width="14" height="14" />
                 Tabi · Hack the 6ix
-              </p>
+                <iconify-icon
+                  icon="heroicons:arrow-top-right-on-square"
+                  width="13"
+                  height="13"
+                  style={{ opacity: 0.65 }}
+                  aria-hidden
+                />
+              </a>
             </Reveal>
             <Reveal delay={100}>
               <h1 className="ds-title text-[2.5rem] leading-[1.06] sm:text-6xl lg:text-[3.7rem]">
@@ -672,7 +712,14 @@ export default function Home() {
             style={{ color: "var(--muted)" }}
           >
             {SPONSORS.map((s) => (
-              <span key={s}>{s}</span>
+              <span key={s.name}>
+                {s.name}
+                {s.thanks ? (
+                  <span className="ml-1 italic" style={{ color: "var(--card-coral-ink)" }}>
+                    (thank you!)
+                  </span>
+                ) : null}
+              </span>
             ))}
           </div>
           <div className="ds-title mt-8 text-xs" style={{ color: "var(--muted)" }}>
