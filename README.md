@@ -1,20 +1,17 @@
 # Tabi — Plan That Trip to Japan
 
-**Everyone wants to go to Japan. It comes up in the group chat constantly — nobody ever goes.** The trip stays a sentence: everyone means it, nobody coordinates, and it quietly dies.
+**Everyone wants to go to Japan. ** It comes up in the group chat constantly, but nobody ever starts planning.** 
 
-**Tabi** is a Telegram bot that turns that stalled group chat into a **virtual pet** with two health bars. The pet visibly rots the longer the group stalls — and the only way to save it is to actually book the trip.
+**Tabi** is a Telegram bot that turns that stalled group chat into a **tomagachi pet** with two health bars. The pet visibly rots the longer the group stalls — and the only way to save it is to actually book the trip.
 
-- 🩺 **Physical health** — driven by **live Stay22 hotel-market pressure**. Prices rising and availability dropping damage the pet. Procrastination literally makes it sick.
-- 🧠 **Mental health** — driven by **group engagement**. An active, deciding group keeps it happy; silence makes it depressed.
 
-When the group finally commits, the pet graduates: Stay22 returns the real hotel booking, the green engine tallies the CO₂e saved, the pet says goodbye in its own voice, and a souvenir "Japan Trip Coin" is minted. The sentence becomes a booked trip.
 
 ### 🔗 Links
 
 - **Live showcase → https://hack-the-6ix.netlify.app/**
 - **Devpost → https://devpost.com/software/a-nhsi8g**
 
-Built at **Hack the 6ix**. Read `PROJECT.md` for the full concept, `REPO_MAP.md` for a module-by-module map, and `PIPELINE.md` for the model seams.
+Built at **Hack the 6ix**. Base44 and Phoebe track winners!
 
 ---
 
@@ -151,6 +148,3 @@ Preview standalone (no Telegram) at `http://localhost:8000/?group=12345`.
 - **Read** — Gemini turns group chat into structured trip constraints (never swapped).
 - **Messenger / Agent** — the pet's voice and the coordination agent (`app/agents/phoebe.py`). Runs a **Freesolo-trained** model when `FREESOLO_AGENT_BASE_URL` is set; falls back to Gemini on any error. The `training/` pipeline builds its dataset from real logged interactions (Mongo flywheel).
 
-## Sponsor fit
-
-Every track maps to a real part of the build — nothing bolted on. **Stay22** is the pet's physical vital sign and the real booking on commit; **MongoDB Atlas** is the matching engine, memory, and nervous system (analytics, vector-ready preferences, time-series health/price, change-ready pet updates); **Freesolo** trains the Read + agent seams via SFT → GRPO; **ElevenLabs** gives the pet a two-way emotional voice; **Auth0** is a ready-to-adopt login layer; **Solana** mints the souvenir trip coin. See `PROJECT.md` §7 for the full mapping.
