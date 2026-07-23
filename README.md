@@ -1,6 +1,6 @@
 # Tabi — Plan That Trip to Japan
 
-**Everyone wants to go to Japan. ** It comes up in the group chat constantly, but nobody ever starts planning.** 
+**Everyone wants to go to Japan. It comes up in the group chat constantly, but nobody ever starts planning.** 
 
 **Tabi** is a Telegram bot that turns that stalled group chat into a **tomagachi pet** with two health bars. The pet visibly rots the longer the group stalls — and the only way to save it is to actually book the trip.
 
